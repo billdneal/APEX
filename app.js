@@ -7649,7 +7649,7 @@
           const modText = h.modifiers && h.modifiers.length ? `[${h.modifiers.join(', ')}]` : 'Standard';
           const setDetails = (h.sets || [])
             .filter(s => s && s.done)
-            .map(s => `${s.actualWeight}lbs×${s.actualReps}`)
+            .map(s => `${s.actualWeight} lbs×${s.actualReps}`)
             .join(', ');
 
           return `
