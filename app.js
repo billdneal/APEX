@@ -3725,7 +3725,7 @@
 
     exportProgrammingBuilderJson() {
       const chassisData = {
-        version: core.APP_VERSION || 'v4.6.0-PWA',
+        version: core.APP_VERSION || 'v4.6.1-PWA',
         timestamp: new Date().toISOString(),
         phaseRepMatrix: state.phaseRepMatrix,
         schemeRecipes: state.schemeRecipes,
@@ -4646,7 +4646,7 @@
     // Data Backup, Migration & CSV Export
     exportBackup() {
       const backupData = {
-        version: core.APP_VERSION || 'v4.6.0-PWA',
+        version: core.APP_VERSION || 'v4.6.1-PWA',
         timestamp: new Date().toISOString(),
         settings: state.settings,
         profile: state.profile,
@@ -5398,7 +5398,7 @@
                   <span>📲</span><span>Install Standalone App</span>
                 </button>
                 <div class="text-[10px] text-slate-500 text-center">
-                  <div>APEX Engine ${core.APP_VERSION || 'v4.6.0'}</div>
+                  <div>APEX Engine ${core.APP_VERSION || 'v4.6.1'}</div>
                   <div class="text-slate-400 mt-0.5 truncate">${state.user ? 'User: ' + state.user.email : 'Offline Local Mode'}</div>
                 </div>
               </div>
@@ -7983,7 +7983,7 @@
 
       html += `
         <footer class="pt-2 border-t border-sub/50 flex justify-between items-center text-[9px] font-mono text-slate-500 shrink-0" onclick="appActions.closeCardMenu()">
-          <span>APEX Training Engine ${core.APP_VERSION || 'v4.6.0'}</span>
+          <span>APEX Training Engine ${core.APP_VERSION || 'v4.6.1'}</span>
           <span>${state.user ? '☁️ Connected (' + state.user.email.split('@')[0] + ')' : '⚡ Offline PWA Mode'}</span>
         </footer>
       `;
