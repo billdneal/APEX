@@ -5759,7 +5759,7 @@
                     ${s.label ? `<span class="text-[7px] md:text-[8px] font-mono px-1 py-0.2 bg-card-sub rounded text-blue-300 border border-sub truncate max-w-[42px]">${s.label}</span>` : ''}
                   </div>
                   <span class="col-span-3 font-mono text-[9px] md:text-xs text-slate-300 text-left pl-0.5 leading-tight truncate">
-                    ${s.targetLoad ? s.targetLoad + '#' : ''}${s.targetReps ? s.targetReps + 'r' : ''}${s.targetTime ? s.targetTime + 's' : ''} @${displayTargetRpe}
+                    ${s.targetLoad ? s.targetLoad + 'x' : ''}${s.targetReps ? s.targetReps + 'r' : ''}${s.targetTime ? s.targetTime + 's' : ''} @${displayTargetRpe}
                   </span>
                   
                   <div class="col-span-6 flex gap-1 items-center justify-end">
@@ -5801,7 +5801,8 @@
                   <div>
                     <div class="flex items-center space-x-1.5">
                       <span class="text-[9px] font-mono uppercase text-slate-400">${ex.tier} • <b class="text-accent">${ex.scheme}</b></span>
-                      ${prEvent ? `<span class="text-[8px] font-mono bg-amber-500/20 text-amber-300 border border-amber-500 px-1 py-0.2 rounded font-bold animate-pulse">🔥 PR +${prEvent.diff}#</span>` : ''}
+                      ${prEvent ? `<span class="text-[8px] font-mono bg-amber-500/20 text-amber-300 border border-amber-500 px-1 py-0.2 rounded font-bold animate-pulse">🔥 
+                      PR +${prEvent.diff}lbs</span>` : ''}
                     </div>
                     <div class="flex items-center space-x-2 mt-0.5">
                       <h3 class="text-xs md:text-sm font-bold text-white">${ex.exercise}</h3>
@@ -5900,7 +5901,7 @@
                     <div class="flex justify-between items-center pt-2 mt-1 border-t border-sub/40 font-mono text-[10px]">
                       <button type="button" onclick="appActions.addSet(${exIdx})" class="text-[9px] md:text-xs font-mono text-slate-300 bg-input px-2.5 py-1 rounded-xl border border-sub font-semibold hover:text-white tactile">+ Add Set</button>
                       <div class="flex items-center space-x-2 text-[10px] text-slate-400">
-                        <span>e1RM: <b class="text-accent">${livePeakE1 > 0 ? livePeakE1 + '#' : '—'}</b></span>
+                        <span>e1RM: <b class="text-accent">${livePeakE1 > 0 ? livePeakE1 + 'lbs' : '—'}</b></span>
                         <span>•</span>
                         <span>Reps: <b class="text-slate-200">${liveReps}</b></span>
                         <span>•</span>
@@ -6148,7 +6149,7 @@
                   const effectiveW = getExerciseLoad(ex.exercise, s.actualWeight, dKey);
                   const cleanRpe = roundRpe(s.actualRpe);
                   const displayRpe = cleanRpe <= 5.5 ? '&lt;6.0' : cleanRpe.toFixed(1);
-                  return `${idx + 1}. ${effectiveW}# × ${s.actualReps || 0}r @${displayRpe}`;
+                  return `${idx + 1}. ${effectiveW}lbs × ${s.actualReps || 0}r @${displayRpe}`;
                 }).join(' • ');
 
                 return `
@@ -6550,7 +6551,7 @@
           <div class="bg-input p-2 rounded-xl border border-sub flex justify-between items-center text-xs">
             <div>
               <div class="text-slate-300 truncate max-w-[170px] font-mono text-[11px] font-bold">${k}</div>
-              <div class="text-[9px] text-slate-500">Anchor: ${state.anchorE1rms?.[k] || state.e1rms[k]}# • Best: ${state.e1rms[k]}#</div>
+              <div class="text-[9px] text-slate-500">Anchor: ${state.anchorE1rms?.[k] || state.e1rms[k]}lbs • Best: ${state.e1rms[k]}lbs</div>
             </div>
             <input type="number" value="${state.anchorE1rms?.[k] || state.e1rms[k]}" onchange="appActions.updateE1rm('${k}', this.value)" class="w-16 bg-card-sub border border-sub rounded-lg text-right px-2 py-0.5 text-accent font-bold focus:outline-none font-mono text-xs">
           </div>
@@ -7211,14 +7212,14 @@
                 ` : ''}
 
                 <div class="w-full bg-input rounded-2xl border border-sub p-2 flex items-center justify-center">
-                  ${renderRichChartSvg(liftPoints, '#', '#38bdf8')}
+                  ${renderRichChartSvg(liftPoints, 'lbs', '#38bdf8')}
                 </div>
 
                 <div class="space-y-1.5 pt-2 border-t border-sub/50">
                   <span class="text-[10px] text-accent font-bold uppercase">Completed Performance Sessions (${filteredLiftHistory.length})</span>
                   <div class="space-y-1 max-h-48 overflow-y-auto pr-1">
                     ${filteredLiftHistory.length ? filteredLiftHistory.slice().reverse().map(h => {
-                      const setDetails = (h.sets || []).filter(s => s && s.done).map(s => `${s.actualWeight}#×${s.actualReps}`).join(', ');
+                      const setDetails = (h.sets || []).filter(s => s && s.done).map(s => `${s.actualWeight}lbs×${s.actualReps}`).join(', ');
                       return `
                         <div class="bg-input p-2 rounded-xl border border-sub flex justify-between items-center text-[10px]">
                           <div>
@@ -7246,7 +7247,7 @@
                   </div>
                   <div class="flex items-center space-x-2">
                     <input type="number" step="5" value="${cWeight}" oninput="appActions.setAnalyticsCalc('analyticsCalcWeight', this.value)" class="w-16 bg-input border border-sub rounded-lg p-1 text-center text-white font-bold">
-                    <span># ×</span>
+                    <span>lbs ×</span>
                     <input type="number" min="1" max="20" value="${cReps}" oninput="appActions.setAnalyticsCalc('analyticsCalcReps', this.value)" class="w-12 bg-input border border-sub rounded-lg p-1 text-center text-white font-bold">
                     <span>reps</span>
                   </div>
@@ -7322,7 +7323,7 @@
                   <div class="grid grid-cols-4 gap-1.5 text-center text-xs">
                     <div class="bg-input p-2 rounded-xl border border-sub">
                       <div class="text-[8px] text-slate-400 uppercase">Current</div>
-                      <div class="text-xs md:text-sm font-black text-teal-300 mt-0.5">${bwRecords[bwRecords.length - 1].val}#</div>
+                      <div class="text-xs md:text-sm font-black text-teal-300 mt-0.5">${bwRecords[bwRecords.length - 1].val}lbs</div>
                     </div>
                     <div class="bg-input p-2 rounded-xl border border-sub">
                       <div class="text-[8px] text-slate-400 uppercase">Low / High</div>
@@ -7331,19 +7332,19 @@
                     <div class="bg-input p-2 rounded-xl border border-sub">
                       <div class="text-[8px] text-slate-400 uppercase">Net &Delta;</div>
                       <div class="text-xs font-bold ${bwRecords[bwRecords.length - 1].val - bwRecords[0].val >= 0 ? 'text-teal-400' : 'text-amber-400'} mt-0.5">
-                        ${bwRecords[bwRecords.length - 1].val - bwRecords[0].val >= 0 ? '+' : ''}${Math.round((bwRecords[bwRecords.length - 1].val - bwRecords[0].val) * 10) / 10}#
+                        ${bwRecords[bwRecords.length - 1].val - bwRecords[0].val >= 0 ? '+' : ''}${Math.round((bwRecords[bwRecords.length - 1].val - bwRecords[0].val) * 10) / 10}lbs
                       </div>
                     </div>
                     <div class="bg-input p-2 rounded-xl border border-sub">
                       <div class="text-[8px] text-slate-400 uppercase">7D Rolling Avg</div>
-                      <div class="text-xs md:text-sm font-black text-white mt-0.5">${bwRecords[bwRecords.length - 1].rollingAvg}#</div>
+                      <div class="text-xs md:text-sm font-black text-white mt-0.5">${bwRecords[bwRecords.length - 1].rollingAvg}lbs</div>
                     </div>
                   </div>
                 ` : ''}
 
                 ${state.analyticsBwView === 'graph' ? `
                   <div class="w-full bg-input rounded-2xl border border-sub p-2 flex items-center justify-center">
-                    ${renderRichChartSvg(bwRecords, '#', '#14b8a6')}
+                    ${renderRichChartSvg(bwRecords, 'lbs', '#14b8a6')}
                   </div>
                 ` : `
                   <div class="space-y-1.5">
@@ -7648,7 +7649,7 @@
           const modText = h.modifiers && h.modifiers.length ? `[${h.modifiers.join(', ')}]` : 'Standard';
           const setDetails = (h.sets || [])
             .filter(s => s && s.done)
-            .map(s => `${s.actualWeight}#×${s.actualReps}`)
+            .map(s => `${s.actualWeight}lbs×${s.actualReps}`)
             .join(', ');
 
           return `
@@ -7970,7 +7971,7 @@
                     </div>
                     <div class="text-right">
                       <div class="text-amber-300 font-black text-sm">${pr.newVal}#</div>
-                      <span class="text-[8px] bg-amber-500/20 text-amber-300 border border-amber-500/50 px-1 py-0.2 rounded font-bold">+${pr.diff}# PR</span>
+                      <span class="text-[8px] bg-amber-500/20 text-amber-300 border border-amber-500/50 px-1 py-0.2 rounded font-bold">+${pr.diff}lbs PR</span>
                     </div>
                   </div>
                 `).join('') : `<div class="text-center py-6 text-slate-500">No PR records logged yet.</div>`}
