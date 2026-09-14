@@ -7967,10 +7967,10 @@
                   <div class="bg-input p-2.5 rounded-xl border border-sub flex justify-between items-center">
                     <div>
                       <div class="font-bold text-white text-xs">${pr.lift}</div>
-                      <div class="text-[9px] text-slate-400 mt-0.5">${pr.date} • Prior: ${pr.oldVal}#</div>
+                      <div class="text-[9px] text-slate-400 mt-0.5">${pr.date} • Prior: ${pr.oldVal}lbs</div>
                     </div>
                     <div class="text-right">
-                      <div class="text-amber-300 font-black text-sm">${pr.newVal}#</div>
+                      <div class="text-amber-300 font-black text-sm">${pr.newVal}lbs</div>
                       <span class="text-[8px] bg-amber-500/20 text-amber-300 border border-amber-500/50 px-1 py-0.2 rounded font-bold">+${pr.diff}lbs PR</span>
                     </div>
                   </div>
