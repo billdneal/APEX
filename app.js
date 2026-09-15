@@ -7714,7 +7714,7 @@ function renderBottomNav() {
           const modText = h.modifiers && h.modifiers.length ? `[${h.modifiers.join(', ')}]` : 'Standard';
           const setDetails = (h.sets || [])
             .filter(s => s && s.done)
-            .map(s => `${s.actualWeight} lbs×${s.actualReps}`)
+            .map(s => `${s.actualWeight}x${s.actualReps}${s.actualRpe || s.rpe ? `@${s.actualRpe || s.rpe}` : ''}`)
             .join(', ');
 
           return `
