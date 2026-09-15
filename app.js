@@ -5282,7 +5282,65 @@
       btn.innerHTML = '☁️ <span class="text-blue-400 font-bold">Cloud Sync</span>';
     }
   };
+function renderBottomNav() {
+  const cur = state.screen;
+  const isWkActive = state.activeWorkout && state.activeWorkout.length > 0;
+  const targetWorkoutScreen = isWkActive ? 'logger' : 'staging';
 
+  const navItems = [
+    {
+      id: 'calendar',
+      label: 'Home',
+      action: "appActions.navigate('calendar', event)",
+      active: cur === 'calendar',
+      icon: `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>`
+    },
+    {
+      id: 'workout',
+      label: isWkActive ? 'Active' : 'Stage',
+      action: `appActions.navigate('${targetWorkoutScreen}', event)`,
+      active: cur === 'logger' || cur === 'staging',
+      badge: isWkActive,
+      icon: `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 5v14M18 5v14M2 9h4M18 9h4M2 15h4M18 15h4M6 12h12"/></svg>`
+    },
+    {
+      id: 'builder',
+      label: 'Builder',
+      action: "appActions.navigate('programming_builder', event)",
+      active: cur === 'programming_builder',
+      icon: `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>`
+    },
+    {
+      id: 'analytics',
+      label: 'Analytics',
+      action: "appActions.navigate('analytics', event)",
+      active: cur === 'analytics',
+      icon: `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>`
+    },
+    {
+      id: 'settings',
+      label: 'Settings',
+      action: "appActions.navigate('settings', event)",
+      active: cur === 'settings',
+      icon: `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>`
+    }
+  ];
+
+  return `
+    <nav class="fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-md border-t border-sub px-3 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] flex justify-around items-center max-w-lg mx-auto shadow-2xl">
+      ${navItems.map(item => `
+        <button type="button" onclick="${item.action}" class="flex-1 flex flex-col items-center justify-center space-y-1 relative tactile transition ${item.active ? 'text-accent font-bold' : 'text-slate-400 hover:text-slate-200'}">
+          <div class="relative">
+            ${item.icon}
+            ${item.badge ? `<span class="absolute -top-1 -right-1.5 w-2 h-2 bg-emerald-400 rounded-full animate-ping"></span><span class="absolute -top-1 -right-1.5 w-2 h-2 bg-emerald-500 rounded-full"></span>` : ''}
+          </div>
+          <span class="text-[9px] font-mono tracking-tight">${item.label}</span>
+          ${item.active ? `<span class="w-3.5 h-0.5 bg-accent rounded-full"></span>` : '<span class="w-3.5 h-0.5 bg-transparent"></span>'}
+        </button>
+      `).join('')}
+    </nav>
+  `;
+}
   window.render = function() {
     try {
       const app = document.getElementById('app');
@@ -7994,7 +8052,7 @@
           <span>${state.user ? '☁️ Connected (' + state.user.email.split('@')[0] + ')' : '⚡ Offline PWA Mode'}</span>
         </footer>
       `;
-
+html += renderBottomNav();
       app.innerHTML = html;
 
       const nextMain = app.querySelector('main');
