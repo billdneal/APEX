@@ -5046,6 +5046,9 @@
       html, body, #app, #app *, .font-mono {
         font-family: '${font}', monospace, sans-serif !important;
       }
+      #app main {
+          padding-bottom: calc(5rem + env(safe-area-inset-bottom)) !important;
+            }
     `;
     document.documentElement.style.fontFamily = `'${font}', monospace, sans-serif`;
 
