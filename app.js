@@ -4979,7 +4979,52 @@
   if (!state.overrideDraft) state.overrideDraft = { phase: 'All', minReps: 8, maxReps: 12 };
   if (!state.activeRecipeScheme) state.activeRecipeScheme = 'Reverse Pyramid';
   if (!state.wizardModal) state.wizardModal = { open: false, data: null };
+if (!state.rpeMatrixModal) {
+  state.rpeMatrixModal = { open: false, exName: '', sets: [{ weight: 225, reps: 5, rpe: 8 }] };
+}
+window.appActions.openRpeMatrixModal = function(exName) {
+  let initialSets = [{ weight: 225, reps: 5, rpe: 8 }];
+  if (exName && typeof getLiftHistory === 'function') {
+    const history = getLiftHistory(exName, false, []) || [];
+    const latest = history[0];
+    if (latest && latest.sets && latest.sets.length > 0) {
+      initialSets = latest.sets
+        .filter(s => s && s.done && s.actualWeight)
+        .slice(0, 3)
+        .map(s => ({
+          weight: parseFloat(s.actualWeight) || 0,
+          reps: parseFloat(s.actualReps) || 0,
+          rpe: parseFloat(s.actualRpe || s.rpe) || 8
+        }));
+    }
+  }
+  state.rpeMatrixModal = { open: true, exName: exName || 'Custom Matrix', sets: initialSets };
+  window.render();
+};
 
+window.appActions.closeRpeMatrixModal = function() {
+  state.rpeMatrixModal.open = false;
+  window.render();
+};
+
+window.appActions.updateRpeMatrixSet = function(idx, field, val) {
+  if (state.rpeMatrixModal.sets[idx]) {
+    state.rpeMatrixModal.sets[idx][field] = parseFloat(val) || 0;
+    window.render();
+  }
+};
+
+window.appActions.addRpeMatrixSet = function() {
+  state.rpeMatrixModal.sets.push({ weight: 225, reps: 5, rpe: 8 });
+  window.render();
+};
+
+window.appActions.removeRpeMatrixSet = function(idx) {
+  if (state.rpeMatrixModal.sets.length > 1) {
+    state.rpeMatrixModal.sets.splice(idx, 1);
+    window.render();
+  }
+};
   if (!window.appActions) window.appActions = {};
 
   window.appActions.setAnalyticsTimeframe = function(tf) { 
@@ -5282,6 +5327,83 @@
       btn.innerHTML = '☁️ <span class="text-blue-400 font-bold">Cloud Sync</span>';
     }
   };
+  function generateRpeMatrix(performances, roundTo = 5) {
+  const valid = (performances || []).filter(p => p.weight > 0 && p.reps > 0);
+  if (!valid.length) return null;
+
+  const e1rms = valid.map(p => {
+    const cleanRpe = p.rpe && !isNaN(p.rpe) ? Math.min(Math.max(p.rpe, 6), 10) : 10;
+    const rEff = p.reps + (10 - cleanRpe);
+    return p.weight * (1 + rEff / 30);
+  });
+  const avgE1RM = e1rms.reduce((a, b) => a + b, 0) / e1rms.length;
+
+  const repsList = [1, 2, 3, 4, 5, 6, 8, 10];
+  const rpeList = [10, 9.5, 9, 8.5, 8, 7.5, 7, 6.5];
+
+  const rows = rpeList.map(rpe => {
+    const row = { rpe, loads: {} };
+    repsList.forEach(reps => {
+      const rEff = reps + (10 - rpe);
+      const rawLoad = avgE1RM / (1 + rEff / 30);
+      row.loads[reps] = Math.round(rawLoad / roundTo) * roundTo;
+    });
+    return row;
+  });
+
+  return { avgE1RM, repsList, rows };
+}
+
+function renderRpeMatrixComponent(config) {
+  const { title, sets, isModal = false } = config;
+  const matrix = generateRpeMatrix(sets);
+  const avgE1RM = matrix ? Math.round(matrix.avgE1RM) : 0;
+
+  return `
+    <div class="space-y-3">
+      <!-- Input Samples Row -->
+      <div class="bg-input/60 p-2.5 rounded-xl border border-sub space-y-2">
+        <div class="flex justify-between items-center text-[11px] font-mono text-slate-400">
+          <span>ANCHOR PERFORMANCES</span>
+          <span class="text-accent font-bold">Base e1RM: ${avgE1RM} lbs</span>
+        </div>
+        <div class="space-y-1.5">
+          ${sets.map((s, idx) => `
+            <div class="flex items-center space-x-1.5 text-xs font-mono">
+              <input type="number" step="5" value="${s.weight}" onchange="appActions.updateRpeMatrixSet(${idx}, 'weight', this.value)" class="w-16 bg-card border border-sub rounded px-1.5 py-1 text-center text-white" placeholder="lbs">
+              <span class="text-slate-500">lbs ×</span>
+              <input type="number" step="1" value="${s.reps}" onchange="appActions.updateRpeMatrixSet(${idx}, 'reps', this.value)" class="w-12 bg-card border border-sub rounded px-1.5 py-1 text-center text-white" placeholder="reps">
+              <span class="text-slate-500">@</span>
+              <input type="number" step="0.5" value="${s.rpe}" onchange="appActions.updateRpeMatrixSet(${idx}, 'rpe', this.value)" class="w-12 bg-card border border-sub rounded px-1.5 py-1 text-center text-white" placeholder="RPE">
+              ${sets.length > 1 ? `<button type="button" onclick="appActions.removeRpeMatrixSet(${idx})" class="text-rose-400 hover:text-rose-300 px-1">✕</button>` : ''}
+            </div>
+          `).join('')}
+        </div>
+        <button type="button" onclick="appActions.addRpeMatrixSet()" class="text-[10px] font-mono text-accent hover:underline">+ Add Calibration Set</button>
+      </div>
+
+      <!-- Target Load Matrix Table -->
+      <div class="overflow-x-auto rounded-xl border border-sub bg-card">
+        <table class="w-full text-center text-xs font-mono">
+          <thead>
+            <tr class="text-slate-400 border-b border-sub bg-input/40">
+              <th class="py-1.5 px-2 text-left text-[10px]">RPE</th>
+              ${(matrix ? matrix.repsList : [1, 2, 3, 4, 5, 6, 8, 10]).map(r => `<th class="py-1.5 px-1 text-[10px]">${r}r</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-sub/20">
+            ${matrix ? matrix.rows.map(row => `
+              <tr class="hover:bg-input/30">
+                <td class="py-1.5 px-2 text-left font-bold text-accent text-[11px]">${row.rpe}</td>
+                ${matrix.repsList.map(r => `<td class="py-1.5 px-1 text-slate-200 text-[11px]">${row.loads[r]}</td>`).join('')}
+              </tr>
+            `).join('') : `<tr><td colspan="9" class="py-4 text-slate-500 text-xs">Enter valid set data above</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
 function renderBottomNav() {
   const cur = state.screen;
   const isWkActive = state.activeWorkout && state.activeWorkout.length > 0;
@@ -7233,13 +7355,13 @@ function renderBottomNav() {
               </div>
             </div>
 
-            <div class="grid grid-cols-4 gap-1 p-1 bg-input rounded-2xl border border-sub font-mono text-[11px]">
-              <button type="button" onclick="appActions.setAnalyticsTab('lifts')" class="py-1.5 rounded-xl font-bold transition tactile ${activeTab === 'lifts' ? 'bg-blue-600 text-white shadow' : 'text-slate-400'}">Lifts & e1RM</button>
-              <button type="button" onclick="appActions.setAnalyticsTab('bodyweight')" class="py-1.5 rounded-xl font-bold transition tactile ${activeTab === 'bodyweight' ? 'bg-blue-600 text-white shadow' : 'text-slate-400'}">Bodyweight</button>
-              <button type="button" onclick="appActions.setAnalyticsTab('fatigue')" class="py-1.5 rounded-xl font-bold transition tactile ${activeTab === 'fatigue' ? 'bg-blue-600 text-white shadow' : 'text-slate-400'}">Fatigue / sRPE</button>
-              <button type="button" onclick="appActions.setAnalyticsTab('volume')" class="py-1.5 rounded-xl font-bold transition tactile ${activeTab === 'volume' ? 'bg-blue-600 text-white shadow' : 'text-slate-400'}">Micro Volume</button>
-            </div>
-
+            <div class="grid grid-cols-5 gap-1 p-1 bg-input rounded-2xl border border-sub font-mono text-[11px]">
+        <button type="button" onclick="appActions.setAnalyticsTab('lifts')" class="py-1.5 rounded-xl font-bold transition ${activeTab === 'lifts' ? 'bg-accent text-black shadow' : 'text-slate-400 hover:text-slate-200'}">Lifts</button>
+        <button type="button" onclick="appActions.setAnalyticsTab('bodyweight')" class="py-1.5 rounded-xl font-bold transition ${activeTab === 'bodyweight' ? 'bg-accent text-black shadow' : 'text-slate-400 hover:text-slate-200'}">BW</button>
+        <button type="button" onclick="appActions.setAnalyticsTab('fatigue')" class="py-1.5 rounded-xl font-bold transition ${activeTab === 'fatigue' ? 'bg-accent text-black shadow' : 'text-slate-400 hover:text-slate-200'}">Fatigue</button>
+        <button type="button" onclick="appActions.setAnalyticsTab('volume')" class="py-1.5 rounded-xl font-bold transition ${activeTab === 'volume' ? 'bg-accent text-black shadow' : 'text-slate-400 hover:text-slate-200'}">Volume</button>
+        <button type="button" onclick="appActions.setAnalyticsTab('tools')" class="py-1.5 rounded-xl font-bold transition ${activeTab === 'tools' ? 'bg-accent text-black shadow' : 'text-slate-400 hover:text-slate-200'}">Tools</button>
+      </div>
             ${activeTab === 'lifts' ? `
               <div class="bg-card-sub p-4 rounded-3xl border border-sub space-y-3 font-mono text-xs shadow-xl">
                 <div class="flex justify-between items-center border-b border-sub pb-2">
@@ -7505,7 +7627,16 @@ function renderBottomNav() {
                 </div>
               </div>
             ` : ''}
-          </main>
+          ${activeTab === 'tools' ? `
+        <div class="space-y-4 font-mono">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-bold text-white uppercase tracking-wider">RPE Load Matrix</h3>
+            <span class="text-[10px] text-slate-500">Continuous 1RM Interpolation</span>
+          </div>
+          ${renderRpeMatrixComponent({ title: 'Dynamic Calculator', sets: state.rpeMatrixModal.sets })}
+        </div>
+      ` : ''}
+            </main>
         `;
       }
 
@@ -7738,7 +7869,12 @@ function renderBottomNav() {
                 <div>
                   <span class="font-bold text-accent text-sm">🧮 Planner: ${ex}</span>
                 </div>
-                <button type="button" onclick="appActions.closePlanner()" class="text-slate-400 hover:text-white p-1">✕</button>
+                <div class="flex items-center space-x-1">
+            <button type="button" onclick="appActions.openRpeMatrixModal('${ex}')" class="text-slate-400 hover:text-accent p-1" title="RPE Matrix">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+            </button>
+            <button type="button" onclick="appActions.closePlanner()" class="text-slate-400 hover:text-white p-1">✕</button>
+          </div>
               </div>
 
               ${savedMsg ? `
@@ -8052,6 +8188,19 @@ function renderBottomNav() {
           <span>${state.user ? '☁️ Connected (' + state.user.email.split('@')[0] + ')' : '⚡ Offline PWA Mode'}</span>
         </footer>
       `;
+      if (state.rpeMatrixModal && state.rpeMatrixModal.open) {
+  html += `
+    <div class="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-3 backdrop-blur-sm animate-fade">
+      <div class="bg-card border border-sub rounded-2xl p-4 w-full max-w-md max-h-[90vh] overflow-y-auto space-y-3 shadow-2xl">
+        <div class="flex justify-between items-center border-b border-sub pb-2">
+          <span class="font-bold text-sm text-white font-mono">${state.rpeMatrixModal.exName}</span>
+          <button type="button" onclick="appActions.closeRpeMatrixModal()" class="text-slate-400 hover:text-white text-base">✕</button>
+        </div>
+        ${renderRpeMatrixComponent({ title: state.rpeMatrixModal.exName, sets: state.rpeMatrixModal.sets, isModal: true })}
+      </div>
+    </div>
+  `;
+}
 html += renderBottomNav();
       app.innerHTML = html;
 
