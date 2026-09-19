@@ -85,7 +85,23 @@
       const clean = String(rawName).trim();
       return schemeAliases[clean] || clean;
     }
+function getIcon(name, cls = 'w-4 h-4') {
+  const paths = {
+    calendar: '<rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/>',
+    builder: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
+    programs: '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>',
+    splits: '<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>',
+    periodization: '<path d="m12 2 10 5-10 5-10-5Z"/><path d="m2 12 10 5 10-5"/><path d="m2 17 10 5 10-5"/>',
+    analytics: '<line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/>',
+    prs: '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>',
+    movements: '<path d="m6.5 6.5 11 11"/><path d="m21 21-1-1"/><path d="m3 3 1 1"/><path d="m18 22 4-4"/><path d="m2 6 4-4"/><path d="m3 10 7-7"/><path d="m14 21 7-7"/>',
+    profile: '<circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/>',
+    settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+    system: '<circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="16" y2="12"/><line x1="12" x2="12.01" y1="8" y2="8"/>'
+  };
 
+  return `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths[name] || ''}</svg>`;
+}
     const phaseDescriptions = {
       'Accumulation': 'High-volume base building (8-14 reps) focused on work capacity, connective tissue resilience, and hypertrophy priming.',
       'Hypertrophy': 'Targeted muscle mass accretion (6-12 reps) operating at 2-3 RIR with high mechanical tension and density clusters.',
@@ -5545,19 +5561,19 @@ function renderBottomNav() {
                 </div>
                 <nav class="space-y-1.5 font-mono text-xs">
                   <button type="button" onclick="appActions.navigate('calendar', event)" class="w-full text-left p-2.5 rounded-xl border border-sub flex items-center space-x-2.5 tactile ${state.screen === 'calendar' ? 'bg-blue-600 text-white font-bold' : 'bg-card-sub text-slate-300 hover:bg-slate-800'}">
-                    <span><svg class="w-4 h-4 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg></span><span>Calendar & Matrix</span>
+                    <span><svg class="w-4 h-4 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg></span><span>Calendar</span>
                   </button>
                   <button type="button" onclick="appActions.navigate('programming_builder', event)" class="w-full text-left p-2.5 rounded-xl border border-sub flex items-center space-x-2.5 tactile ${state.screen === 'programming_builder' ? 'bg-blue-600 text-white font-bold' : 'bg-card-sub text-accent hover:bg-slate-800 font-semibold'}">
-                    <span><svg class="w-4 h-4 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span><span>Programming Builder</span>
+                    <span><svg class="w-4 h-4 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span><span>Rep Scheme Builder</span>
                   </button>
                   <button type="button" onclick="appActions.navigate('library', event)" class="w-full text-left p-2.5 rounded-xl border border-sub flex items-center space-x-2.5 tactile ${state.screen === 'library' ? 'bg-blue-600 text-white font-bold' : 'bg-card-sub text-slate-300 hover:bg-slate-800'}">
                     <span><svg class="w-4 h-4 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></span><span>Program Library</span>
                   </button>
                   <button type="button" onclick="appActions.navigate('splits', event)" class="w-full text-left p-2.5 rounded-xl border border-sub flex items-center space-x-2.5 tactile ${state.screen === 'splits' ? 'bg-blue-600 text-white font-bold' : 'bg-card-sub text-slate-300 hover:bg-slate-800'}">
-                    <span><svg class="w-4 h-4 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg></span><span>Split Blueprint Builder</span>
+                    <span><svg class="w-4 h-4 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg></span><span>Microcycle Builder</span>
                   </button>
                   <button type="button" onclick="appActions.navigate('blocks', event)" class="w-full text-left p-2.5 rounded-xl border border-sub flex items-center space-x-2.5 tactile ${state.screen === 'blocks' ? 'bg-blue-600 text-white font-bold' : 'bg-card-sub text-slate-300 hover:bg-slate-800'}">
-                    <span><svg class="w-4 h-4 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 10 5-10 5-10-5Z"/><path d="m2 12 10 5 10-5"/><path d="m2 17 10 5 10-5"/></svg></span><span>Periodization</span>
+                    <span><svg class="w-4 h-4 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 10 5-10 5-10-5Z"/><path d="m2 12 10 5 10-5"/><path d="m2 17 10 5 10-5"/></svg></span><span>Macrocycle Builder</span>
                   </button>
                   <button type="button" onclick="appActions.navigate('analytics', event)" class="w-full text-left p-2.5 rounded-xl border border-sub flex items-center space-x-2.5 tactile ${state.screen === 'analytics' ? 'bg-blue-600 text-white font-bold' : 'bg-card-sub text-slate-300 hover:bg-slate-800'}">
                     <span><svg class="w-4 h-4 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></svg></span><span>Analytics</span>
@@ -5826,7 +5842,9 @@ function renderBottomNav() {
         html += `
           <main class="flex-1 min-h-0 overflow-y-auto space-y-3 max-w-4xl mx-auto w-full pr-0.5" onclick="appActions.closeCardMenu()">
             <div class="flex justify-between items-center border-b border-sub pb-2 text-xs font-bold text-white font-mono w-full">
-              <span>🛠️ Programming Builder & Periodization Chassis</span>
+              <span class="flex items-center gap-1.5">
+  <svg class="w-4 h-4 text-accent shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+  Rep Scheme Builder</span>
               <button type="button" onclick="appActions.navigate('calendar', event)" class="text-slate-400 hover:text-white underline">Calendar</button>
             </div>
 
@@ -6413,7 +6431,9 @@ function renderBottomNav() {
         html += `
           <main class="flex-1 min-h-0 overflow-y-auto space-y-3 w-full pr-0.5" onclick="appActions.closeCardMenu()">
             <div class="flex justify-between items-center border-b border-sub pb-2 text-xs font-bold text-white font-mono w-full">
-              <span>🔄 Macrocycle & Periodization Timeline</span>
+              <span class="flex items-center gap-1.5">
+  <svg class="w-4 h-4 text-accent shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 10 5-10 5-10-5Z"/><path d="m2 12 10 5 10-5"/><path d="m2 17 10 5 10-5"/></svg>
+  Macrocycle Builder</span>
               <button type="button" onclick="appActions.navigate('calendar', event)" class="text-slate-400 hover:text-white underline">Calendar</button>
             </div>
 
@@ -6496,7 +6516,9 @@ function renderBottomNav() {
         html += `
           <main class="flex-1 min-h-0 overflow-y-auto space-y-3.5 w-full pr-0.5" onclick="appActions.closeCardMenu()">
             <div class="flex justify-between items-center border-b border-sub pb-2 text-xs font-bold text-white font-mono w-full">
-              <span>🏋️ Movement & Modifier Registry</span>
+              <span class="flex items-center gap-1.5">
+  <svg class="w-4 h-4 text-accent shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6.5 6.5 11 11"/><path d="m21 21-1-1"/><path d="m3 3 1 1"/><path d="m18 22 4-4"/><path d="m2 6 4-4"/><path d="m3 10 7-7"/><path d="m14 21 7-7"/></svg>
+  Movement Library</span>
               <button type="button" onclick="appActions.navigate('calendar', event)" class="text-slate-400 hover:text-white underline">Calendar</button>
             </div>
 
@@ -6642,7 +6664,9 @@ function renderBottomNav() {
         html += `
           <main class="flex-1 min-h-0 overflow-y-auto space-y-3 max-w-2xl mx-auto w-full pr-0.5" onclick="appActions.closeCardMenu()">
             <div class="flex justify-between items-center border-b border-sub pb-2 text-xs font-bold text-white font-mono w-full">
-              <span>👤 Profile & Individual Parameters</span>
+              <span class="flex items-center gap-1.5">
+  <svg class="w-4 h-4 text-accent shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>
+  Profile</span>
               <button type="button" onclick="appActions.navigate('calendar', event)" class="text-slate-400 hover:text-white underline">Calendar</button>
             </div>
 
@@ -6747,7 +6771,9 @@ function renderBottomNav() {
         html += `
           <main class="flex-1 min-h-0 overflow-y-auto space-y-3.5 max-w-4xl mx-auto w-full pr-0.5" onclick="appActions.closeCardMenu()">
             <div class="flex justify-between items-center text-xs font-bold border-b border-sub pb-2 text-slate-200 font-mono w-full">
-              <span>⚙️ Settings & System Configuration</span>
+              <span class="flex items-center gap-1.5">
+  <svg class="w-4 h-4 text-accent shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+  Settings</span>
               <button type="button" onclick="appActions.navigate('calendar', event)" class="text-slate-400 hover:text-white">✕</button>
             </div>
 
@@ -6939,7 +6965,9 @@ function renderBottomNav() {
         html += `
           <main class="flex-1 min-h-0 overflow-y-auto space-y-3.5 max-w-4xl mx-auto w-full pr-0.5" onclick="appActions.closeCardMenu()">
             <div class="flex justify-between items-center border-b border-sub pb-2 text-xs font-bold text-white font-mono w-full">
-              <span>📖 System Scientific Codex & Periodization Architecture</span>
+              <span class="flex items-center gap-1.5">
+  <svg class="w-4 h-4 text-accent shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="16" y2="12"/><line x1="12" x2="12.01" y1="8" y2="8"/></svg>
+  System</span>
               <button type="button" onclick="appActions.navigate('calendar', event)" class="text-slate-400 hover:text-white underline">Calendar</button>
             </div>
 
@@ -7061,7 +7089,9 @@ function renderBottomNav() {
         html += `
           <main class="flex-1 min-h-0 overflow-y-auto space-y-3 w-full pr-0.5" onclick="appActions.closeCardMenu()">
             <div class="flex justify-between items-center border-b border-sub pb-2 text-xs font-bold text-white font-mono">
-              <span>📚 Program Library (Evidence-Based Splits)</span>
+              <span class="flex items-center gap-1.5">
+  <svg class="w-4 h-4 text-accent shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+  Program Library</span>
               <button type="button" onclick="appActions.navigate('calendar', event)" class="text-slate-400 hover:text-white underline">Calendar</button>
             </div>
 
@@ -7148,7 +7178,9 @@ function renderBottomNav() {
         html += `
           <main class="flex-1 min-h-0 overflow-y-auto space-y-3 w-full pr-0.5" onclick="appActions.closeCardMenu()">
             <div class="flex justify-between items-center border-b border-sub pb-2 text-xs font-bold text-white font-mono">
-              <span>🧩 Custom Split Blueprint Builder</span>
+              <span class="flex items-center gap-1.5">
+  <svg class="w-4 h-4 text-accent shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>
+  Microcycle Builder</span>
               <button type="button" onclick="appActions.navigate('calendar', event)" class="text-slate-400 hover:text-white underline">Calendar</button>
             </div>
 
@@ -7340,7 +7372,9 @@ function renderBottomNav() {
         html += `
           <main class="flex-1 min-h-0 overflow-y-auto space-y-3.5 w-full pr-0.5" onclick="appActions.closeCardMenu()">
             <div class="flex justify-between items-center border-b border-sub pb-2 text-xs font-bold text-white font-mono">
-              <span>📈 Longitudinal Telemetry & Science</span>
+              <span class="flex items-center gap-1.5">
+  <svg class="w-4 h-4 text-accent shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></svg>
+  Analytics</span>
               <button type="button" onclick="appActions.navigate('calendar', event)" class="text-slate-400 hover:text-white underline">Calendar</button>
             </div>
 
@@ -8150,7 +8184,9 @@ function renderBottomNav() {
             <div class="bg-card border border-sub rounded-3xl w-full max-w-md p-4 space-y-3 shadow-2xl my-auto text-xs font-mono max-h-[88vh] flex flex-col">
               <div class="flex justify-between items-center border-b border-sub pb-2">
                 <span class="font-bold text-amber-300 text-sm flex items-center space-x-1.5">
-                  <span>🔥</span><span>Personal Record Ledger</span>
+                  <span class="flex items-center gap-1.5">
+  <svg class="w-4 h-4 text-accent shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
+  PR Tracking</span>
                 </span>
                 <button type="button" onclick="appActions.closePrLedgerModal()" class="text-slate-400 hover:text-white p-1">✕</button>
               </div>
