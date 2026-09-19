@@ -8181,9 +8181,9 @@ function renderBottomNav() {
 
         html += `
           <div class="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center p-3 z-50 overflow-y-auto" onclick="event.stopPropagation()">
-            <div class="bg-card border border-sub rounded-3xl w-full max-w-md p-4 space-y-3 shadow-2xl my-auto text-xs font-mono max-h-[88vh] flex flex-col">
+            <div class="bg-card border border-sub rounded-3xl w-full max-w-4xl p-4 space-y-3 shadow-2xl my-auto text-xs font-mono max-h-[88vh] flex flex-col">
               <div class="flex justify-between items-center border-b border-sub pb-2">
-                <span class="font-bold text-amber-300 text-sm flex items-center space-x-1.5">
+                <span class="font-bold text-sm flex items-center space-x-1.5">
                   <span class="flex items-center gap-1.5">
   <svg class="w-4 h-4 text-accent shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
   PR Tracking</span>
