@@ -5439,7 +5439,18 @@ function renderBottomNav() {
       action: `appActions.navigate('${targetWorkoutScreen}', event)`,
       active: cur === 'logger' || cur === 'staging',
       badge: isWkActive,
-      icon: `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 5v14M18 5v14M2 9h4M18 9h4M2 15h4M18 15h4M6 12h12"/></svg>`
+      icon: `<svg class="w-5 h-5 mx-auto mb-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Barbell shaft -->
+  <path d="M2 12h20" />
+  <!-- Left plates: outer, middle, inner -->
+  <path d="M5 8v8" />
+  <path d="M7 6v12" />
+  <path d="M9 5v14" />
+  <!-- Right plates: inner, middle, outer -->
+  <path d="M15 5v14" />
+  <path d="M17 6v12" />
+  <path d="M19 8v8" />
+</svg`
     },
     {
       id: 'builder',
@@ -5453,7 +5464,7 @@ function renderBottomNav() {
       label: 'Analytics',
       action: "appActions.navigate('analytics', event)",
       active: cur === 'analytics',
-      icon: `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>`
+      icon: `<span><svg class="w-4 h-4 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></svg></span><span>Analytics</span>`
     },
     {
       id: 'settings',
