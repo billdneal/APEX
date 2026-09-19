@@ -8180,8 +8180,8 @@ function renderBottomNav() {
         const filteredPRs = (state.prLedger || []).filter(p => filterLift === 'All' || p.lift === filterLift);
 
         html += `
-          <div class="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center p-3 z-50 overflow-y-auto" onclick="event.stopPropagation()">
-            <div class="bg-card border border-sub rounded-3xl w-full max-w-4xl p-4 space-y-3 shadow-2xl my-auto text-xs font-mono max-h-[88vh] flex flex-col">
+         <div class="fixed inset-0 bg-black/90 backdrop-blur-sm flex justify-center p-2 sm:p-4 z-50 overflow-y-auto" onclick="event.stopPropagation()">
+  <div class="bg-card border border-sub rounded-2xl w-full max-w-4xl p-4 space-y-3 shadow-2xl flex flex-col h-[95vh] text-xs font-mono">
               <div class="flex justify-between items-center border-b border-sub pb-2">
                 <span class="font-bold text-sm flex items-center space-x-1.5">
                   <span class="flex items-center gap-1.5">
