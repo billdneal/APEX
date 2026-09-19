@@ -5439,18 +5439,7 @@ function renderBottomNav() {
       action: `appActions.navigate('${targetWorkoutScreen}', event)`,
       active: cur === 'logger' || cur === 'staging',
       badge: isWkActive,
-      icon: `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-  <!-- Barbell shaft -->
-  <path d="M2 12h20" />
-  <!-- Left plates: outer, middle, inner -->
-  <path d="M5 8v8" />
-  <path d="M7 6v12" />
-  <path d="M9 5v14" />
-  <!-- Right plates: inner, middle, outer -->
-  <path d="M15 5v14" />
-  <path d="M17 6v12" />
-  <path d="M19 8v8" />
-</svg`
+      icon: `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h20"/><path d="M5 8v8"/><path d="M7 6v12"/><path d="M9 5v14"/><path d="M15 5v14"/><path d="M17 6v12"/><path d="M19 8v8"/></svg>`
     },
     {
       id: 'builder',
