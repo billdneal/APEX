@@ -5578,9 +5578,9 @@ function renderBottomNav() {
                   <button type="button" onclick="appActions.navigate('analytics', event)" class="w-full text-left p-2.5 rounded-xl border border-sub flex items-center space-x-2.5 tactile ${state.screen === 'analytics' ? 'bg-blue-600 text-white font-bold' : 'bg-card-sub text-slate-300 hover:bg-slate-800'}">
                     <span><svg class="w-4 h-4 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></svg></span><span>Analytics</span>
                   </button>
-                  <button type="button" onclick="appActions.openPrLedgerModal()" class="w-full text-left p-2.5 rounded-xl border border-sub flex items-center space-x-2.5 tactile bg-card-sub text-slate-300 hover:bg-slate-800 font-bold">
-                    <span><svg class="w-4 h-4 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg></span><span>PR Tracking</span>
-                  </button>
+                  <button type="button" onclick="appActions.navigate('prs', event)" class="w-full text-left p-2.5 rounded-xl border border-sub flex items-center space-x-2.5 tactile ${state.screen === 'prs' ? 'bg-blue-600 text-white font-bold' : 'bg-card-sub text-slate-300 hover:text-white hover:bg-slate-800 font-semibold'}">
+  <span><svg class="w-4 h-4 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg></span><span>PR Tracking</span>
+</button>
                   <button type="button" onclick="appActions.navigate('resources', event)" class="w-full text-left p-2.5 rounded-xl border border-sub flex items-center space-x-2.5 tactile ${state.screen === 'resources' ? 'bg-blue-600 text-white font-bold' : 'bg-card-sub text-slate-300 hover:bg-slate-800'}">
                     <span><svg class="w-4 h-4 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6.5 6.5 11 11"/><path d="m21 21-1-1"/><path d="m3 3 1 1"/><path d="m18 22 4-4"/><path d="m2 6 4-4"/><path d="m3 10 7-7"/><path d="m14 21 7-7"/></svg></span><span>Movement Library</span>
                   </button>
@@ -8174,22 +8174,20 @@ function renderBottomNav() {
       }
 
       // PR Ledger Modal
-      if (state.prLedgerModal && state.prLedgerModal.open) {
-        const filterLift = state.prLedgerModal.filterLift || 'All';
+     if (state.screen === 'prs') {
+  const filterLift = state.prLedgerModal?.filterLift || 'All';
         const allPrLifts = Array.from(new Set((state.prLedger || []).map(p => p.lift))).sort();
         const filteredPRs = (state.prLedger || []).filter(p => filterLift === 'All' || p.lift === filterLift);
 
         html += `
-         <div class="fixed inset-0 bg-black/90 backdrop-blur-sm flex justify-center p-2 sm:p-4 z-50 overflow-y-auto" onclick="event.stopPropagation()">
-  <div class="bg-card border border-sub rounded-2xl w-full max-w-4xl p-4 space-y-3 shadow-2xl flex flex-col h-[95vh] text-xs font-mono">
-              <div class="flex justify-between items-center border-b border-sub pb-2">
-                <span class="font-bold text-sm flex items-center space-x-1.5">
-                  <span class="flex items-center gap-1.5">
-  <svg class="w-4 h-4 text-accent shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
-  PR Tracking</span>
-                </span>
-                <button type="button" onclick="appActions.closePrLedgerModal()" class="text-slate-400 hover:text-white p-1">✕</button>
-              </div>
+        <main class="flex-1 min-h-0 overflow-y-auto space-y-3 max-w-4xl mx-auto w-full pr-0.5" onclick="appActions.closeCardMenu()">
+      <div class="flex justify-between items-center border-b border-sub pb-2 text-xs font-bold text-white font-mono w-full">
+        <span class="flex items-center gap-1.5">
+          <svg class="w-4 h-4 text-accent shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
+          PR Tracking
+        </span>
+        <button type="button" onclick="appActions.navigate('calendar', event)" class="text-slate-400 hover:text-white underline">Calendar</button>
+      </div>
 
               <div class="flex justify-between items-center">
                 <span class="text-[10px] text-slate-400 uppercase font-bold">Filter Lift:</span>
@@ -8213,8 +8211,7 @@ function renderBottomNav() {
                   </div>
                 `).join('') : `<div class="text-center py-6 text-slate-500">No PR records logged yet.</div>`}
               </div>
-            </div>
-          </div>
+            </main>
         `;
       }
 
