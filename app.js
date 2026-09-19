@@ -5518,7 +5518,7 @@ function renderBottomNav() {
             </button>
             <div class="flex items-center space-x-1.5 cursor-pointer" onclick="appActions.navigate('calendar', event)">
               <span class="font-black tracking-wider text-base text-white font-mono">APEX</span>
-              <span class="text-[9px] font-mono uppercase px-1.5 py-0.2 rounded bg-input border border-sub text-accent font-bold">PRO</span>
+              <span class="text-[9px] font-mono uppercase px-1.5 py-0.2 rounded bg-input border border-sub text-slate-300 hover:text-white font-bold">PRO</span>
             </div>
             <button type="button" onclick="appActions.navigate('blocks', event)" class="text-[10px] font-mono bg-card-sub px-2.5 py-1 rounded-lg border border-sub text-slate-300 truncate max-w-[160px] tactile">
               ${currentRealTimePos.phase} (W${currentRealTimePos.week}/${currentRealTimePos.block.weeks})
@@ -5578,7 +5578,7 @@ function renderBottomNav() {
                   <button type="button" onclick="appActions.navigate('analytics', event)" class="w-full text-left p-2.5 rounded-xl border border-sub flex items-center space-x-2.5 tactile ${state.screen === 'analytics' ? 'bg-blue-600 text-white font-bold' : 'bg-card-sub text-slate-300 hover:bg-slate-800'}">
                     <span><svg class="w-4 h-4 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></svg></span><span>Analytics</span>
                   </button>
-                  <button type="button" onclick="appActions.openPrLedgerModal()" class="w-full text-left p-2.5 rounded-xl border border-sub flex items-center space-x-2.5 tactile bg-card-sub text-amber-300 hover:bg-slate-800 font-bold">
+                  <button type="button" onclick="appActions.openPrLedgerModal()" class="w-full text-left p-2.5 rounded-xl border border-sub flex items-center space-x-2.5 tactile bg-card-sub text-slate-300 hover:bg-slate-800 font-bold">
                     <span><svg class="w-4 h-4 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg></span><span>PR Tracking</span>
                   </button>
                   <button type="button" onclick="appActions.navigate('resources', event)" class="w-full text-left p-2.5 rounded-xl border border-sub flex items-center space-x-2.5 tactile ${state.screen === 'resources' ? 'bg-blue-600 text-white font-bold' : 'bg-card-sub text-slate-300 hover:bg-slate-800'}">
@@ -6006,7 +6006,7 @@ function renderBottomNav() {
                   <div>
                     <div class="flex items-center space-x-1.5">
                       <span class="text-[9px] font-mono uppercase text-slate-400">${ex.tier} • <b class="text-accent">${ex.scheme}</b></span>
-                      ${prEvent ? `<span class="text-[8px] font-mono bg-amber-500/20 text-amber-300 border border-amber-500 px-1 py-0.2 rounded font-bold animate-pulse">🔥 
+                      ${prEvent ? `<span class="text-[8px] font-mono bg-amber-500/20 text-slate-300 border border-amber-500 px-1 py-0.2 rounded font-bold animate-pulse">🔥 
                       PR +${prEvent.diff}lbs</span>` : ''}
                     </div>
                     <div class="flex items-center space-x-2 mt-0.5">
@@ -6016,7 +6016,7 @@ function renderBottomNav() {
                       </button>
                     </div>
                     <div class="flex flex-wrap gap-1 mt-1 cursor-pointer" onclick="event.stopPropagation(); appActions.openConfig(${exIdx}, true)" title="Tap to adjust modifiers">
-                      ${cleanMods.length ? cleanMods.map(m => `<span class="text-[8px] font-mono bg-input text-accent px-1.5 py-0.2 rounded border border-sub">${m}</span>`).join('') : `<span class="text-[8px] font-mono text-slate-500 hover:text-accent">+ Add Modifiers</span>`}
+                      ${cleanMods.length ? cleanMods.map(m => `<span class="text-[8px] font-mono bg-input text-slate-300 hover:text-white px-1.5 py-0.2 rounded border border-sub">${m}</span>`).join('') : `<span class="text-[8px] font-mono text-slate-500 hover:text-accent">+ Add Modifiers</span>`}
                     </div>
                   </div>
                 </div>
