@@ -8197,7 +8197,7 @@ function renderBottomNav() {
                 </select>
               </div>
 
-              <div class="space-y-1.5 overflow-y-auto max-h-60 pr-1 flex-1">
+              <div class="space-y-1.5 pr-1 pb-24">
                 ${filteredPRs.length ? filteredPRs.map(pr => `
                   <div class="bg-input p-2.5 rounded-xl border border-sub flex justify-between items-center">
                     <div>
