@@ -5487,7 +5487,7 @@ function renderBottomNav() {
       const validScreens = [
         'calendar', 'logger', 'staging', 'checkin', 'blocks', 'resources', 
         'profile', 'history_review', 'settings', 'about', 'library', 'splits', 
-        'analytics', 'programming_builder'
+        'analytics', 'programming_builder','prs'
       ];
       if (!validScreens.includes(state.screen)) {
         state.screen = 'calendar';
