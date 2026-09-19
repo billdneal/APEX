@@ -6,7 +6,7 @@
 //           Multi-Formula 1RM Prediction Engine (APEX, Epley, Brzycki, Wathan, Lombardi),
 //           Neutral Scheme Nomenclature with Backward Compatibility Aliasing,
 //           Strict 0.5 RPE Quantization Engine (<6 / 5.5 to 10.0),
-//           Anticipated Target Date Macrocycle Resolver (getMacrocyclePosition),
+//           Anticipated Target Date Mesocycle Resolver (getMesocyclePosition),
 //           Dual-Bound Phase Rep Matrix & Lift Override Architecture,
 //           Resilient Database-Safe Settings Mirroring
 // ============================================================================
@@ -729,8 +729,8 @@ function getIcon(name, cls = 'w-4 h-4') {
       },
       authModal: { open: false, mode: 'login', email: '', password: '', msg: '', msgType: '' },
       profile: { age: 40, bodyweight: 196.2, skillLevel: 'Advanced', lifterType: 'Natural' },
-      macrocycleStartDate: getTodayDateString(),
-      macrocycle: [
+      mesocycleStartDate: getTodayDateString(),
+      mesocycle: [
         { id: 1, phase: 'Accumulation', weeks: 3 },
         { id: 2, phase: 'Hypertrophy', weeks: 3 },
         { id: 3, phase: 'Intensification', weeks: 3 },
@@ -870,10 +870,10 @@ function getIcon(name, cls = 'w-4 h-4') {
       }
       const savedProf = localStorage.getItem('apex_profile');
       if (savedProf) { const p = JSON.parse(savedProf); if (p && typeof p === 'object') state.profile = { ...state.profile, ...p }; }
-      const savedStart = localStorage.getItem('apex_macrocycleStartDate');
-      if (savedStart) state.macrocycleStartDate = normalizeDateKey(savedStart);
-      const savedMacro = localStorage.getItem('apex_macrocycle');
-      if (savedMacro) { const p = JSON.parse(savedMacro); if (Array.isArray(p) && p.length > 0) state.macrocycle = p; }
+      const savedStart = localStorage.getItem('apex_mesocycleStartDate');
+      if (savedStart) state.mesocycleStartDate = normalizeDateKey(savedStart);
+      const savedMacro = localStorage.getItem('apex_mesocycle');
+      if (savedMacro) { const p = JSON.parse(savedMacro); if (Array.isArray(p) && p.length > 0) state.mesocycle = p; }
       const savedSplit = localStorage.getItem('apex_weekdaySplit');
       if (savedSplit) { const p = JSON.parse(savedSplit); if (p && typeof p === 'object') state.weekdaySplit = { ...state.weekdaySplit, ...p }; }
       const savedCustomSplits = localStorage.getItem('apex_customSplitBlueprints');
@@ -990,8 +990,8 @@ function getIcon(name, cls = 'w-4 h-4') {
         localStorage.setItem('apex_prLedger', JSON.stringify(state.prLedger));
         localStorage.setItem('apex_settings', JSON.stringify(state.settings));
         localStorage.setItem('apex_profile', JSON.stringify(state.profile));
-        localStorage.setItem('apex_macrocycleStartDate', state.macrocycleStartDate);
-        localStorage.setItem('apex_macrocycle', JSON.stringify(state.macrocycle));
+        localStorage.setItem('apex_mesocycleStartDate', state.mesocycleStartDate);
+        localStorage.setItem('apex_mesocycle', JSON.stringify(state.mesocycle));
         localStorage.setItem('apex_weekdaySplit', JSON.stringify(state.weekdaySplit));
         localStorage.setItem('apex_customSplitBlueprints', JSON.stringify(state.customSplitBlueprints));
         localStorage.setItem('apex_exerciseMeta', JSON.stringify(state.exerciseMeta));
@@ -1083,13 +1083,13 @@ function getIcon(name, cls = 'w-4 h-4') {
       } catch(e) {}
     }
 
-    // Date-Aware Macrocycle Position Resolver
-    function getMacrocyclePosition(targetDate = new Date()) {
-      if (!state.macrocycle || !state.macrocycle.length || !state.macrocycleStartDate) {
+    // Date-Aware Mesocycle Position Resolver
+    function getMesocyclePosition(targetDate = new Date()) {
+      if (!state.mesocycle || !state.mesocycle.length || !state.mesocycleStartDate) {
         return { blockIdx: 0, week: 1, phase: 'Hypertrophy', block: { phase: 'Hypertrophy', weeks: 3 } };
       }
       try {
-        const [sY, sM, sD] = state.macrocycleStartDate.split('-').map(Number);
+        const [sY, sM, sD] = state.mesocycleStartDate.split('-').map(Number);
         const startDate = new Date(sY, sM - 1, sD);
         startDate.setHours(0, 0, 0, 0);
 
@@ -1108,35 +1108,35 @@ function getIcon(name, cls = 'w-4 h-4') {
         const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
         if (diffDays < 0) {
-          return { blockIdx: 0, week: 1, phase: state.macrocycle[0].phase, block: state.macrocycle[0] };
+          return { blockIdx: 0, week: 1, phase: state.mesocycle[0].phase, block: state.mesocycle[0] };
         }
 
         let totalWeeksElapsed = Math.floor(diffDays / 7);
-        const totalMacroWeeks = state.macrocycle.reduce((sum, b) => sum + (Number(b.weeks) || 1), 0);
+        const totalMacroWeeks = state.mesocycle.reduce((sum, b) => sum + (Number(b.weeks) || 1), 0);
         if (totalMacroWeeks > 0) {
           totalWeeksElapsed = totalWeeksElapsed % totalMacroWeeks;
         }
 
         let accumulatedWeeks = 0;
-        for (let i = 0; i < state.macrocycle.length; i++) {
-          const bWeeks = Number(state.macrocycle[i].weeks) || 1;
+        for (let i = 0; i < state.mesocycle.length; i++) {
+          const bWeeks = Number(state.mesocycle[i].weeks) || 1;
           if (totalWeeksElapsed < accumulatedWeeks + bWeeks) {
             const weekNum = (totalWeeksElapsed - accumulatedWeeks) + 1;
             return {
               blockIdx: i,
               week: weekNum,
-              phase: state.macrocycle[i].phase,
-              block: state.macrocycle[i]
+              phase: state.mesocycle[i].phase,
+              block: state.mesocycle[i]
             };
           }
           accumulatedWeeks += bWeeks;
         }
       } catch (e) {}
-      return { blockIdx: 0, week: 1, phase: state.macrocycle[0]?.phase || 'Hypertrophy', block: state.macrocycle[0] };
+      return { blockIdx: 0, week: 1, phase: state.mesocycle[0]?.phase || 'Hypertrophy', block: state.mesocycle[0] };
     }
 
-    function syncMacrocycleProgression(targetDate = new Date()) {
-      const pos = getMacrocyclePosition(targetDate);
+    function syncMesocycleProgression(targetDate = new Date()) {
+      const pos = getMesocyclePosition(targetDate);
       state.activeBlockIdx = pos.blockIdx;
       state.activeWeek = pos.week;
     }
@@ -1446,7 +1446,7 @@ function getIcon(name, cls = 'w-4 h-4') {
     // MULTI-VARIABLE BLOCK TRANSITION WIZARD HEURISTICS ENGINE
     // ========================================================================
     function analyzeBlockTransition(targetDateKey = null) {
-      const pos = getMacrocyclePosition(targetDateKey || new Date());
+      const pos = getMesocyclePosition(targetDateKey || new Date());
       const curPhase = pos.phase;
       const curWeeks = Number(pos.block.weeks) || 3;
       const lifterType = state.profile?.lifterType || 'Natural';
@@ -1454,12 +1454,12 @@ function getIcon(name, cls = 'w-4 h-4') {
 
       // 1. Gather DayLogs for the Current Block Window
       const allDates = Object.keys(state.dayLogs || {}).sort();
-      const [sY, sM, sD] = (state.macrocycleStartDate || getTodayDateString()).split('-').map(Number);
+      const [sY, sM, sD] = (state.mesocycleStartDate || getTodayDateString()).split('-').map(Number);
       const startOfCycle = new Date(sY, sM - 1, sD).getTime();
 
       let accumWeeks = 0;
       for (let i = 0; i < pos.blockIdx; i++) {
-        accumWeeks += Number(state.macrocycle[i].weeks) || 1;
+        accumWeeks += Number(state.mesocycle[i].weeks) || 1;
       }
       const blockStartEpoch = startOfCycle + (accumWeeks * 7 * 86400000);
       const blockEndEpoch = blockStartEpoch + (curWeeks * 7 * 86400000);
@@ -1703,7 +1703,7 @@ function getIcon(name, cls = 'w-4 h-4') {
           user_id: state.user.id,
           settings: state.settings,
           profile: state.profile,
-          macrocycle: state.macrocycle,
+          mesocycle: state.mesocycle,
           weekday_split: state.weekdaySplit,
           exercise_meta: state.exerciseMeta,
           phase_rep_matrix: state.phaseRepMatrix,
@@ -1754,7 +1754,7 @@ function getIcon(name, cls = 'w-4 h-4') {
             if (data.settings.oneRmFormula) state.settings.oneRmFormula = data.settings.oneRmFormula;
           }
           if (data.profile) state.profile = { ...state.profile, ...data.profile };
-          if (data.macrocycle) state.macrocycle = data.macrocycle;
+          if (data.mesocycle) state.mesocycle = data.mesocycle;
           if (data.weekday_split) state.weekdaySplit = data.weekday_split;
           if (data.exercise_meta) state.exerciseMeta = { ...state.exerciseMeta, ...data.exercise_meta };
           if (data.phase_rep_matrix) state.phaseRepMatrix = data.phase_rep_matrix;
@@ -1774,7 +1774,7 @@ function getIcon(name, cls = 'w-4 h-4') {
           else if (!state.anchorE1rms || !Object.keys(state.anchorE1rms).length) state.anchorE1rms = { ...state.e1rms };
           if (data.pr_ledger) state.prLedger = data.pr_ledger;
           localStorage.setItem('apex_last_sync_timestamp', String(Date.now()));
-          syncMacrocycleProgression();
+          syncMesocycleProgression();
           state.formMetrics.weight = getLatestBodyweight();
           if (typeof window.persist === 'function') window.persist();
           state.syncStatus = 'synced';
@@ -1841,8 +1841,8 @@ function getIcon(name, cls = 'w-4 h-4') {
       getReadinessScore,
       getReadinessBand,
       getRollingReadiness,
-      getMacrocyclePosition,
-      syncMacrocycleProgression,
+      getMesocyclePosition,
+      syncMesocycleProgression,
       sanitizeModifiers,
       getVariantKey,
       normalizeRepBookends,
@@ -1895,20 +1895,20 @@ function getIcon(name, cls = 'w-4 h-4') {
     const {
       roundRpe, roundLoad, getPct, calcLoad, getCurKey, getDayOfWeek,
       getLiftHistory, getExMeta, getRollingReadiness, getReadinessBand,
-      getMacrocyclePosition, resolveTargetReps, defaultSchemeRecipes,
+      getMesocyclePosition, resolveTargetReps, defaultSchemeRecipes,
       normalizeSchemeName
     } = window.apexCore;
 
     const state = window.state;
 
     function getActiveBlock(targetDateKey = null) {
-      if (typeof getMacrocyclePosition === 'function') {
-        const pos = getMacrocyclePosition(targetDateKey || new Date());
+      if (typeof getMesocyclePosition === 'function') {
+        const pos = getMesocyclePosition(targetDateKey || new Date());
         return pos.block || { phase: pos.phase || 'Hypertrophy', weeks: 3 };
       }
-      if (!state.macrocycle || !state.macrocycle.length) return { phase: 'Hypertrophy', weeks: 3 };
-      if (state.activeBlockIdx >= state.macrocycle.length) state.activeBlockIdx = 0;
-      return state.macrocycle[state.activeBlockIdx];
+      if (!state.mesocycle || !state.mesocycle.length) return { phase: 'Hypertrophy', weeks: 3 };
+      if (state.activeBlockIdx >= state.mesocycle.length) state.activeBlockIdx = 0;
+      return state.mesocycle[state.activeBlockIdx];
     }
 
     // ========================================================================
@@ -1930,8 +1930,8 @@ function getIcon(name, cls = 'w-4 h-4') {
       let phase = 'Hypertrophy';
       let w = 1;
 
-      if (typeof getMacrocyclePosition === 'function') {
-        const pos = getMacrocyclePosition(targetDateKey);
+      if (typeof getMesocyclePosition === 'function') {
+        const pos = getMesocyclePosition(targetDateKey);
         curBlock = pos.block;
         phase = pos.phase;
         w = pos.week;
@@ -3106,8 +3106,8 @@ function getIcon(name, cls = 'w-4 h-4') {
     getReadinessScore = () => 80,
     getReadinessBand = () => ({ name: 'Optimal', badge: '', desc: '', factor: 1.0, rpeCap: 10, setReduction: 0 }),
     getRollingReadiness = () => 80,
-    getMacrocyclePosition = () => ({ blockIdx: 0, week: 1, phase: 'Hypertrophy', block: { phase: 'Hypertrophy', weeks: 3 } }),
-    syncMacrocycleProgression = () => {},
+    getMesocyclePosition = () => ({ blockIdx: 0, week: 1, phase: 'Hypertrophy', block: { phase: 'Hypertrophy', weeks: 3 } }),
+    syncMesocycleProgression = () => {},
     sanitizeModifiers = (m) => Array.isArray(m) ? m : [],
     getVariantKey = (ex, m) => ex,
     requestWakeLock = () => {},
@@ -3676,9 +3676,9 @@ function getIcon(name, cls = 'w-4 h-4') {
         state.anchorE1rms[vKey] = blendE1rmValues(priorAnchor, tested, blending);
       });
 
-      // 2. Advance to Next Macrocycle Block
-      if (state.macrocycle && state.macrocycle.length) {
-        state.activeBlockIdx = (state.activeBlockIdx + 1) % state.macrocycle.length;
+      // 2. Advance to Next Mesocycle Block
+      if (state.mesocycle && state.mesocycle.length) {
+        state.activeBlockIdx = (state.activeBlockIdx + 1) % state.mesocycle.length;
         state.activeWeek = 1;
       }
 
@@ -3787,10 +3787,10 @@ function getIcon(name, cls = 'w-4 h-4') {
     // Active Workout Runtime Execution
     startActiveWorkout() {
       const targetDateKey = formatIsoDate(state.year, state.month, state.selectedDay);
-      syncMacrocycleProgression(targetDateKey);
+      syncMesocycleProgression(targetDateKey);
       const r = getRollingReadiness(targetDateKey, 3);
       const readyBand = getReadinessBand(r);
-      const pos = getMacrocyclePosition(targetDateKey);
+      const pos = getMesocyclePosition(targetDateKey);
       const w = pos.week || 1;
 
       state.sStart = Date.now();
@@ -4411,15 +4411,15 @@ function getIcon(name, cls = 'w-4 h-4') {
       safeRender();
     },
 
-    // Macrocycle & Blueprint Architecture
+    // Mesocycle & Blueprint Architecture
     setActiveBlock(idx) { state.activeBlockIdx = idx; state.activeWeek = 1; persist(); window.pushToCloud(false); safeRender(); },
     setActiveWeek(w) { state.activeWeek = w; persist(); window.pushToCloud(false); safeRender(); },
-    addMacroBlock() { state.macrocycle.push({ id: Date.now(), phase: state.newBlockPhase, weeks: Number(state.newBlockWeeks) }); syncMacrocycleProgression(); persist(); window.pushToCloud(false); safeRender(); },
+    addMacroBlock() { state.mesocycle.push({ id: Date.now(), phase: state.newBlockPhase, weeks: Number(state.newBlockWeeks) }); syncMesocycleProgression(); persist(); window.pushToCloud(false); safeRender(); },
     
     deleteMacroBlock(idx) {
-      if (state.macrocycle.length <= 1) return;
-      state.macrocycle.splice(idx, 1);
-      syncMacrocycleProgression();
+      if (state.mesocycle.length <= 1) return;
+      state.mesocycle.splice(idx, 1);
+      syncMesocycleProgression();
       persist();
       window.pushToCloud(false);
       safeRender();
@@ -4427,30 +4427,30 @@ function getIcon(name, cls = 'w-4 h-4') {
 
     moveMacroBlock(idx, dir) {
       const target = idx + dir;
-      if (target < 0 || target >= state.macrocycle.length) return;
-      const item = state.macrocycle.splice(idx, 1)[0];
-      state.macrocycle.splice(target, 0, item);
-      syncMacrocycleProgression();
+      if (target < 0 || target >= state.mesocycle.length) return;
+      const item = state.mesocycle.splice(idx, 1)[0];
+      state.mesocycle.splice(target, 0, item);
+      syncMesocycleProgression();
       persist();
       window.pushToCloud(false);
       safeRender();
     },
 
-    setMacrocycleStartDate(dateStr) {
-      state.macrocycleStartDate = normalizeDateKey(dateStr);
-      syncMacrocycleProgression();
+    setMesocycleStartDate(dateStr) {
+      state.mesocycleStartDate = normalizeDateKey(dateStr);
+      syncMesocycleProgression();
       persist();
       window.pushToCloud(false);
       safeRender();
     },
 
-    setMacrocycleStartToMonday() {
+    setMesocycleStartToMonday() {
       const d = new Date();
       const day = d.getDay();
       const diff = d.getDate() - day + (day === 0 ? -6 : 1);
       const monday = new Date(d.setDate(diff));
-      state.macrocycleStartDate = formatIsoDate(monday.getFullYear(), monday.getMonth(), monday.getDate());
-      syncMacrocycleProgression();
+      state.mesocycleStartDate = formatIsoDate(monday.getFullYear(), monday.getMonth(), monday.getDate());
+      syncMesocycleProgression();
       persist();
       window.pushToCloud(false);
       showToast("Set start date to current Monday!");
@@ -4501,9 +4501,9 @@ function getIcon(name, cls = 'w-4 h-4') {
     launchProgramPreset(progId, days) {
       const prog = programPresets.find(p => p.id === progId);
       if (!prog) return;
-      state.macrocycle = JSON.parse(JSON.stringify(prog.macro));
-      state.macrocycleStartDate = core.getTodayDateString ? core.getTodayDateString() : formatIsoDate(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
-      syncMacrocycleProgression();
+      state.mesocycle = JSON.parse(JSON.stringify(prog.macro));
+      state.mesocycleStartDate = core.getTodayDateString ? core.getTodayDateString() : formatIsoDate(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+      syncMesocycleProgression();
       const assignedSplit = prog.splits[days] || prog.splits[4];
       state.weekdaySplit = { ...assignedSplit };
       persist();
@@ -4666,8 +4666,8 @@ function getIcon(name, cls = 'w-4 h-4') {
         timestamp: new Date().toISOString(),
         settings: state.settings,
         profile: state.profile,
-        macrocycle: state.macrocycle,
-        macrocycleStartDate: state.macrocycleStartDate,
+        mesocycle: state.mesocycle,
+        mesocycleStartDate: state.mesocycleStartDate,
         weekdaySplit: state.weekdaySplit,
         customSplitBlueprints: state.customSplitBlueprints,
         exerciseMeta: state.exerciseMeta,
@@ -4704,8 +4704,8 @@ function getIcon(name, cls = 'w-4 h-4') {
           if (imported && typeof imported === 'object') {
             if (imported.settings) state.settings = { ...state.settings, ...imported.settings };
             if (imported.profile) state.profile = { ...state.profile, ...imported.profile };
-            if (imported.macrocycle) state.macrocycle = imported.macrocycle;
-            if (imported.macrocycleStartDate) state.macrocycleStartDate = imported.macrocycleStartDate;
+            if (imported.mesocycle) state.mesocycle = imported.mesocycle;
+            if (imported.mesocycleStartDate) state.mesocycleStartDate = imported.mesocycleStartDate;
             if (imported.weekdaySplit) state.weekdaySplit = imported.weekdaySplit;
             if (imported.customSplitBlueprints) state.customSplitBlueprints = imported.customSplitBlueprints;
             if (imported.exerciseMeta) state.exerciseMeta = imported.exerciseMeta;
@@ -4880,7 +4880,7 @@ function getIcon(name, cls = 'w-4 h-4') {
     getReadinessScore = () => 80,
     getReadinessBand = () => ({ name: 'Optimal', badge: '', desc: '', factor: 1.0, rpeCap: 10, setReduction: 0 }),
     getLatestBodyweight = () => 196.2,
-    getMacrocyclePosition = () => ({ blockIdx: 0, week: 1, phase: 'Hypertrophy', block: { phase: 'Hypertrophy', weeks: 3 } }),
+    getMesocyclePosition = () => ({ blockIdx: 0, week: 1, phase: 'Hypertrophy', block: { phase: 'Hypertrophy', weeks: 3 } }),
     metricDescs = {},
     programPresets = [],
     getLiftHistory = () => [],
@@ -5501,7 +5501,7 @@ function renderBottomNav() {
       applyGlobalThemeAndFont();
       
       // Real-time position for app header bar
-      const currentRealTimePos = getMacrocyclePosition(new Date());
+      const currentRealTimePos = getMesocyclePosition(new Date());
       const isWorkoutActive = state.activeWorkout && state.activeWorkout.length > 0;
 
       let syncBtnContent = state.user 
@@ -5573,7 +5573,7 @@ function renderBottomNav() {
                     <span><svg class="w-4 h-4 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg></span><span>Microcycle Builder</span>
                   </button>
                   <button type="button" onclick="appActions.navigate('blocks', event)" class="w-full text-left p-2.5 rounded-xl border border-sub flex items-center space-x-2.5 tactile ${state.screen === 'blocks' ? 'bg-blue-600 text-white font-bold' : 'bg-card-sub text-slate-300 hover:bg-slate-800'}">
-                    <span><svg class="w-4 h-4 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 10 5-10 5-10-5Z"/><path d="m2 12 10 5 10-5"/><path d="m2 17 10 5 10-5"/></svg></span><span>Macrocycle Builder</span>
+                    <span><svg class="w-4 h-4 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 10 5-10 5-10-5Z"/><path d="m2 12 10 5 10-5"/><path d="m2 17 10 5 10-5"/></svg></span><span>Mesocycle Builder</span>
                   </button>
                   <button type="button" onclick="appActions.navigate('analytics', event)" class="w-full text-left p-2.5 rounded-xl border border-sub flex items-center space-x-2.5 tactile ${state.screen === 'analytics' ? 'bg-blue-600 text-white font-bold' : 'bg-card-sub text-slate-300 hover:bg-slate-800'}">
                     <span><svg class="w-4 h-4 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></svg></span><span>Analytics</span>
@@ -6151,7 +6151,7 @@ function renderBottomNav() {
       // 4. STAGING SCREEN
       else if (state.screen === 'staging') {
         const targetDateKey = formatIsoDate(state.year, state.month, state.selectedDay);
-        const stagedPos = getMacrocyclePosition(targetDateKey);
+        const stagedPos = getMesocyclePosition(targetDateKey);
         const curPhase = stagedPos.phase;
         const curWeek = stagedPos.week;
         const curBlockWeeks = stagedPos.block.weeks || 3;
@@ -6389,7 +6389,7 @@ function renderBottomNav() {
         `;
       }
 
-      // 7. MACROCYCLE BLOCKS SCREEN (With On-Demand Wizard Launcher)
+      // 7. MESOCYCLE BLOCKS SCREEN (With On-Demand Wizard Launcher)
       else if (state.screen === 'blocks') {
         const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
         const splitOptions = Object.keys(state.customSplitBlueprints || {});
@@ -6403,7 +6403,7 @@ function renderBottomNav() {
           </div>
         `).join('');
 
-        const blockCards = (state.macrocycle || []).map((b, idx) => {
+        const blockCards = (state.mesocycle || []).map((b, idx) => {
           const isActive = idx === state.activeBlockIdx;
           return `
             <div class="p-3 rounded-2xl border transition ${isActive ? 'bg-blue-950/40 border-blue-600 ring-1 ring-blue-500 shadow-accent' : 'bg-card-sub border-sub'} space-y-2 font-mono">
@@ -6433,7 +6433,7 @@ function renderBottomNav() {
             <div class="flex justify-between items-center border-b border-sub pb-2 text-xs font-bold text-white font-mono w-full">
               <span class="flex items-center gap-1.5">
   <svg class="w-4 h-4 text-accent shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 10 5-10 5-10-5Z"/><path d="m2 12 10 5 10-5"/><path d="m2 17 10 5 10-5"/></svg>
-  Macrocycle Builder</span>
+  Mesocycle Builder</span>
               <button type="button" onclick="appActions.navigate('calendar', event)" class="text-slate-400 hover:text-white underline">Calendar</button>
             </div>
 
@@ -6451,16 +6451,16 @@ function renderBottomNav() {
             <div class="p-3.5 bg-card-sub rounded-2xl border border-sub space-y-2 font-mono text-xs shadow-md">
               <div class="flex justify-between items-center">
                 <div>
-                  <span class="text-[10px] text-accent font-bold uppercase">Macrocycle Timeline Anchor</span>
+                  <span class="text-[10px] text-accent font-bold uppercase">Mesocycle Timeline Anchor</span>
                   <div class="text-[9px] text-slate-400">Auto-calculates phase & active week based on current date</div>
                 </div>
                 <div class="flex items-center space-x-1">
-                  <button type="button" onclick="appActions.setMacrocycleStartToMonday()" class="px-2 py-1 bg-input border border-sub text-[10px] text-slate-300 rounded-lg font-bold hover:text-white tactile">Set Monday</button>
-                  <button type="button" onclick="appActions.setMacrocycleStartDate(core.getTodayDateString ? core.getTodayDateString() : '')" class="px-2 py-1 bg-blue-600 text-white text-[10px] rounded-lg font-bold tactile shadow">Today</button>
+                  <button type="button" onclick="appActions.setMesocycleStartToMonday()" class="px-2 py-1 bg-input border border-sub text-[10px] text-slate-300 rounded-lg font-bold hover:text-white tactile">Set Monday</button>
+                  <button type="button" onclick="appActions.setMesocycleStartDate(core.getTodayDateString ? core.getTodayDateString() : '')" class="px-2 py-1 bg-blue-600 text-white text-[10px] rounded-lg font-bold tactile shadow">Today</button>
                 </div>
               </div>
               <div class="flex items-center space-x-2 pt-1">
-                <input type="date" value="${state.macrocycleStartDate}" onchange="appActions.setMacrocycleStartDate(this.value)" class="flex-1 bg-input border border-sub rounded-xl p-2 text-white font-mono text-xs focus:outline-none font-bold">
+                <input type="date" value="${state.mesocycleStartDate}" onchange="appActions.setMesocycleStartDate(this.value)" class="flex-1 bg-input border border-sub rounded-xl p-2 text-white font-mono text-xs focus:outline-none font-bold">
                 <div class="bg-input px-3 py-2 rounded-xl border border-sub text-center shrink-0">
                   <div class="text-[8px] text-slate-400 uppercase">Current Real-Time</div>
                   <div class="text-xs font-black text-accent">${currentRealTimePos.phase} • W${currentRealTimePos.week}</div>
@@ -7054,7 +7054,7 @@ function renderBottomNav() {
             </div>
 
             <div class="p-3.5 bg-card-sub rounded-3xl border border-sub space-y-2.5 font-mono text-xs shadow-md">
-              <span class="text-[10px] text-accent font-bold uppercase">Macrocycle Periodization Blocks</span>
+              <span class="text-[10px] text-accent font-bold uppercase">Mesocycle Periodization Blocks</span>
               <div class="grid grid-cols-1 md:grid-cols-2 gap-2">${phasesList}</div>
             </div>
 
@@ -7121,7 +7121,7 @@ function renderBottomNav() {
 
               <div class="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
                 <div class="space-y-2">
-                  <div class="text-[10px] text-accent font-bold uppercase">Macrocycle Periodization Sequence</div>
+                  <div class="text-[10px] text-accent font-bold uppercase">Mesocycle Periodization Sequence</div>
                   <div class="space-y-1.5">
                     ${(selectedProg.macro || []).map((m, idx) => `
                       <div class="bg-input p-2 rounded-xl border border-sub flex justify-between items-center text-xs">
