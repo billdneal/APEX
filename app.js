@@ -5959,8 +5959,8 @@ function renderBottomNav() {
             return `
               <div id="set-row-${exIdx}-${sIdx}" class="p-2 rounded-xl border space-y-1.5 ${s.done ? 'bg-emerald-950/30 border-emerald-800' : 'bg-input border-sub'}">
                 <div class="grid grid-cols-12 gap-1 items-center text-center">
-                  <div class="col-span-2 flex flex-col items-start justify-center text-left leading-tight">
-  <button type="button" onclick="appActions.deleteSet(${exIdx},${sIdx})" class="text-[9px] md:text-xs font-mono text-slate-400 hover:text-red-400 font-bold">${sIdx + 1}</button>${s.label ? `<span class="text-[7px] md:text-[7.5px] font-mono px-1 py-0.5 mt-0.5 bg-card-sub rounded text-blue-300 border border-sub leading-tight whitespace-normal break-words">${s.label}</span>` : ''}
+                  <div class="col-span-2 flex items-center space-x-1 text-left min-w-0">
+  <button type="button" onclick="appActions.deleteSet(${exIdx},${sIdx})" class="text-[9px] md:text-xs font-mono text-slate-400 hover:text-red-400 font-bold shrink-0">${sIdx + 1}</button>${s.label ? `<span class="text-[7px] md:text-[7.5px] font-mono px-1 py-0.5 bg-card-sub rounded text-blue-300 border border-sub leading-[9px] whitespace-normal break-words text-center flex-1">${s.label}</span>` : ''}
 </div>
                   <span class="col-span-3 font-mono text-[9px] md:text-xs text-slate-300 text-left pl-0.5 leading-tight truncate">
                     ${s.targetLoad ? s.targetLoad + 'x' : ''}${s.targetReps ? s.targetReps + 'r' : ''}${s.targetTime ? s.targetTime + 's' : ''} @${displayTargetRpe}
@@ -6094,12 +6094,24 @@ function renderBottomNav() {
                   ` : ''}
 
                   <div class="space-y-1.5">
-                    <div class="grid grid-cols-12 gap-1 text-[9px] md:text-[10px] font-mono text-slate-400 text-center font-bold">
-                      <span class="col-span-2 text-left">SET</span>
-                      <span class="col-span-3 text-left">TARGET</span>
-                      <span class="col-span-6 grid grid-cols-3 text-center">${meta.t ? 'LOAD / REPS / RPE' : 'ACTUAL (LBS / REPS / RPE)'}</span>
-                      <span class="col-span-1">LOG</span>
-                    </div>
+                    <div class="grid grid-cols-12 gap-1 text-[9px] md:text-[10px] font-mono text-slate-400 text-center font-bold items-end pb-1">
+  <span class="col-span-2 text-left pb-0.5">SET</span>
+  <span class="col-span-3 text-left pb-0.5">TARGET</span>
+  
+  <!-- Stacked Actual + Sub-columns -->
+  <div class="col-span-6 flex flex-col items-center">
+    <span class="text-[7.5px] md:text-[8px] uppercase tracking-widest text-slate-500 font-semibold mb-0.5">
+      ${meta.t ? 'LOAD' : 'ACTUAL'}
+    </span>
+    <div class="w-full grid grid-cols-3 text-center text-[9px] md:text-[10px] text-slate-400">
+      <span>LBS</span>
+      <span>REPS</span>
+      <span>RPE</span>
+    </div>
+  </div>
+
+  <span class="col-span-1 pb-0.5">LOG</span>
+</div>
                     ${setRows}
                     
                     <div class="flex justify-between items-center pt-2 mt-1 border-t border-sub/40 font-mono text-[10px]">
