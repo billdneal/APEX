@@ -5959,10 +5959,9 @@ function renderBottomNav() {
             return `
               <div id="set-row-${exIdx}-${sIdx}" class="p-2 rounded-xl border space-y-1.5 ${s.done ? 'bg-emerald-950/30 border-emerald-800' : 'bg-input border-sub'}">
                 <div class="grid grid-cols-12 gap-1 items-center text-center">
-                  <div class="col-span-2 flex items-center space-x-1 text-left">
-                    <button type="button" onclick="appActions.deleteSet(${exIdx}, ${sIdx})" class="text-[9px] md:text-xs font-mono text-slate-400 hover:text-red-400 font-bold">${sIdx + 1}</button>
-                    ${s.label ? `<span class="text-[7px] md:text-[8px] font-mono px-1 py-0.2 bg-card-sub rounded text-blue-300 border border-sub truncate max-w-[42px]">${s.label}</span>` : ''}
-                  </div>
+                  <div class="col-span-2 flex flex-col items-start justify-center text-left leading-tight">
+  <button type="button" onclick="appActions.deleteSet(${exIdx},${sIdx})" class="text-[9px] md:text-xs font-mono text-slate-400 hover:text-red-400 font-bold">${sIdx + 1}</button>${s.label ? `<span class="text-[7px] md:text-[7.5px] font-mono px-1 py-0.5 mt-0.5 bg-card-sub rounded text-blue-300 border border-sub leading-tight whitespace-normal break-words">${s.label}</span>` : ''}
+</div>
                   <span class="col-span-3 font-mono text-[9px] md:text-xs text-slate-300 text-left pl-0.5 leading-tight truncate">
                     ${s.targetLoad ? s.targetLoad + 'x' : ''}${s.targetReps ? s.targetReps + 'r' : ''}${s.targetTime ? s.targetTime + 's' : ''} @${displayTargetRpe}
                   </span>
@@ -6098,7 +6097,7 @@ function renderBottomNav() {
                     <div class="grid grid-cols-12 gap-1 text-[9px] md:text-[10px] font-mono text-slate-400 text-center font-bold">
                       <span class="col-span-2 text-left">SET</span>
                       <span class="col-span-3 text-left">TARGET</span>
-                      <span class="col-span-6 text-right">${meta.t ? 'LOAD / REPS / RPE' : 'ACTUAL (LBS / REPS / RPE)'}</span>
+                      <span class="col-span-6 grid grid-cols-3 text-center">${meta.t ? 'LOAD / REPS / RPE' : 'ACTUAL (LBS / REPS / RPE)'}</span>
                       <span class="col-span-1">LOG</span>
                     </div>
                     ${setRows}
