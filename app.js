@@ -6094,24 +6094,24 @@ function renderBottomNav() {
                   ` : ''}
 
                   <div class="space-y-1.5">
-                    <div class="grid grid-cols-12 gap-1 text-[9px] md:text-[10px] font-mono text-slate-400 text-center font-bold items-end pb-1">
-  <span class="col-span-2 text-center pb-0.5">SET</span>
-  <span class="col-span-3 text-center pb-0.5">TARGET</span>
-  
-  <!-- Stacked Actual + Sub-columns -->
-  <div class="col-span-6 flex flex-col items-center">
-    <span class="text-[7.5px] md:text-[8px] uppercase tracking-widest text-slate-500 font-semibold mb-0.5">
-      ${meta.t ? 'LOAD' : 'ACTUAL'}
-    </span>
-    <div class="w-full grid grid-cols-3 text-center text-[9px] md:text-[10px] text-slate-400">
-      <span>LBS</span>
-      <span>REPS</span>
-      <span>RPE</span>
-    </div>
-  </div>
+                    <div class="grid grid-cols-12 gap-1 px-2 text-[9px] md:text-[10px] font-mono text-slate-400 font-bold items-end pb-1">
+      <div class="col-span-2 flex items-end justify-center pb-0.5">SET</div>
+      <div class="col-span-3 flex items-end justify-center pb-0.5">TARGET</div>
+      
+      <!-- Stacked Actual + Sub-columns -->
+      <div class="col-span-6 flex flex-col items-center">
+        <span class="text-[7.5px] md:text-[8px] uppercase tracking-widest text-slate-500 font-semibold mb-0.5">
+          ${meta.t ? 'LOAD' : 'ACTUAL'}
+        </span>
+        <div class="w-full grid grid-cols-3 text-center text-[9px] md:text-[10px] text-slate-400">
+          <span>LBS</span>
+          <span>REPS</span>
+          <span>RPE</span>
+        </div>
+      </div>
 
-  <span class="col-span-1 text-center pb-0.5">LOG</span>
-</div>
+      <div class="col-span-1 flex items-end justify-center pb-0.5">LOG</div>
+    </div>
                     ${setRows}
                     
                     <div class="flex justify-between items-center pt-2 mt-1 border-t border-sub/40 font-mono text-[10px]">
