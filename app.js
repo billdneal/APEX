@@ -6095,8 +6095,8 @@ function renderBottomNav() {
 
                   <div class="space-y-1.5">
                     <div class="grid grid-cols-12 gap-1 text-[9px] md:text-[10px] font-mono text-slate-400 text-center font-bold items-end pb-1">
-  <span class="col-span-2 text-left pb-0.5">SET</span>
-  <span class="col-span-3 text-left pb-0.5">TARGET</span>
+  <span class="col-span-2 text-center pb-0.5">SET</span>
+  <span class="col-span-3 text-center pb-0.5">TARGET</span>
   
   <!-- Stacked Actual + Sub-columns -->
   <div class="col-span-6 flex flex-col items-center">
@@ -6110,7 +6110,7 @@ function renderBottomNav() {
     </div>
   </div>
 
-  <span class="col-span-1 pb-0.5">LOG</span>
+  <span class="col-span-1 text-center pb-0.5">LOG</span>
 </div>
                     ${setRows}
                     
