@@ -5966,11 +5966,11 @@ function renderBottomNav() {
                     ${s.targetLoad ? s.targetLoad + 'x' : ''}${s.targetReps ? s.targetReps + 'r' : ''}${s.targetTime ? s.targetTime + 's' : ''} @${displayTargetRpe}
                   </span>
                   
-                  <div class="col-span-6 flex gap-1 items-center justify-end">
-                    ${meta.w ? `<input type="number" step="2.5" placeholder="lbs" value="${s.actualWeight !== undefined && s.actualWeight !== null ? s.actualWeight : ''}" onchange="appActions.updateSetInput(${exIdx}, ${sIdx}, 'actualWeight', this.value)" class="w-16 md:w-20 bg-card-sub border border-sub rounded-lg py-1 text-xs text-center font-mono text-white focus:outline-none">` : ''}
-                    ${meta.r ? `<input type="number" placeholder="reps" value="${s.actualReps !== undefined && s.actualReps !== null ? s.actualReps : ''}" onchange="appActions.updateSetInput(${exIdx}, ${sIdx}, 'actualReps', this.value)" class="w-14 md:w-16 bg-card-sub border border-sub rounded-lg py-1 text-xs text-center font-mono text-white focus:outline-none">` : ''}
+                  <div class="col-span-6 grid grid-cols-3 gap-1 items-center">
+                    ${meta.w ? `<input type="number" step="2.5" placeholder="lbs" value="${s.actualWeight !== undefined && s.actualWeight !== null ? s.actualWeight : ''}" onchange="appActions.updateSetInput(${exIdx}, ${sIdx}, 'actualWeight', this.value)" class="w-full text-center bg-card-sub border border-sub rounded-lg py-1 text-xs text-center font-mono text-white focus:outline-none">` : ''}
+                    ${meta.r ? `<input type="number" placeholder="reps" value="${s.actualReps !== undefined && s.actualReps !== null ? s.actualReps : ''}" onchange="appActions.updateSetInput(${exIdx}, ${sIdx}, 'actualReps', this.value)" class="w-full text-center bg-card-sub border border-sub rounded-lg py-1 text-xs text-center font-mono text-white focus:outline-none">` : ''}
                     ${meta.rpe ? `
-                      <select onchange="appActions.updateSetInput(${exIdx}, ${sIdx}, 'actualRpe', this.value)" class="w-12 md:w-14 bg-card-sub border border-sub rounded-lg py-1 text-[9px] md:text-xs font-mono text-white px-0 focus:outline-none shrink-0 font-bold">
+                      <select onchange="appActions.updateSetInput(${exIdx}, ${sIdx}, 'actualRpe', this.value)" class="w-full text-center bg-card-sub border border-sub rounded-lg py-1 text-[9px] md:text-xs font-mono text-white px-0 focus:outline-none shrink-0 font-bold">
                         <option value="5.5" ${actualRpeNum <= 5.5 ? 'selected' : ''}>&lt;6.0</option>
                         ${[6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0].map(r => `<option value="${r}" ${actualRpeNum === r ? 'selected' : ''}>${r.toFixed(1)}</option>`).join('')}
                       </select>
