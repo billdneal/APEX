@@ -1341,6 +1341,7 @@ const DEFAULT_HIGH_CAPACITY_BASE = {
   11: { 10: 82.7,  9.5: 81.9, 9: 81.1, 8.5: 80.4, 8: 79.6, 7.5: 78.9, 7: 78.1, 6.5: 77.4, 6: 76.6, 5.5: 75.9, 5: 75.2 },
   12: { 10: 81.1,  9.5: 80.4, 9: 79.6, 8.5: 78.9, 8: 78.1, 7.5: 77.4, 7: 76.6, 6.5: 75.9, 6: 75.2, 5.5: 74.5, 5: 73.8 }
 };
+window.DEFAULT_HIGH_CAPACITY_BASE = DEFAULT_HIGH_CAPACITY_BASE;
 
 // Autonomously extends 1-12 slope out to 50 reps using dampened decay
 function extendRpeMatrix(baseMatrix, maxReps = 50) {
@@ -3934,6 +3935,7 @@ function renderRpeMatrixTable(profile) {
   const state = window.state || {};
   const core = window.apexCore || {};
   const extendRpeMatrix = window.extendRpeMatrix;
+  const DEFAULT_HIGH_CAPACITY_BASE = window.DEFAULT_HIGH_CAPACITY_BASE || {};
 
   // State initialization safeguards
   if (!state.anchorE1rms) state.anchorE1rms = {};
