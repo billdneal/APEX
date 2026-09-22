@@ -6902,7 +6902,7 @@ function renderBottomNav() {
 
     <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
       <label class="text-[9px] text-slate-400 font-bold uppercase">Total Working Sets</label>
-      <input type="number" min="1" max="10" value="${bp.baseSets \vert{}\vert{} 3}" onchange="appActions.updateSchemeBlueprint('${curScheme}', 'baseSets', Number(this.value))" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-white font-bold text-center text-xs focus:outline-none">
+      <input type="number" min="1" max="10" value="${bp.baseSets || 3}" onchange="appActions.updateSchemeBlueprint('${curScheme}', 'baseSets', Number(this.value))" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-white font-bold text-center text-xs focus:outline-none">
     </div>
 
     <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
@@ -6921,7 +6921,7 @@ function renderBottomNav() {
 
     <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
       <label class="text-[9px] text-slate-400 font-bold uppercase">Inter-Set Rest (Sec)</label>
-      <input type="number" step="15" value="${bp.restSeconds \vert{}\vert{} 120}" onchange="appActions.updateSchemeBlueprint('${curScheme}', 'restSeconds', Number(this.value))" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-slate-200 font-bold text-center text-xs focus:outline-none">
+      <input type="number" step="15" value="${bp.restSeconds || 120}" onchange="appActions.updateSchemeBlueprint('${curScheme}', 'restSeconds', Number(this.value))" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-slate-200 font-bold text-center text-xs focus:outline-none">
     </div>
 
     ${patternFieldsHtml}
