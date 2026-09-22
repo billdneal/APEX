@@ -2082,6 +2082,7 @@ function getE1RM(weight, reps, rpe) {
   }
   return Math.round(w / (pct / 100));
 }
+window.getE1RM = getE1RM;
 // ==========================================
 // RPE TOOL SVG & MATRIX RENDERERS
 // ==========================================
@@ -3937,6 +3938,7 @@ function renderRpeMatrixTable(profile) {
   const core = window.apexCore || {};
   const extendRpeMatrix = window.extendRpeMatrix;
   const DEFAULT_HIGH_CAPACITY_BASE = window.DEFAULT_HIGH_CAPACITY_BASE || {};
+const getE1RM = window.getE1RM || function() { return 0; };
 
   // State initialization safeguards
   if (!state.anchorE1rms) state.anchorE1rms = {};
@@ -5819,7 +5821,7 @@ if (!state.editingRpeProfile) {
   const renderCustomRpeTool = window.renderCustomRpeTool || function() { return ''; };
 const extendRpeMatrix = window.extendRpeMatrix;
   const generateSetsFromBlueprint = window.generateSetsFromBlueprint;
-
+const getE1RM = window.getE1RM || function() { return 0; };
 
   const { 
     fmtTime = (sec) => {
