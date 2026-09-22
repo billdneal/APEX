@@ -1367,6 +1367,8 @@ function extendRpeMatrix(baseMatrix, maxReps = 50) {
   }
   return extended;
 }
+window.extendRpeMatrix = extendRpeMatrix;
+window.generateSetsFromBlueprint = generateSetsFromBlueprint;
 // ==========================================
 // SCHEME BLUEPRINTS & UNIVERSAL GENERATOR
 // ==========================================
@@ -3931,6 +3933,7 @@ function renderRpeMatrixTable(profile) {
 (function() {
   const state = window.state || {};
   const core = window.apexCore || {};
+  const extendRpeMatrix = window.extendRpeMatrix;
 
   // State initialization safeguards
   if (!state.anchorE1rms) state.anchorE1rms = {};
@@ -5810,6 +5813,9 @@ if (!state.editingRpeProfile) {
 (function() {
   const state = window.state || {};
   const core = window.apexCore || {};
+const extendRpeMatrix = window.extendRpeMatrix;
+  const generateSetsFromBlueprint = window.generateSetsFromBlueprint;
+
 
   const { 
     fmtTime = (sec) => {
