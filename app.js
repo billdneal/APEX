@@ -6735,7 +6735,6 @@ function renderBottomNav() {
           openerRpe: 'Opener Set Target RPE'
         };
 
-       const curScheme = state.selectedRecipeScheme || state.selectedProgrammingScheme || 'Straight Sets';
     if (!state.schemeBlueprints) {
       state.schemeBlueprints = JSON.parse(JSON.stringify(state.schemeRecipes || DEFAULT_SCHEME_BLUEPRINTS));
     }
