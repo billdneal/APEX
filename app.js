@@ -1321,7 +1321,851 @@ function getIcon(name, cls = 'w-4 h-4') {
       }
       return Math.max(40, Math.round((100 - (effReps - 1) * 2.15) * 10) / 10);
     }
+// ==========================================
+// RPE MATRIX & E1RM ENGINE
+// ==========================================
 
+const RPE_COLS = [10, 9.5, 9, 8.5, 8, 7.5, 7, 6.5, 6, 5.5, 5];
+
+const DEFAULT_HIGH_CAPACITY_BASE = {
+  1:  { 10: 100.0, 9.5: 99.1, 9: 98.1, 8.5: 97.2, 8: 96.2, 7.5: 95.3, 7: 94.4, 6.5: 93.5, 6: 92.6, 5.5: 91.8, 5: 90.9 },
+  2:  { 10: 98.1,  9.5: 97.2, 9: 96.2, 8.5: 95.3, 8: 94.4, 7.5: 93.5, 7: 92.6, 6.5: 91.8, 6: 90.9, 5.5: 90.1, 5: 89.2 },
+  3:  { 10: 96.2,  9.5: 95.3, 9: 94.4, 8.5: 93.5, 8: 92.6, 7.5: 91.8, 7: 90.9, 6.5: 90.1, 6: 89.2, 5.5: 88.4, 5: 87.5 },
+  4:  { 10: 94.4,  9.5: 93.5, 9: 92.6, 8.5: 91.8, 8: 90.9, 7.5: 90.1, 7: 89.2, 6.5: 88.4, 6: 87.5, 5.5: 86.7, 5: 85.8 },
+  5:  { 10: 92.6,  9.5: 91.8, 9: 90.9, 8.5: 90.1, 8: 89.2, 7.5: 88.4, 7: 87.5, 6.5: 86.7, 6: 85.8, 5.5: 85.0, 5: 84.2 },
+  6:  { 10: 90.9,  9.5: 90.1, 9: 89.2, 8.5: 88.4, 8: 87.5, 7.5: 86.7, 7: 85.8, 6.5: 85.0, 6: 84.2, 5.5: 83.5, 5: 82.7 },
+  7:  { 10: 89.2,  9.5: 88.4, 9: 87.5, 8.5: 86.7, 8: 85.8, 7.5: 85.0, 7: 84.2, 6.5: 83.5, 6: 82.7, 5.5: 81.9, 5: 81.1 },
+  8:  { 10: 87.5,  9.5: 86.7, 9: 85.8, 8.5: 85.0, 8: 84.2, 7.5: 83.5, 7: 82.7, 6.5: 81.9, 6: 81.1, 5.5: 80.4, 5: 79.6 },
+  9:  { 10: 85.8,  9.5: 85.0, 9: 84.2, 8.5: 83.5, 8: 82.7, 7.5: 81.9, 7: 81.1, 6.5: 80.4, 6: 79.6, 5.5: 78.9, 5: 78.1 },
+  10: { 10: 84.2,  9.5: 83.5, 9: 82.7, 8.5: 81.9, 8: 81.1, 7.5: 80.4, 7: 79.6, 6.5: 78.9, 6: 78.1, 5.5: 77.4, 5: 76.6 },
+  11: { 10: 82.7,  9.5: 81.9, 9: 81.1, 8.5: 80.4, 8: 79.6, 7.5: 78.9, 7: 78.1, 6.5: 77.4, 6: 76.6, 5.5: 75.9, 5: 75.2 },
+  12: { 10: 81.1,  9.5: 80.4, 9: 79.6, 8.5: 78.9, 8: 78.1, 7.5: 77.4, 7: 76.6, 6.5: 75.9, 6: 75.2, 5.5: 74.5, 5: 73.8 }
+};
+
+// Autonomously extends 1-12 slope out to 50 reps using dampened decay
+function extendRpeMatrix(baseMatrix, maxReps = 50) {
+  const extended = JSON.parse(JSON.stringify(baseMatrix));
+  for (let rep = 13; rep <= maxReps; rep++) {
+    extended[rep] = {};
+    let dropPerRep;
+    if (rep <= 16) dropPerRep = 1.50;
+    else if (rep <= 22) dropPerRep = 1.20;
+    else if (rep <= 30) dropPerRep = 0.90;
+    else if (rep <= 40) dropPerRep = 0.65;
+    else dropPerRep = 0.50;
+
+    const prevRep10 = extended[rep - 1][10];
+    const currentRep10 = Math.round((prevRep10 - dropPerRep) * 10) / 10;
+    extended[rep][10] = currentRep10;
+
+    const stepOffset = Math.max(0.45, Math.round((currentRep10 * 0.01) * 100) / 100);
+    for (let i = 1; i < RPE_COLS.length; i++) {
+      const rpe = RPE_COLS[i];
+      const prevRpe = RPE_COLS[i - 1];
+      extended[rep][rpe] = Math.round((extended[rep][prevRpe] - stepOffset) * 10) / 10;
+    }
+  }
+  return extended;
+}
+// ==========================================
+// SCHEME BLUEPRINTS & UNIVERSAL GENERATOR
+// ==========================================
+
+const DEFAULT_SCHEME_BLUEPRINTS = {
+  'Straight Sets': {
+    id: 'straight_sets',
+    name: 'Straight Sets',
+    category: 'Hypertrophy',
+    pattern: 'straight',
+    baseSets: 3,
+    reps: 8,
+    targetRpe: 8.0,
+    rpeStepDelta: 0.0,
+    fatigueDropPct: 0.0,
+    restSeconds: 120,
+    intraSetRest: 0,
+    densityPenalty: 1.0
+  },
+  'Dynamic Double Progression (Rep Range)': {
+    id: 'ddp_rep_range',
+    name: 'Dynamic Double Progression (Rep Range)',
+    category: 'Hypertrophy',
+    pattern: 'straight',
+    baseSets: 3,
+    reps: '8-12',
+    targetRpe: 8.5,
+    rpeStepDelta: 0.0,
+    fatigueDropPct: 0.0,
+    restSeconds: 120,
+    intraSetRest: 0,
+    densityPenalty: 1.0
+  },
+  'Step Loading (Double Progression)': {
+    id: 'step_loading',
+    name: 'Step Loading (Double Progression)',
+    category: 'Hypertrophy',
+    pattern: 'straight',
+    baseSets: 3,
+    reps: 10,
+    targetRpe: 8.0,
+    rpeStepDelta: 0.0,
+    fatigueDropPct: 0.0,
+    restSeconds: 90,
+    intraSetRest: 0,
+    densityPenalty: 1.0
+  },
+  'Myo-reps': {
+    id: 'myo_reps',
+    name: 'Myo-reps',
+    category: 'Hypertrophy',
+    pattern: 'cluster',
+    baseSets: 5,
+    reps: [12, 3, 3, 3, 3],
+    targetRpe: 9.5,
+    restSeconds: 120,
+    intraSetRest: 15,
+    densityPenalty: 0.85
+  },
+  'Rest-Pause (Dogcrapp)': {
+    id: 'rest_pause_dc',
+    name: 'Rest-Pause (Dogcrapp)',
+    category: 'Hypertrophy',
+    pattern: 'cluster',
+    baseSets: 3,
+    reps: [8, 4, 2],
+    targetRpe: 10.0,
+    restSeconds: 180,
+    intraSetRest: 25,
+    densityPenalty: 0.90
+  },
+  'Density Block': {
+    id: 'density_block',
+    name: 'Density Block',
+    category: 'Hypertrophy',
+    pattern: 'straight',
+    baseSets: 4,
+    reps: 8,
+    targetRpe: 8.0,
+    restSeconds: 45,
+    intraSetRest: 0,
+    densityPenalty: 0.85
+  },
+  'Rep Goal System (Metabolic 50)': {
+    id: 'rep_goal_50',
+    name: 'Rep Goal System (Metabolic 50)',
+    category: 'Hypertrophy',
+    pattern: 'rep_goal',
+    baseSets: 4,
+    repGoal: 50,
+    targetRpe: 9.0,
+    restSeconds: 90,
+    intraSetRest: 0,
+    densityPenalty: 1.0
+  },
+  'Reverse Pyramid': {
+    id: 'reverse_pyramid',
+    name: 'Reverse Pyramid',
+    category: 'Hypertrophy',
+    pattern: 'load_drop',
+    baseSets: 3,
+    topSetCount: 1,
+    reps: [4, 6, 8],
+    targetRpe: 9.0,
+    fatigueDropPct: 0.10,
+    restSeconds: 150,
+    intraSetRest: 0,
+    densityPenalty: 1.0
+  },
+  'Tapered': {
+    id: 'tapered',
+    name: 'Tapered',
+    category: 'Hypertrophy',
+    pattern: 'load_drop',
+    baseSets: 3,
+    topSetCount: 1,
+    reps: [6, 8, 10],
+    targetRpe: 8.5,
+    fatigueDropPct: 0.075,
+    restSeconds: 120,
+    intraSetRest: 0,
+    densityPenalty: 1.0
+  },
+  'Ascending Pyramid': {
+    id: 'ascending_pyramid',
+    name: 'Ascending Pyramid',
+    category: 'Hypertrophy',
+    pattern: 'ramp',
+    baseSets: 3,
+    reps: [12, 10, 8],
+    targetRpe: 7.5,
+    rpeStepDelta: 0.5,
+    restSeconds: 120,
+    intraSetRest: 0,
+    densityPenalty: 1.0
+  },
+  'Volume Pyramid': {
+    id: 'volume_pyramid',
+    name: 'Volume Pyramid',
+    category: 'Hypertrophy',
+    pattern: 'ramp',
+    baseSets: 4,
+    reps: [10, 8, 8, 12],
+    targetRpe: 8.0,
+    rpeStepDelta: 0.5,
+    restSeconds: 120,
+    intraSetRest: 0,
+    densityPenalty: 1.0
+  },
+  'Force/Metabolic Interleave': {
+    id: 'force_metabolic_interleave',
+    name: 'Force/Metabolic Interleave',
+    category: 'Hypertrophy',
+    pattern: 'load_drop',
+    baseSets: 4,
+    topSetCount: 1,
+    reps: [5, 15, 5, 20],
+    targetRpe: 9.0,
+    fatigueDropPct: 0.20,
+    restSeconds: 120,
+    intraSetRest: 0,
+    densityPenalty: 1.0
+  },
+  'Drop Set': {
+    id: 'drop_set',
+    name: 'Drop Set',
+    category: 'Hypertrophy',
+    pattern: 'load_drop',
+    baseSets: 3,
+    topSetCount: 1,
+    reps: [8, 8, 8],
+    targetRpe: 9.5,
+    fatigueDropPct: 0.15,
+    restSeconds: 15,
+    intraSetRest: 15,
+    densityPenalty: 0.85
+  },
+  'Hypertrophy Cluster': {
+    id: 'hypertrophy_cluster',
+    name: 'Hypertrophy Cluster',
+    category: 'Hypertrophy',
+    pattern: 'cluster',
+    baseSets: 4,
+    reps: 6,
+    targetRpe: 8.0,
+    restSeconds: 120,
+    intraSetRest: 20,
+    densityPenalty: 0.90
+  },
+  'Ascending Triplet + Load Drop': {
+    id: 'ascending_triplet_drop',
+    name: 'Ascending Triplet + Load Drop',
+    category: 'Hypertrophy',
+    pattern: 'load_drop',
+    baseSets: 4,
+    topSetCount: 3,
+    reps: 3,
+    targetRpe: 9.0,
+    fatigueDropPct: 0.12,
+    restSeconds: 150,
+    intraSetRest: 0,
+    densityPenalty: 1.0
+  },
+  'Ascending RPE Ladder': {
+    id: 'ascending_rpe_ladder',
+    name: 'Ascending RPE Ladder',
+    category: 'Hypertrophy',
+    pattern: 'ramp',
+    baseSets: 3,
+    reps: 8,
+    targetRpe: 7.0,
+    rpeStepDelta: 1.0,
+    restSeconds: 120,
+    intraSetRest: 0,
+    densityPenalty: 1.0
+  },
+  'Intensity Matched': {
+    id: 'intensity_matched',
+    name: 'Intensity Matched',
+    category: 'Hypertrophy',
+    pattern: 'straight',
+    baseSets: 3,
+    reps: 8,
+    targetRpe: 8.0,
+    restSeconds: 120,
+    intraSetRest: 0,
+    densityPenalty: 1.0
+  },
+
+  // ==========================================
+  // STRENGTH SCHEMES
+  // ==========================================
+  'Top Set + Back-off': {
+    id: 'top_set_backoff',
+    name: 'Top Set + Back-off',
+    category: 'Strength',
+    pattern: 'load_drop',
+    baseSets: 4,
+    topSetCount: 1,
+    reps: [3, 5, 5, 5],
+    targetRpe: 9.0,
+    fatigueDropPct: 0.10,
+    restSeconds: 180,
+    intraSetRest: 0,
+    densityPenalty: 1.0
+  },
+  'Primer Single + % Back-offs': {
+    id: 'primer_single_backoffs',
+    name: 'Primer Single + % Back-offs',
+    category: 'Strength',
+    pattern: 'load_drop',
+    baseSets: 4,
+    topSetCount: 1,
+    reps: [1, 5, 5, 5],
+    targetRpe: 8.5,
+    fatigueDropPct: 0.15,
+    restSeconds: 180,
+    intraSetRest: 0,
+    densityPenalty: 1.0
+  },
+  'Benchmark + Density Back-Off': {
+    id: 'benchmark_density',
+    name: 'Benchmark + Density Back-Off',
+    category: 'Strength',
+    pattern: 'load_drop',
+    baseSets: 4,
+    topSetCount: 1,
+    reps: [3, 8, 8, 8],
+    targetRpe: 9.0,
+    fatigueDropPct: 0.20,
+    restSeconds: 90,
+    intraSetRest: 0,
+    densityPenalty: 0.90
+  },
+  'Submaximal AMRAP Calibration': {
+    id: 'submax_amrap_cal',
+    name: 'Submaximal AMRAP Calibration',
+    category: 'Strength',
+    pattern: 'ramp',
+    baseSets: 3,
+    reps: 5,
+    targetRpe: 8.0,
+    rpeStepDelta: 0.5,
+    restSeconds: 180,
+    intraSetRest: 0,
+    densityPenalty: 1.0
+  },
+  'Autoregulated Fatigue Stop': {
+    id: 'autoreg_fatigue_stop',
+    name: 'Autoregulated Fatigue Stop',
+    category: 'Strength',
+    pattern: 'repeats',
+    baseSets: 4,
+    reps: 5,
+    targetRpe: 8.0,
+    fatigueStopRpe: 9.5,
+    restSeconds: 180,
+    intraSetRest: 0,
+    densityPenalty: 1.0
+  },
+  'Dynamic Effort (Speed Waves)': {
+    id: 'dynamic_effort_waves',
+    name: 'Dynamic Effort (Speed Waves)',
+    category: 'Strength',
+    pattern: 'straight',
+    baseSets: 6,
+    reps: 3,
+    targetRpe: 7.0,
+    restSeconds: 60,
+    intraSetRest: 0,
+    densityPenalty: 0.80
+  },
+  'Intra-Set Cluster (4x[2+2+2])': {
+    id: 'intra_set_cluster_222',
+    name: 'Intra-Set Cluster (4x[2+2+2])',
+    category: 'Strength',
+    pattern: 'cluster',
+    baseSets: 4,
+    reps: 6,
+    targetRpe: 8.5,
+    restSeconds: 180,
+    intraSetRest: 20,
+    densityPenalty: 0.95
+  },
+  'Autoregulated Fatigue Drop (-5%)': {
+    id: 'autoreg_fatigue_drop_5',
+    name: 'Autoregulated Fatigue Drop (-5%)',
+    category: 'Strength',
+    pattern: 'load_drop',
+    baseSets: 4,
+    topSetCount: 1,
+    reps: 5,
+    targetRpe: 9.0,
+    fatigueDropPct: 0.05,
+    restSeconds: 180,
+    intraSetRest: 0,
+    densityPenalty: 1.0
+  },
+  'Prescription Table': {
+    id: 'prescription_table',
+    name: 'Prescription Table',
+    category: 'Strength',
+    pattern: 'straight',
+    baseSets: 3,
+    reps: 5,
+    targetRpe: 8.0,
+    restSeconds: 180,
+    intraSetRest: 0,
+    densityPenalty: 1.0
+  },
+  'Wave Loading': {
+    id: 'wave_loading',
+    name: 'Wave Loading',
+    category: 'Strength',
+    pattern: 'ramp',
+    baseSets: 6,
+    reps: [5, 3, 1, 5, 3, 1],
+    targetRpe: 8.0,
+    rpeStepDelta: 0.5,
+    restSeconds: 180,
+    intraSetRest: 0,
+    densityPenalty: 1.0
+  },
+  'Double Pyramid': {
+    id: 'double_pyramid',
+    name: 'Double Pyramid',
+    category: 'Strength',
+    pattern: 'ramp',
+    baseSets: 5,
+    reps: [6, 4, 2, 4, 6],
+    targetRpe: 8.0,
+    rpeStepDelta: 0.5,
+    restSeconds: 180,
+    intraSetRest: 0,
+    densityPenalty: 1.0
+  },
+  'Sawtooth': {
+    id: 'sawtooth',
+    name: 'Sawtooth',
+    category: 'Strength',
+    pattern: 'ramp',
+    baseSets: 6,
+    reps: [6, 4, 6, 4, 6, 4],
+    targetRpe: 8.0,
+    rpeStepDelta: 0.5,
+    restSeconds: 150,
+    intraSetRest: 0,
+    densityPenalty: 1.0
+  },
+  'Strength Cluster': {
+    id: 'strength_cluster',
+    name: 'Strength Cluster',
+    category: 'Strength',
+    pattern: 'cluster',
+    baseSets: 4,
+    reps: 3,
+    targetRpe: 9.0,
+    restSeconds: 180,
+    intraSetRest: 20,
+    densityPenalty: 0.95
+  },
+  'e1RM Grounding AMRAP': {
+    id: 'grounding_amrap',
+    name: 'e1RM Grounding AMRAP',
+    category: 'Strength',
+    pattern: 'load_drop',
+    baseSets: 3,
+    topSetCount: 1,
+    reps: [5, 8, 8],
+    targetRpe: 9.5,
+    fatigueDropPct: 0.10,
+    restSeconds: 180,
+    intraSetRest: 0,
+    densityPenalty: 1.0
+  }
+};
+
+function generateSetsFromBlueprint(paramsOrName, metaArg, e1rmArg, baseWorkingSetsArg = 3, landmarkOffsetArg = 0) {
+  // Self-heal: automatically migrate or initialize blueprints
+  if (!state.schemeBlueprints) {
+    state.schemeBlueprints = JSON.parse(JSON.stringify(state.schemeRecipes || DEFAULT_SCHEME_BLUEPRINTS));
+  }
+
+  // Unpack whether passed as an object or positional arguments
+  let schemeName, meta, e1rm, baseWorkingSets, minRep, maxRep, rangeStr, weekRpeBump, isGrounding;
+  if (typeof paramsOrName === 'object' && paramsOrName !== null) {
+    ({
+      schemeName,
+      meta,
+      e1rm,
+      baseWorkingSets = 3,
+      minRep = 8,
+      maxRep = 8,
+      rangeStr = '8',
+      weekRpeBump = 0,
+      isGrounding = false
+    } = paramsOrName);
+  } else {
+    schemeName = paramsOrName;
+    meta = metaArg;
+    e1rm = e1rmArg;
+    baseWorkingSets = baseWorkingSetsArg;
+    weekRpeBump = landmarkOffsetArg;
+    minRep = 8;
+    maxRep = 8;
+    rangeStr = '8';
+    isGrounding = false;
+  }
+
+  const pool = state.schemeBlueprints || DEFAULT_SCHEME_BLUEPRINTS;
+  const bp = pool[schemeName] || DEFAULT_SCHEME_BLUEPRINTS[schemeName];
+  if (!bp) return null; // Fallback to legacy ladder if custom scheme is unmapped
+
+  const totalSets = Number(bp.baseSets) || baseWorkingSets || 3;
+  const baseEffort = roundRpe(isGrounding ? 9.0 : ((Number(bp.targetRpe) || 8.0) + (weekRpeBump || 0)));
+  const topCount = Number(bp.topSetCount) || 1;
+  const isPlank = meta && meta.t && !meta.r;
+  const sets = [];
+  let topSetLoad = 0;
+
+  for (let idx = 0; idx < totalSets; idx++) {
+    // 1. Rep resolution (supports arrays [4,6,8], ranges '8-12', rep goals, or fixed counts)
+    let setRepStr = rangeStr;
+    let setRepVal = minRep;
+
+    if (Array.isArray(bp.reps)) {
+      const r = bp.reps[idx] !== undefined ? bp.reps[idx] : bp.reps[bp.reps.length - 1];
+      setRepStr = String(r);
+      setRepVal = Number(r) || minRep;
+    } else if (bp.pattern === 'rep_goal') {
+      const goal = Number(bp.repGoal) || 30;
+      const r = Math.ceil(goal / totalSets);
+      setRepStr = String(r);
+      setRepVal = r;
+    } else if (bp.reps) {
+      if (typeof bp.reps === 'string' && bp.reps.includes('-')) {
+        setRepStr = bp.reps;
+        setRepVal = Number(bp.reps.split('-')[0]) || minRep;
+      } else {
+        setRepStr = String(bp.reps);
+        setRepVal = Number(bp.reps) || minRep;
+      }
+    }
+
+    // 2. Effort resolution
+    let setRpe = baseEffort;
+    if (bp.pattern === 'ramp' && bp.rpeStepDelta) {
+      setRpe = roundRpe(baseEffort + (idx * Number(bp.rpeStepDelta)));
+    } else if (bp.pattern === 'load_drop' && idx >= topCount) {
+      setRpe = roundRpe(Math.max(6.0, baseEffort - 0.5));
+    }
+
+    // 3. Load resolution
+    let setLoad = 0;
+    if (meta && meta.w && e1rm > 0) {
+      const penalty = Number(bp.densityPenalty) || 1.0;
+      const calcReps = typeof setRepVal === 'number' ? setRepVal : (Number(minRep) || 8);
+      
+      if (idx === 0) {
+        topSetLoad = calcLoad(e1rm, getPct(calcReps, baseEffort) * penalty);
+        setLoad = topSetLoad;
+      } else if (bp.pattern === 'load_drop' && idx >= topCount) {
+        const dropPct = Number(bp.fatigueDropPct) || Number(bp.loadStepPct) || 0.05;
+        const multiplier = 1 - (dropPct * (idx - topCount + 1));
+        setLoad = roundLoad(topSetLoad * multiplier);
+      } else {
+        setLoad = calcLoad(e1rm, getPct(calcReps, setRpe) * penalty);
+      }
+    }
+
+    // 4. Label resolution
+    let label = `Set ${idx + 1}`;
+    if (bp.pattern === 'cluster') {
+      label = `Cluster ${idx + 1}`;
+    } else if (bp.pattern === 'rep_goal') {
+      label = `Set ${idx + 1} (Goal: ${bp.repGoal || 30}r)`;
+    } else if (bp.pattern === 'load_drop') {
+      const dropPct = Math.round((Number(bp.fatigueDropPct) || 0.05) * 100 * (idx - topCount + 1));
+      label = idx < topCount ? (isGrounding ? '🔥 Grounding Top Set (@9.0)' : (topCount === 1 ? 'Top Set' : `Top Set ${idx + 1}`)) : `Back-off ${idx - topCount + 1} (-${dropPct}%)`;
+    }
+
+    // 5. APEX Set Contract
+    sets.push({
+      label: label,
+      targetLoad: (meta && meta.w) ? setLoad : 0,
+      targetReps: (meta && meta.r) ? setRepStr : 0,
+      targetTime: isPlank ? 60 : 0,
+      targetRpe: setRpe,
+      actualWeight: (meta && meta.w) ? setLoad : 0,
+      actualReps: (meta && meta.r) ? setRepVal : 0,
+      actualTime: isPlank ? 60 : 0,
+      actualRpe: setRpe,
+      done: false,
+      lapRunning: false
+    });
+  }
+
+  return sets;
+}
+// ==========================================
+// SCHEME BLUEPRINT CONTROLLER ACTIONS
+// ==========================================
+window.appActions = window.appActions || {};
+
+// 1. Sidebar Selector
+window.appActions.selectRecipeScheme = function(schemeName) {
+  state.selectedRecipeScheme = schemeName;
+  state.selectedProgrammingScheme = schemeName;
+
+  // Ensure blueprint exists in state when selected
+  if (!state.schemeBlueprints) {
+    state.schemeBlueprints = JSON.parse(JSON.stringify(state.schemeRecipes || DEFAULT_SCHEME_BLUEPRINTS));
+  }
+  if (!state.schemeBlueprints[schemeName]) {
+    const fallback = DEFAULT_SCHEME_BLUEPRINTS[schemeName] || DEFAULT_SCHEME_BLUEPRINTS['Straight Sets'];
+    state.schemeBlueprints[schemeName] = JSON.parse(JSON.stringify(fallback));
+    state.schemeBlueprints[schemeName].name = schemeName;
+  }
+
+  if (typeof saferRender === 'function') saferRender();
+  else if (typeof window.render === 'function') window.render();
+};
+
+// 2. Dynamic Input Updater
+window.appActions.updateSchemeBlueprint = function(schemeName, key, value) {
+  if (!state.schemeBlueprints) {
+    state.schemeBlueprints = JSON.parse(JSON.stringify(state.schemeRecipes || DEFAULT_SCHEME_BLUEPRINTS));
+  }
+  if (!state.schemeBlueprints[schemeName]) {
+    const fallback = DEFAULT_SCHEME_BLUEPRINTS[schemeName] || DEFAULT_SCHEME_BLUEPRINTS['Straight Sets'];
+    state.schemeBlueprints[schemeName] = JSON.parse(JSON.stringify(fallback));
+    state.schemeBlueprints[schemeName].name = schemeName;
+  }
+
+  // Handle comma-separated arrays (e.g. "4, 6, 8" -> [4, 6, 8])
+  if (key === 'reps' && typeof value === 'string' && value.includes(',')) {
+    value = value.split(',').map(s => {
+      const trimmed = s.trim();
+      return isNaN(Number(trimmed)) ? trimmed : Number(trimmed);
+    });
+  } else if (['baseSets', 'topSetCount', 'restSeconds', 'intraSetRest', 'targetRpe', 'fatigueDropPct', 'densityPenalty', 'repGoal', 'rpeStepDelta'].includes(key)) {
+    // Cast numeric inputs
+    const num = Number(value);
+    if (!isNaN(num)) value = num;
+  }
+
+  state.schemeBlueprints[schemeName][key] = value;
+
+  // Mirror legacy cache for backward compatibility
+  if (state.schemeRecipes && state.schemeRecipes[schemeName]) {
+    state.schemeRecipes[schemeName][key] = value;
+  }
+
+  if (typeof saferRender === 'function') saferRender();
+  else if (typeof window.render === 'function') window.render();
+};
+
+// 3. Save Blueprint to Persistent Storage
+window.appActions.saveSchemeBlueprint = function(schemeName) {
+  if (typeof saveState === 'function') {
+    saveState();
+  } else {
+    localStorage.setItem('apex_state', JSON.stringify(state));
+  }
+
+  if (typeof showToast === 'function') {
+    showToast(`Blueprint Saved: ${schemeName}`);
+  }
+  if (typeof saferRender === 'function') saferRender();
+  else if (typeof window.render === 'function') window.render();
+};
+
+// 4. Reset Blueprints to Canonical Factory Defaults
+window.appActions.resetSchemeRecipes = function() {
+  if (confirm("Reset all 32 scheme blueprints back to factory default parameters?")) {
+    state.schemeBlueprints = JSON.parse(JSON.stringify(DEFAULT_SCHEME_BLUEPRINTS));
+    state.schemeRecipes = JSON.parse(JSON.stringify(DEFAULT_SCHEME_BLUEPRINTS));
+    
+    if (typeof saveState === 'function') saveState();
+    else localStorage.setItem('apex_state', JSON.stringify(state));
+
+    if (typeof showToast === 'function') showToast("Blueprints reset to factory defaults");
+    if (typeof saferRender === 'function') saferRender();
+    else if (typeof window.render === 'function') window.render();
+  }
+};
+
+// Aliases for legacy button bindings
+window.appActions.saveCurrentRecipe = window.appActions.saveSchemeBlueprint;
+window.appActions.resetSchemeBlueprints = window.appActions.resetSchemeRecipes;
+function renderCustomRpeTool() {
+  // Self-heal: initialize default profile if missing from cache
+  if (!state.rpeProfiles || !state.rpeProfiles.high_capacity) {
+    state.rpeProfiles = {
+      high_capacity: {
+        id: 'high_capacity',
+        name: 'High Capacity',
+        matrix: extendRpeMatrix(DEFAULT_HIGH_CAPACITY_BASE, 50)
+      }
+    };
+    state.activeRpeProfileId = 'high_capacity';
+    state.editingRpeProfile = JSON.parse(JSON.stringify(state.rpeProfiles.high_capacity));
+  }
+
+  const prof = state.editingRpeProfile || state.rpeProfiles[state.activeRpeProfileId] || Object.values(state.rpeProfiles)[0];
+  if (!prof || !prof.matrix) return '<div class="text-slate-500 text-xs font-mono p-4">Initializing RPE Profile...</div>';
+
+  return `
+    <div class="space-y-3 bg-card p-4 rounded-2xl border border-sub">
+      <div class="flex items-center justify-between gap-2">
+        <select onchange="appActions.selectRpeProfile(this.value)" class="bg-input border border-sub rounded-lg px-2.5 py-1.5 text-xs font-mono flex-1 text-slate-200">
+          ${Object.values(state.rpeProfiles).map(p => `
+            <option value="${p.id}" ${p.id === prof.id ? 'selected' : ''}>${p.name}</option>
+          `).join('')}
+        </select>
+        <button type="button" onclick="appActions.createNewRpeProfile()" class="px-3 py-1.5 bg-input border border-sub rounded-lg text-xs font-mono text-slate-200 whitespace-nowrap hover:border-slate-400">
+          + Create New
+        </button>
+      </div>
+
+      <div>
+        <label class="text-[10px] font-mono uppercase tracking-wider text-slate-400">Title</label>
+        <input 
+          type="text" 
+          value="${prof.name || ''}" 
+          onchange="appActions.updateRpeProfileName(this.value)" 
+          class="w-full bg-input border border-sub rounded-lg px-3 py-1.5 text-xs font-mono text-slate-200 mt-1"
+        />
+      </div>
+
+      <div class="flex items-center gap-2 pt-1">
+        <button type="button" onclick="appActions.deleteRpeProfile()" class="px-3 py-1.5 bg-red-950/40 border border-red-800 text-red-300 rounded-lg text-xs font-mono">
+          Delete RPE Chart
+        </button>
+        <button type="button" onclick="appActions.saveCurrentRpeProfile()" class="flex-1 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-mono font-bold">
+          Update Chart
+        </button>
+        <button type="button" onclick="appActions.saveNewRpeProfile()" class="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-mono font-bold">
+          Save as New
+        </button>
+      </div>
+
+      ${renderRpeSvgCurve(prof.matrix)}
+
+      <div class="flex items-center justify-between pt-1">
+        <span class="text-[10px] font-mono text-slate-400">Interactive Matrix (1-50 Reps)</span>
+        <button type="button" onclick="appActions.autoExtendActiveChart()" class="text-[9.5px] font-mono text-accent hover:underline">
+          ⚡ Re-extrapolate to 50
+        </button>
+      </div>
+
+      ${renderRpeMatrixTable(prof)}
+    </div>
+  `;
+}
+// Global Single Source of Truth for e1RM
+function getE1RM(weight, reps, rpe) {
+  const w = Number(weight);
+  const r = Math.min(Math.max(Math.round(Number(reps) || 0), 1), 50);
+  const effort = Math.min(Math.max(Number(rpe) || 10.0, 5.0), 10.0);
+  if (!w || !r) return 0;
+
+  const activeProfile = (state.rpeProfiles && state.rpeProfiles[state.activeRpeProfileId]) || null;
+  const pct = activeProfile?.matrix?.[r]?.[effort];
+
+  if (!pct) {
+    // Fallback if specific cell is missing
+    return Math.round(w * (1 + (r + (10 - effort)) / 30));
+  }
+  return Math.round(w / (pct / 100));
+}
+// ==========================================
+// RPE TOOL SVG & MATRIX RENDERERS
+// ==========================================
+
+function renderRpeSvgCurve(matrix) {
+  const width = 360;
+  const height = 140;
+  const pad = { top: 15, bottom: 25, left: 32, right: 15 };
+  const plotW = width - pad.left - pad.right;
+  const plotH = height - pad.top - pad.bottom;
+
+  const curves = [
+    { rpe: 10, stroke: '#a855f7' },
+    { rpe: 8,  stroke: '#3b82f6' },
+    { rpe: 6,  stroke: '#14b8a6' }
+  ];
+
+  const lines = curves.map(c => {
+    const points = Object.keys(matrix).map(reps => {
+      const repNum = Number(reps);
+      const pct = matrix[repNum]?.[c.rpe] || 0;
+      const x = pad.left + ((repNum - 1) / 49) * plotW;
+      const y = pad.top + ((100 - pct) / 60) * plotH;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+    return `<polyline points="${points}" fill="none" stroke="${c.stroke}" stroke-width="2.5" stroke-linecap="round"/>`;
+  }).join('');
+
+  return `
+    <div class="bg-card-sub/60 rounded-xl p-2.5 border border-sub/60 my-3">
+      <svg class="w-full h-36" viewBox="0 0 ${width} ${height}">
+        <line x1="${pad.left}" y1="${pad.top}" x2="${width - pad.right}" y2="${pad.top}" stroke="#334155" stroke-dasharray="3 3"/>
+        <line x1="${pad.left}" y1="${pad.top + plotH/2}" x2="${width - pad.right}" y2="${pad.top + plotH/2}" stroke="#334155" stroke-dasharray="3 3"/>
+        <line x1="${pad.left}" y1="${height - pad.bottom}" x2="${width - pad.right}" y2="${height - pad.bottom}" stroke="#334155"/>
+        <text x="5" y="${pad.top + 4}" fill="#64748b" font-size="9" font-family="monospace">100%</text>
+        <text x="5" y="${pad.top + plotH/2 + 3}" fill="#64748b" font-size="9" font-family="monospace">70%</text>
+        <text x="5" y="${height - pad.bottom + 3}" fill="#64748b" font-size="9" font-family="monospace">40%</text>
+        ${[1, 10, 20, 30, 40, 50].map(r => `
+          <text x="${pad.left + ((r-1)/49)*plotW - 4}" y="${height - 8}" fill="#64748b" font-size="9" font-family="monospace">${r}</text>
+        `).join('')}
+        ${lines}
+      </svg>
+      <div class="flex justify-center gap-4 text-[10px] font-mono text-slate-400 mt-1">
+        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-purple-500"></span> @10</span>
+        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-blue-500"></span> @8</span>
+        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-teal-500"></span> @6</span>
+      </div>
+    </div>
+  `;
+}
+
+function renderRpeMatrixTable(profile) {
+  const matrix = profile.matrix;
+  const repsList = Object.keys(matrix).map(Number).sort((a,b) => a - b);
+
+  return `
+    <div class="overflow-x-auto border border-sub/70 rounded-xl bg-card-sub/40 shadow-inner max-h-[380px] scrollbar-thin">
+      <table class="w-full border-collapse font-mono text-[11px] text-center whitespace-nowrap">
+        <thead class="sticky top-0 bg-[#121820] z-10 border-b border-sub/80 text-slate-400">
+          <tr>
+            <th class="p-2 sticky left-0 bg-[#121820] border-r border-sub/60 text-slate-300 font-bold z-20">Reps</th>
+            ${RPE_COLS.map(rpe => `<th class="p-2 px-3 font-semibold">${rpe}</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-sub/40 text-slate-200">
+          ${repsList.map(rep => `
+            <tr class="hover:bg-card/40">
+              <td class="p-1.5 font-bold sticky left-0 bg-[#151c24] border-r border-sub/60 text-slate-400 z-10">${rep}</td>${RPE_COLS.map(rpe => {
+                const val = matrix[rep]?.[rpe] !== undefined ? matrix[rep][rpe].toFixed(1) : '';
+                return `
+                  <td class="p-1">
+                    <input 
+                      type="number" 
+                      step="0.1" 
+                      value="${val}" 
+                      onchange="appActions.updateRpeCell(${rep}, ${rpe}, this.value)"
+                      class="w-14 bg-input/70 border border-sub/40 rounded px-1 py-0.5 text-center text-[10.5px] font-mono focus:border-accent focus:bg-input focus:outline-none"
+                    />
+                  </td>
+                `;
+              }).join('')}
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
     function calcLoad(e1rm, pct) {
       return roundLoad((Number(e1rm) || 135) * ((Number(pct) || 75) / 100));
     }
@@ -2081,7 +2925,23 @@ function getIcon(name, cls = 'w-4 h-4') {
       const baseReps = Math.round((minRep + maxRep) / 2);
       const isFixedRep = (minRep === maxRep);
       const rangeStr = isFixedRep ? `${minRep}` : `${minRep}-${maxRep}`;
-
+// ====================================================
+    // UNIVERSAL SCHEME BLUEPRINT INTERCEPT
+    // ====================================================
+    const blueprintSets = generateSetsFromBlueprint({
+      schemeName: cleanScheme,
+      meta,
+      e1rm: adj,
+      baseWorkingSets,
+      minRep,
+      maxRep,
+      rangeStr,
+      weekRpeBump,
+      isGrounding
+    });
+    if (blueprintSets && blueprintSets.length > 0) {
+      return blueprintSets;
+    }
       // ----------------------------------------------------------------------
       // 1. STRAIGHT SETS
       // ----------------------------------------------------------------------
@@ -3076,11 +3936,25 @@ function getIcon(name, cls = 'w-4 h-4') {
   if (!state.anchorE1rms) state.anchorE1rms = {};
   if (!state.settings) state.settings = {};
   if (!state.settings.e1rmBlending) state.settings.e1rmBlending = 'moderate';
+  if (!state.schemeBlueprints) {
+    state.schemeBlueprints = JSON.parse(JSON.stringify(state.schemeRecipes || DEFAULT_SCHEME_BLUEPRINTS));}
   if (!state.settings.oneRmFormula) state.settings.oneRmFormula = 'apex';
   if (!state.schemeRecipes) state.schemeRecipes = JSON.parse(JSON.stringify(core.defaultSchemeRecipes || {}));
   if (!state.activeRecipeScheme) state.activeRecipeScheme = 'Reverse Pyramid';
   if (!state.wizardModal) state.wizardModal = { open: false, data: null };
-
+if (!state.rpeProfiles) {
+  state.rpeProfiles = {
+    high_capacity: {
+      id: 'high_capacity',
+      name: 'High Capacity',
+      matrix: extendRpeMatrix(DEFAULT_HIGH_CAPACITY_BASE, 50)
+    }
+  };
+}
+if (!state.activeRpeProfileId) state.activeRpeProfileId = 'high_capacity';
+if (!state.editingRpeProfile) {
+  state.editingRpeProfile = JSON.parse(JSON.stringify(state.rpeProfiles[state.activeRpeProfileId]));
+}
   const { 
     roundRpe = (v) => {
       const num = Number(v);
@@ -3316,7 +4190,85 @@ function getIcon(name, cls = 'w-4 h-4') {
     navigate(screen, e) { if (e?.stopPropagation) e.stopPropagation(); state.screen = screen; state.drawerOpen = false; safeRender(); },
     changeMonth(delta) { state.month += delta; if (state.month > 11) { state.month = 0; state.year++; } if (state.month < 0) { state.month = 11; state.year--; } safeRender(); },
     jumpToToday() { const t = new Date(); state.year = t.getFullYear(); state.month = t.getMonth(); state.selectedDay = t.getDate(); safeRender(); },
+// RPE Chart Actions
+  selectRpeProfile(id) {
+    state.activeRpeProfileId = id;
+    state.editingRpeProfile = JSON.parse(JSON.stringify(state.rpeProfiles[id]));
+    persist();
+    safeRender();
+  },
 
+  createNewRpeProfile() {
+    const name = prompt("Enter profile name:", "New Profile");
+    if (!name) return;
+    const newId = 'rpe_' + Date.now();
+    const newProf = {
+      id: newId,
+      name: name,
+      matrix: extendRpeMatrix(DEFAULT_HIGH_CAPACITY_BASE, 50)
+    };
+    state.rpeProfiles[newId] = newProf;
+    state.activeRpeProfileId = newId;
+    state.editingRpeProfile = JSON.parse(JSON.stringify(newProf));
+    persist();
+    triggerCloudSync(1000);
+    safeRender();
+  },
+
+  updateRpeProfileName(name) {
+    if (state.editingRpeProfile) state.editingRpeProfile.name = name;
+  },
+
+  updateRpeCell(rep, rpe, val) {
+    if (!state.editingRpeProfile.matrix[rep]) state.editingRpeProfile.matrix[rep] = {};
+    state.editingRpeProfile.matrix[rep][rpe] = Number(val);
+    safeRender();
+  },
+
+  autoExtendActiveChart() {
+    state.editingRpeProfile.matrix = extendRpeMatrix(state.editingRpeProfile.matrix, 50);
+    showToast("Extrapolated reps 13-50 based on 6-12 curve");
+    safeRender();
+  },
+
+  saveCurrentRpeProfile() {
+    const id = state.editingRpeProfile.id;
+    state.rpeProfiles[id] = JSON.parse(JSON.stringify(state.editingRpeProfile));
+    state.activeRpeProfileId = id;
+    persist();
+    triggerCloudSync(1000);
+    showToast(`Updated "${state.editingRpeProfile.name}" RPE Chart`);
+    safeRender();
+  },
+
+  saveNewRpeProfile() {
+    const name = prompt("Name for new profile:", `${state.editingRpeProfile.name} (Copy)`);
+    if (!name) return;
+    const newId = 'rpe_' + Date.now();
+    state.editingRpeProfile.id = newId;
+    state.editingRpeProfile.name = name;
+    state.rpeProfiles[newId] = JSON.parse(JSON.stringify(state.editingRpeProfile));
+    state.activeRpeProfileId = newId;
+    persist();
+    triggerCloudSync(1000);
+    showToast(`Created "${name}"`);
+    safeRender();
+  },
+
+  deleteRpeProfile() {
+    const id = state.editingRpeProfile.id;
+    if (Object.keys(state.rpeProfiles).length <= 1) {
+      showToast("Cannot delete the only remaining profile");
+      return;
+    }
+    if (!confirm(`Delete profile "${state.editingRpeProfile.name}"?`)) return;
+    delete state.rpeProfiles[id];
+    state.activeRpeProfileId = Object.keys(state.rpeProfiles)[0];
+    state.editingRpeProfile = JSON.parse(JSON.stringify(state.rpeProfiles[state.activeRpeProfileId]));
+    persist();
+    triggerCloudSync(1000);
+    safeRender();
+  },
     // Date Selection & Modal Activation
     selectDate(d) {
       state.selectedDay = Number(d);
@@ -5783,61 +6735,98 @@ function renderBottomNav() {
           openerRpe: 'Opener Set Target RPE'
         };
 
-        const formFieldsHtml = recipeKeys.map(k => {
-          const val = recipe[k];
-          const isArr = Array.isArray(val);
-          const label = fieldLabels[k] || k;
-          const isRpeField = typeof k === 'string' && k.toLowerCase().includes('rpe');
-          const isBooleanToggle = k === 'enableRpeProgression';
+       const curScheme = state.selectedRecipeScheme || state.selectedProgrammingScheme || 'Straight Sets';
+    if (!state.schemeBlueprints) {
+      state.schemeBlueprints = JSON.parse(JSON.stringify(state.schemeRecipes || DEFAULT_SCHEME_BLUEPRINTS));
+    }
+    const bp = state.schemeBlueprints[curScheme] || DEFAULT_SCHEME_BLUEPRINTS[curScheme] || DEFAULT_SCHEME_BLUEPRINTS['Straight Sets'];
 
-          if (isBooleanToggle) {
-            const isEnabled = Boolean(val);
-            return `
-              <div class="bg-input p-3 rounded-2xl border border-sub space-y-1 sm:col-span-2">
-                <label class="text-[10px] text-slate-300 font-bold uppercase flex justify-between">
-                  <span>${label}</span>
-                  <span class="text-accent font-bold">${isEnabled ? 'Active (+0.5/Wk)' : 'Disabled (Fixed RPE)'}</span>
-                </label>
-                <div class="grid grid-cols-2 gap-1.5 pt-0.5">
-                  <button type="button" onclick="appActions.updateSchemeRecipe('${curScheme}', '${k}', true)" class="py-2 rounded-xl font-bold text-xs border transition tactile ${isEnabled ? 'bg-blue-600 text-white border-blue-400 shadow' : 'bg-card-sub text-slate-400 border-sub'}">
-                    Progression ON
-                  </button>
-                  <button type="button" onclick="appActions.updateSchemeRecipe('${curScheme}', '${k}', false)" class="py-2 rounded-xl font-bold text-xs border transition tactile ${!isEnabled ? 'bg-blue-600 text-white border-blue-400 shadow' : 'bg-card-sub text-slate-400 border-sub'}">
-                    Progression OFF
-                  </button>
-                </div>
-              </div>
-            `;
-          }
+    const repDisplayVal = Array.isArray(bp.reps) ? bp.reps.join(', ') : (bp.reps || 8);
+    const rpeOpts = [6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0];
 
-          if (isRpeField) {
-            const currentRpe = roundRpe(val);
-            const rpeOptions = [5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0];
-            return `
-              <div class="bg-input p-3 rounded-2xl border border-sub space-y-1">
-                <label class="text-[10px] text-slate-300 font-bold uppercase">${label}</label>
-                <select onchange="appActions.updateSchemeRecipe('${curScheme}', '${k}', this.value)" class="w-full bg-card-sub border border-sub rounded-xl p-2 text-white font-mono text-xs focus:outline-none font-bold">
-                  ${rpeOptions.map(r => `
-                    <option value="${r}" ${currentRpe === r ? 'selected' : ''}>
-                      ${r === 5.5 ? '5.5 (<6.0)' : '@' + r.toFixed(1)}
-                    </option>
-                  `).join('')}
-                </select>
-              </div>
-            `;
-          }
+    // Pattern-specific contextual controls
+    let patternFieldsHtml = '';
+    if (bp.pattern === 'load_drop') {
+      patternFieldsHtml = `
+        <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
+          <label class="text-[9px] text-slate-400 font-bold uppercase">Top Sets Count</label>
+          <input type="number" min="1" max="4" value="${bp.topSetCount || 1}" onchange="appActions.updateSchemeBlueprint('${curScheme}', 'topSetCount', Number(this.value))" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-white font-bold text-center text-xs focus:outline-none">
+        </div>
+        <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
+          <label class="text-[9px] text-slate-400 font-bold uppercase">Back-off Load Drop %</label>
+          <select onchange="appActions.updateSchemeBlueprint('${curScheme}', 'fatigueDropPct', Number(this.value))" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-amber-300 font-bold text-xs focus:outline-none">
+            ${[0.03, 0.05, 0.075, 0.10, 0.12, 0.15, 0.20].map(d => `
+              <option value="${d}" ${(Number(bp.fatigueDropPct) === d) ? 'selected' : ''}>-${Math.round(d * 100)}% Load Drop</option>
+            `).join('')}
+          </select>
+        </div>
+      `;
+    } else if (bp.pattern === 'ramp') {
+      patternFieldsHtml = `
+        <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1 sm:col-span-2">
+          <label class="text-[9px] text-slate-400 font-bold uppercase">RPE Step Delta Per Set</label>
+          <select onchange="appActions.updateSchemeBlueprint('${curScheme}', 'rpeStepDelta', Number(this.value))" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-indigo-300 font-bold text-xs focus:outline-none">
+            ${[0.0, 0.5, 1.0].map(step => `
+              <option value="${step}" ${(Number(bp.rpeStepDelta) === step) ? 'selected' : ''}>+${step.toFixed(1)} RPE per Set</option>
+            `).join('')}
+          </select>
+        </div>
+      `;
+    } else if (bp.pattern === 'rep_goal') {
+      patternFieldsHtml = `
+        <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1 sm:col-span-2">
+          <label class="text-[9px] text-slate-400 font-bold uppercase">Cumulative Rep Goal Target</label>
+          <input type="number" step="5" value="${bp.repGoal || 30}" onchange="appActions.updateSchemeBlueprint('${curScheme}', 'repGoal', Number(this.value))" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-teal-300 font-bold text-center text-xs focus:outline-none">
+        </div>
+      `;
+    } else if (bp.pattern === 'cluster') {
+      patternFieldsHtml = `
+        <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
+          <label class="text-[9px] text-slate-400 font-bold uppercase">Intra-Cluster Rest (Sec)</label>
+          <select onchange="appActions.updateSchemeBlueprint('${curScheme}', 'intraSetRest', Number(this.value))" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-white font-bold text-xs focus:outline-none">
+            ${[15, 20, 25, 30].map(s => `
+              <option value="${s}" ${(Number(bp.intraSetRest) === s) ? 'selected' : ''}>${s} Seconds</option>
+            `).join('')}
+          </select>
+        </div>
+        <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
+          <label class="text-[9px] text-slate-400 font-bold uppercase">Density Load Penalty</label>
+          <select onchange="appActions.updateSchemeBlueprint('${curScheme}', 'densityPenalty', Number(this.value))" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-accent font-bold text-xs focus:outline-none">
+            <option value="1.0" ${(Number(bp.densityPenalty) === 1.0) ? 'selected' : ''}>1.00x (Standard Load)</option>
+            <option value="0.95" ${(Number(bp.densityPenalty) === 0.95) ? 'selected' : ''}>0.95x (-5% Density)</option>
+            <option value="0.90" ${(Number(bp.densityPenalty) === 0.90) ? 'selected' : ''}>0.90x (-10% Density)</option>
+            <option value="0.85" ${(Number(bp.densityPenalty) === 0.85) ? 'selected' : ''}>0.85x (-15% Density)</option>
+          </select>
+        </div>
+      `;
+    } else if (bp.pattern === 'repeats') {
+      patternFieldsHtml = `
+        <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1 sm:col-span-2">
+          <label class="text-[9px] text-slate-400 font-bold uppercase">Fatigue Stop Cap</label>
+          <select onchange="appActions.updateSchemeBlueprint('${curScheme}', 'fatigueStopRpe', Number(this.value))" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-rose-300 font-bold text-xs focus:outline-none">
+            <option value="9.0" ${(Number(bp.fatigueStopRpe) === 9.0) ? 'selected' : ''}>Stop Set Ladder at @9.0 RPE</option>
+            <option value="9.5" ${(Number(bp.fatigueStopRpe) === 9.5) ? 'selected' : ''}>Stop Set Ladder at @9.5 RPE</option>
+            <option value="10.0" ${(Number(bp.fatigueStopRpe) === 10.0) ? 'selected' : ''}>Stop at @10.0 (Failure)</option>
+          </select>
+        </div>
+      `;
+    }
 
-          return `
-            <div class="bg-input p-3 rounded-2xl border border-sub space-y-1">
-              <label class="text-[10px] text-slate-300 font-bold uppercase">${label}</label>
-              ${isArr ? `
-                <input type="text" value="${val.join(', ')}" onchange="appActions.updateSchemeRecipe('${curScheme}', '${k}', this.value.split(',').map(s=>Number(s.trim())).filter(n=>!isNaN(n)))" class="w-full bg-card-sub border border-sub rounded-xl p-2 text-white font-mono text-xs focus:outline-none">
-              ` : `
-                <input type="number" step="0.5" value="${val}" onchange="appActions.updateSchemeRecipe('${curScheme}', '${k}', this.value)" class="w-full bg-card-sub border border-sub rounded-xl p-2 text-white font-mono text-xs focus:outline-none font-bold">
-              `}
-            </div>
-          `;
-        }).join('');
+    // Simulated set preview
+    const previewSets = generateSetsFromBlueprint({
+      schemeName: curScheme,
+      meta: { w: true, r: true },
+      e1rm: 200,
+      baseWorkingSets: Number(bp.baseSets) || 3
+    }) || [];
+
+    const simulationPreviewHtml = previewSets.map(s => `
+      <div class="bg-input/60 p-1.5 rounded-xl border border-sub/50 flex justify-between items-center text-[9.5px]">
+        <span class="font-bold text-slate-200">${s.label}</span>
+        <span class="text-accent font-mono font-bold">${s.targetReps} reps @ ${s.targetRpe ? s.targetRpe.toFixed(1) : '8.0'}</span>
+        <span class="text-slate-400">${s.targetLoad} lbs</span>
+      </div>
+    `).join('');
 
         html += `
           <main class="flex-1 min-h-0 overflow-y-auto space-y-3 max-w-4xl mx-auto w-full pr-0.5" onclick="appActions.closeCardMenu()">
@@ -5869,7 +6858,7 @@ function renderBottomNav() {
 
             <div class="grid grid-cols-1 md:grid-cols-12 gap-3.5 items-start font-mono text-xs w-full">
               <div class="md:col-span-4 bg-card-sub p-3 rounded-2xl border border-sub space-y-2">
-                <div class="text-[10px] text-accent font-bold uppercase">All 31 Prescribed Schemes</div>
+                <div class="text-[10px] text-accent font-bold uppercase">All 32 Prescribed Schemes</div>
                 <div class="space-y-1 max-h-96 overflow-y-auto pr-1">
                   <div class="text-[9px] text-slate-500 uppercase font-bold pt-1">Hypertrophy Schemes</div>
                   ${(hypertrophySchemes || []).map(s => `
@@ -5886,21 +6875,69 @@ function renderBottomNav() {
                 </div>
               </div>
 
-              <div class="md:col-span-8 bg-card-sub p-4 rounded-3xl border border-sub space-y-3 shadow-xl">
-                <div class="border-b border-sub pb-2 flex justify-between items-start">
-                  <div>
-                    <span class="text-[9px] text-accent font-bold uppercase">Recipe Architecture</span>
-                    <h3 class="text-sm font-bold text-white">${curScheme}</h3>
-                    <p class="text-[10px] text-slate-400 mt-0.5">${schemeDescriptions[curScheme] || 'Dynamic periodization scheme prescription.'}</p>
-                  </div>
-                  <button type="button" onclick="appActions.saveCurrentRecipe('${curScheme}')" class="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs shadow-md tactile">
-                    Save Changes
-                  </button>
-                </div>
+              <div class="md:col-span-8 bg-card-sub p-4 rounded-3xl border border-sub space-y-3.5 shadow-xl">
+  <div class="border-b border-sub pb-2 flex justify-between items-start">
+    <div>
+      <span class="text-[9px] text-accent font-bold uppercase tracking-wider">Blueprint Architecture</span>
+      <h3 class="text-sm font-bold text-white mt-0.5">${curScheme}</h3>
+      <div class="text-[10px] text-slate-400 mt-0.5">${bp.category || 'Dynamic'} • Pattern: <b class="text-slate-200 capitalize">${(bp.pattern || 'straight').replace('_', ' ')}</b></div>
+    </div>
+    <button type="button" onclick="appActions.saveSchemeBlueprint('${curScheme}')" class="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs tactile shadow-md">
+      Save Blueprint
+    </button>
+  </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  ${formFieldsHtml.length ? formFieldsHtml : `<div class="text-slate-500 text-center py-8 col-span-2">This scheme uses pure phase matrix constraints without additional sub-rules.</div>`}
-                </div>
+  <!-- Primary Parameters Grid -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+    <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
+      <label class="text-[9px] text-slate-400 font-bold uppercase">Execution Pattern</label>
+      <select onchange="appActions.updateSchemeBlueprint('${curScheme}', 'pattern', this.value)" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-white font-bold text-xs focus:outline-none">
+        <option value="straight" ${bp.pattern === 'straight' ? 'selected' : ''}>Straight Sets (Uniform)</option>
+        <option value="load_drop" ${bp.pattern === 'load_drop' ? 'selected' : ''}>Load Drop (Down Sets)</option>
+        <option value="repeats" ${bp.pattern === 'repeats' ? 'selected' : ''}>Repeats (Fatigue Stop)</option>
+        <option value="ramp" ${bp.pattern === 'ramp' ? 'selected' : ''}>Ascending Ramp / Ladder</option>
+        <option value="rep_goal" ${bp.pattern === 'rep_goal' ? 'selected' : ''}>Rep-Goal System</option>
+        <option value="cluster" ${bp.pattern === 'cluster' ? 'selected' : ''}>Intra-Set Cluster</option>
+      </select>
+    </div>
+
+    <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
+      <label class="text-[9px] text-slate-400 font-bold uppercase">Total Working Sets</label>
+      <input type="number" min="1" max="10" value="${bp.baseSets \vert{}\vert{} 3}" onchange="appActions.updateSchemeBlueprint('${curScheme}', 'baseSets', Number(this.value))" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-white font-bold text-center text-xs focus:outline-none">
+    </div>
+
+    <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
+      <label class="text-[9px] text-slate-400 font-bold uppercase">Prescribed Reps / Array</label>
+      <input type="text" value="${repDisplayVal}" placeholder="e.g. 8, 8-12, or 4, 6, 8" onchange="appActions.updateSchemeBlueprint('${curScheme}', 'reps', this.value)" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-white font-bold text-center text-xs focus:outline-none">
+    </div>
+
+    <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
+      <label class="text-[9px] text-slate-400 font-bold uppercase">Target Effort Anchor</label>
+      <select onchange="appActions.updateSchemeBlueprint('${curScheme}', 'targetRpe', Number(this.value))" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-accent font-bold text-xs focus:outline-none">
+        ${rpeOpts.map(r => `
+          <option value="${r}" ${roundRpe(bp.targetRpe || 8.0) === r ? 'selected' : ''}>@${r.toFixed(1)}</option>
+        `).join('')}
+      </select>
+    </div>
+
+    <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
+      <label class="text-[9px] text-slate-400 font-bold uppercase">Inter-Set Rest (Sec)</label>
+      <input type="number" step="15" value="${bp.restSeconds \vert{}\vert{} 120}" onchange="appActions.updateSchemeBlueprint('${curScheme}', 'restSeconds', Number(this.value))" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-slate-200 font-bold text-center text-xs focus:outline-none">
+    </div>
+
+    ${patternFieldsHtml}
+  </div>
+
+  <!-- Live Simulation Preview -->
+  <div class="pt-2 border-t border-sub/50 space-y-1.5">
+    <div class="flex justify-between items-center text-[9px] text-slate-400 uppercase font-bold px-1">
+      <span>Simulation Preview (200 lbs e1RM Anchor)</span>
+      <span class="text-accent">${previewSets.length} Sets Total</span>
+    </div>
+    <div class="space-y-1">
+      ${simulationPreviewHtml}
+    </div>
+  </div
 
                 <div class="pt-2 border-t border-sub/50 flex justify-between items-center text-[10px] text-slate-400">
                   <span>Rep window locks (e.g. 8-8r) override Global Matrix bookends.</span>
@@ -5940,7 +6977,7 @@ function renderBottomNav() {
             const effectiveW = getExerciseLoad(ex.exercise, s.actualWeight, sessionDateKey);
             if (effectiveW && s.actualReps && s.actualRpe) {
               const cleanRpe = roundRpe(s.actualRpe);
-              const c = Math.round(Number(effectiveW) / (getPct(s.actualReps, cleanRpe) / 100));
+              const c = getE1RM(effectiveW, s.actualReps, cleanRpe);
               if (c > livePeakE1) livePeakE1 = c;
               liveLastE1 = c;
             }
@@ -5963,7 +7000,7 @@ function renderBottomNav() {
   <button type="button" onclick="appActions.deleteSet(${exIdx},${sIdx})" class="text-[9px] md:text-xs font-mono text-slate-400 hover:text-red-400 font-bold shrink-0">${sIdx + 1}</button>${s.label ? `<span class="text-[7px] md:text-[7.5px] font-mono px-1 py-0.5 bg-card-sub rounded text-blue-300 border border-sub leading-[9px] whitespace-normal break-words text-center flex-1">${s.label}</span>` : ''}
 </div>
                   <span class="col-span-3 font-mono text-[9px] md:text-xs text-slate-300 text-left pl-0.5 leading-tight truncate">
-                    ${s.targetLoad ? s.targetLoad + 'x' : ''}${s.targetReps ? s.targetReps + 'r' : ''}${s.targetTime ? s.targetTime + 's' : ''} @${displayTargetRpe}
+                    ${(s.targetLoad !== undefined && s.targetLoad !== null && s.targetLoad !== '') ? s.targetLoad + 'x' : ''}${s.targetReps ? s.targetReps + 'r' : ''}${s.targetTime ? s.targetTime + 's' : ''} @${displayTargetRpe}
                   </span>
                   
                   <div class="col-span-6 grid grid-cols-3 gap-1 items-center">
@@ -7673,14 +8710,10 @@ function renderBottomNav() {
               </div>
             ` : ''}
           ${activeTab === 'tools' ? `
-        <div class="space-y-4 font-mono">
-          <div class="flex items-center justify-between">
-            <h3 class="text-sm font-bold text-white uppercase tracking-wider">RPE Load Matrix</h3>
-            <span class="text-[10px] text-slate-500">Continuous 1RM Interpolation</span>
-          </div>
-          ${renderRpeMatrixComponent({ title: 'Dynamic Calculator', sets: state.rpeMatrixModal.sets })}
-        </div>
-      ` : ''}
+            <div class="space-y-4 font-mono">
+              ${renderCustomRpeTool()}
+            </div>
+          ` : ''}
             </main>
         `;
       }
@@ -7882,8 +8915,8 @@ function renderBottomNav() {
       if (state.plannerModal.open) {
         const { ex, mods, exIdx, weight, reps, rpe, withMods, savedMsg } = state.plannerModal;
         const cleanRpe = roundRpe(rpe);
-        const pPct = getPct(reps, cleanRpe);
-        const pE1 = Math.round(weight / (pPct / 100));
+        const pE1 = getE1RM(weight, reps, cleanRpe);
+        const pPct = (pE1 && Number(weight)) ? Math.round((Number(weight) / pE1) * 1000) / 10 : getPct(reps, cleanRpe);
         const history = getLiftHistory(ex, withMods, mods);
 
         const historyHtml = history.length ? history.map(h => {
