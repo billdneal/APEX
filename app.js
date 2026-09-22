@@ -2000,6 +2000,7 @@ window.appActions.resetSchemeRecipes = function() {
 // Aliases for legacy button bindings
 window.appActions.saveCurrentRecipe = window.appActions.saveSchemeBlueprint;
 window.appActions.resetSchemeBlueprints = window.appActions.resetSchemeRecipes;
+window.renderCustomRpeTool = renderCustomRpeTool;
 function renderCustomRpeTool() {
   // Self-heal: initialize default profile if missing from cache
   if (!state.rpeProfiles || !state.rpeProfiles.high_capacity) {
@@ -5815,6 +5816,7 @@ if (!state.editingRpeProfile) {
 (function() {
   const state = window.state || {};
   const core = window.apexCore || {};
+  const renderCustomRpeTool = window.renderCustomRpeTool || function() { return ''; };
 const extendRpeMatrix = window.extendRpeMatrix;
   const generateSetsFromBlueprint = window.generateSetsFromBlueprint;
 
