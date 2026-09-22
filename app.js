@@ -1786,6 +1786,7 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     densityPenalty: 1.0
   }
 };
+window.DEFAULT_SCHEME_BLUEPRINTS = DEFAULT_SCHEME_BLUEPRINTS;
 
 function generateSetsFromBlueprint(paramsOrName, metaArg, e1rmArg, baseWorkingSetsArg = 3, landmarkOffsetArg = 0) {
   // Self-heal: automatically migrate or initialize blueprints
@@ -1844,20 +1845,27 @@ function generateSetsFromBlueprint(paramsOrName, metaArg, e1rmArg, baseWorkingSe
       const r = Math.ceil(goal / totalSets);
       setRepStr = String(r);
       setRepVal = r;
-    } else if (bp.reps) {
-      if (typeof bp.reps === 'string' && bp.reps.includes('-')) {
-        setRepStr = bp.reps;
-        setRepVal = Number(bp.reps.split('-')[0]) || minRep;
+    } else if (bp.reps || bp.targetReps) {
+      const repSource = bp.reps || bp.targetReps;
+      if (typeof repSource === 'string' && repSource.includes(',')) {
+        const rArr = repSource.split(',').map(x => x.trim());
+        setRepStr = rArr[idx] !== undefined ? rArr[idx] : rArr[rArr.length - 1];
+        setRepVal = Number(setRepStr) || minRep;
+      } else if (typeof repSource === 'string' && repSource.includes('-')) {
+        setRepStr = repSource;
+        setRepVal = Number(repSource.split('-')[0]) || minRep;
       } else {
-        setRepStr = String(bp.reps);
-        setRepVal = Number(bp.reps) || minRep;
+        setRepStr = String(repSource);
+        setRepVal = Number(repSource) || minRep;
       }
     }
 
     // 2. Effort resolution
     let setRpe = baseEffort;
-    if (bp.pattern === 'ramp' && bp.rpeStepDelta) {
-      setRpe = roundRpe(baseEffort + (idx * Number(bp.rpeStepDelta)));
+    if (bp.pattern === 'ramp') {
+      const rpeStep = bp.rpeStepDelta !== undefined ? Number(bp.rpeStepDelta) : 0.5;
+      const stepsFromTop = totalSets - 1 - idx;
+      setRpe = roundRpe(Math.max(6.0, baseEffort - (stepsFromTop * rpeStep)));
     } else if (bp.pattern === 'load_drop' && idx >= topCount) {
       setRpe = roundRpe(Math.max(6.0, baseEffort - 0.5));
     }
@@ -1867,14 +1875,37 @@ function generateSetsFromBlueprint(paramsOrName, metaArg, e1rmArg, baseWorkingSe
     if (meta && meta.w && e1rm > 0) {
       const penalty = Number(bp.densityPenalty) || 1.0;
       const calcReps = typeof setRepVal === 'number' ? setRepVal : (Number(minRep) || 8);
-      
-      if (idx === 0) {
+
+      if (bp.pattern === 'ramp') {
+        // Ascending Ramp: Peak working set is the final set; earlier sets step down
+        const rawRamp = bp.loadRampPct !== undefined ? bp.loadRampPct : 7.5;
+        const rampPct = rawRamp > 1 ? rawRamp / 100 : rawRamp;
+        const stepsFromTop = totalSets - 1 - idx;
+
+        if (!topSetLoad) {
+          let peakReps = minRep;
+          const rSource = bp.reps || bp.targetReps;
+          if (Array.isArray(rSource)) {
+            peakReps = rSource[totalSets - 1] !== undefined ? rSource[totalSets - 1] : rSource[rSource.length - 1];
+          } else if (typeof rSource === 'string' && rSource.includes(',')) {
+            const parts = rSource.split(',');
+            peakReps = Number(parts[parts.length - 1].trim()) || minRep;
+          } else if (rSource) {
+            peakReps = Number(rSource) || minRep;
+          }
+          topSetLoad = calcLoad(e1rm, getPct(peakReps, baseEffort) * penalty);
+        }
+
+        const multiplier = Math.max(0.2, 1 - (stepsFromTop * rampPct));
+        setLoad = roundLoad(topSetLoad * multiplier);
+      } else if (idx === 0) {
         topSetLoad = calcLoad(e1rm, getPct(calcReps, baseEffort) * penalty);
         setLoad = topSetLoad;
       } else if (bp.pattern === 'load_drop' && idx >= topCount) {
-        const dropPct = Number(bp.fatigueDropPct) || Number(bp.loadStepPct) || 0.05;
+        const rawDrop = bp.loadDropPct !== undefined ? bp.loadDropPct : (bp.fatiguedDropPct || bp.loadStepPct || 10);
+        const dropPct = rawDrop > 1 ? rawDrop / 100 : rawDrop;
         const multiplier = 1 - (dropPct * (idx - topCount + 1));
-        setLoad = roundLoad(topSetLoad * multiplier);
+        setLoad = roundLoad(topSetLoad * Math.max(0.1, multiplier));
       } else {
         setLoad = calcLoad(e1rm, getPct(calcReps, setRpe) * penalty);
       }
@@ -1887,10 +1918,14 @@ function generateSetsFromBlueprint(paramsOrName, metaArg, e1rmArg, baseWorkingSe
     } else if (bp.pattern === 'rep_goal') {
       label = `Set ${idx + 1} (Goal: ${bp.repGoal || 30}r)`;
     } else if (bp.pattern === 'load_drop') {
-      const dropPct = Math.round((Number(bp.fatigueDropPct) || 0.05) * 100 * (idx - topCount + 1));
-      label = idx < topCount ? (isGrounding ? '🔥 Grounding Top Set (@9.0)' : (topCount === 1 ? 'Top Set' : `Top Set ${idx + 1}`)) : `Back-off ${idx - topCount + 1} (-${dropPct}%)`;
+      const rawDrop = bp.loadDropPct !== undefined ? bp.loadDropPct : ((Number(bp.fatiguedDropPct) || 0.05) * 100);
+      const dropStep = rawDrop > 1 ? rawDrop : rawDrop * 100;
+      const totalDropPct = Math.round(dropStep * (idx - topCount + 1));
+      label = idx < topCount ? (isGrounding ? '🔥 Grounding Top Set (@9.0)' : (topCount === 1 ? 'Top Set' : `Top Set ${idx + 1}`)) : `Back-off ${idx - topCount + 1} (-${totalDropPct}%)`;
+    } else if (bp.pattern === 'ramp') {
+      const stepsFromTop = totalSets - 1 - idx;
+      label = stepsFromTop === 0 ? (isGrounding ? '🔥 Grounding Top Set' : 'Top Set (Peak)') : `Ramp Set ${idx + 1}`;
     }
-
     // 5. APEX Set Contract
     sets.push({
       label: label,
@@ -1997,6 +2032,37 @@ window.appActions.resetSchemeRecipes = function() {
   }
 };
 
+// 5. Create New Custom Blueprint
+window.appActions.createCustomBlueprint = function() {
+  const newId = 'custom_' + Date.now();
+  if (!state.schemeBlueprints) state.schemeBlueprints = {};
+
+  state.schemeBlueprints[newId] = {
+    id: newId,
+    name: 'New Custom Scheme',
+    pattern: 'straight',
+    sets: 3,
+    targetReps: '10',
+    anchorRpe: 8.0,
+    restSec: 120,
+    loadDropPct: 10,
+    loadRampPct: 7.5
+  };
+
+  state.activeRecipeScheme = newId;
+
+  if (typeof saveState === 'function') {
+    saveState();
+  } else {
+    localStorage.setItem('apex_state', JSON.stringify(state));
+  }
+
+  if (typeof showToast === 'function') {
+    showToast('New Custom Blueprint Created');
+  }
+  if (typeof saferRender === 'function') saferRender();
+  else if (typeof window.render === 'function') window.render();
+};
 // Aliases for legacy button bindings
 window.appActions.saveCurrentRecipe = window.appActions.saveSchemeBlueprint;
 window.appActions.resetSchemeBlueprints = window.appActions.resetSchemeRecipes;
@@ -6869,7 +6935,14 @@ function renderBottomNav() {
 
             <div class="grid grid-cols-1 md:grid-cols-12 gap-3.5 items-start font-mono text-xs w-full">
               <div class="md:col-span-4 bg-card-sub p-3 rounded-2xl border border-sub space-y-2">
-                <div class="text-[10px] text-accent font-bold uppercase">All 32 Prescribed Schemes</div>
+                <div class="flex items-center justify-between pb-1">
+  <span class="text-[10px] text-accent font-bold uppercase">Scheme Library</span>
+  <button type="button"
+    onclick="appActions.createCustomBlueprint()"
+    class="px-2 py-0.5 text-[9px] font-bold rounded bg-emerald-600 hover:bg-emerald-500 text-white transition-colors flex items-center gap-1 shadow">
+    + New Scheme
+  </button>
+</div>
                 <div class="space-y-1 max-h-96 overflow-y-auto pr-1">
                   <div class="text-[9px] text-slate-500 uppercase font-bold pt-1">Hypertrophy Schemes</div>
                   ${(hypertrophySchemes || []).map(s => `
@@ -6916,6 +6989,25 @@ function renderBottomNav() {
       <label class="text-[9px] text-slate-400 font-bold uppercase">Total Working Sets</label>
       <input type="number" min="1" max="10" value="${bp.baseSets || 3}" onchange="appActions.updateSchemeBlueprint('${curScheme}', 'baseSets', Number(this.value))" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-white font-bold text-center text-xs focus:outline-none">
     </div>
+${bp.pattern === 'load_drop' ? `
+  <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
+    <label class="text-[9px] text-slate-400 font-bold uppercase">Load Drop Per Set (%)</label>
+    <input type="number" step="0.5" min="1" max="30"
+      value="${bp.loadDropPct !== undefined ? bp.loadDropPct : 10}"
+      onchange="appActions.updateSchemeBlueprint('${curScheme}', 'loadDropPct', Number(this.value))"
+      class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-white font-bold text-xs focus:border-blue-500 focus:outline-none" />
+  </div>
+` : ''}
+
+${bp.pattern === 'ramp' ? `
+  <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
+    <label class="text-[9px] text-slate-400 font-bold uppercase">Load Ramp Step (%)</label>
+    <input type="number" step="0.5" min="1" max="30"
+      value="${bp.loadRampPct !== undefined ? bp.loadRampPct : 7.5}"
+      onchange="appActions.updateSchemeBlueprint('${curScheme}', 'loadRampPct', Number(this.value))"
+      class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-white font-bold text-xs focus:border-blue-500 focus:outline-none" />
+  </div>
+` : ''}
 
     <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
       <label class="text-[9px] text-slate-400 font-bold uppercase">Prescribed Reps / Array</label>
@@ -7015,7 +7107,13 @@ function renderBottomNav() {
                   </span>
                   
                   <div class="col-span-6 grid grid-cols-3 gap-1 items-center">
-                    ${meta.w ? `<input type="number" step="2.5" placeholder="lbs" value="${s.actualWeight !== undefined && s.actualWeight !== null ? s.actualWeight : ''}" onchange="appActions.updateSetInput(${exIdx}, ${sIdx}, 'actualWeight', this.value)" class="w-full text-center bg-card-sub border border-sub rounded-lg py-1 text-xs text-center font-mono text-white focus:outline-none">` : ''}
+                    ${meta.w ? `
+  <input type="number" step="2.5" placeholder="lbs" value="${s.actualWeight !== undefined && s.actualWeight !== null ? s.actualWeight : ''}" onchange="appActions.updateSetInput(${exIdx}, ${sIdx}, 'actualWeight', this.value)" class="w-full text-center bg-card-sub border border-sub rounded-lg py-1 text-xs text-white focus:border-blue-500 focus:outline-none" />
+` : `
+  <div class="w-full py-1 text-center bg-card-sub/40 border border-sub/50 rounded-lg text-slate-400 text-[11px] font-bold tracking-wider select-none">
+    BW
+  </div>
+`}
                     ${meta.r ? `<input type="number" placeholder="reps" value="${s.actualReps !== undefined && s.actualReps !== null ? s.actualReps : ''}" onchange="appActions.updateSetInput(${exIdx}, ${sIdx}, 'actualReps', this.value)" class="w-full text-center bg-card-sub border border-sub rounded-lg py-1 text-xs text-center font-mono text-white focus:outline-none">` : ''}
                     ${meta.rpe ? `
                       <select onchange="appActions.updateSetInput(${exIdx}, ${sIdx}, 'actualRpe', this.value)" class="w-full text-center bg-card-sub border border-sub rounded-lg py-1 text-[9px] md:text-xs font-mono text-white px-0 focus:outline-none shrink-0 font-bold">
