@@ -6944,6 +6944,13 @@ const SPECIALIZED_SCHEMES = [
       'Top Set + Back-off', 'Ascending Triplet + Load Drop'
     ];
 
+    // Pre-build target RPE options cleanly without nested template strings
+    const targetRpeVal = roundRpe(bp.targetRpe || 8.0);
+    let targetRpeOptionsHtml = '';
+    (rpeOpts || [6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0]).forEach(r => {
+      targetRpeOptionsHtml += `<option value="${r}" ${targetRpeVal === r ? 'selected' : ''}>@${r.toFixed(1)}</option>`;
+    });
+
     let parametersGridHtml = '';
 
     if (SPECIALIZED_SCHEMES.includes(curScheme)) {
@@ -6968,9 +6975,10 @@ const SPECIALIZED_SCHEMES = [
           }
 
           if (key.toLowerCase().includes('rpe')) {
-            const rOpts = [6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0].map(r => 
-              `<option value="${r}" ${roundRpe(val) === r ? 'selected' : ''}>@${r.toFixed(1)}</option>`
-            ).join('');
+            let rOpts = '';
+            [6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0].forEach(r => {
+              rOpts += `<option value="${r}" ${roundRpe(val) === r ? 'selected' : ''}>@${r.toFixed(1)}</option>`;
+            });
 
             return `
               <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
@@ -7018,9 +7026,7 @@ const SPECIALIZED_SCHEMES = [
         <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
           <label class="text-[9px] text-slate-400 font-bold uppercase">Target Effort Anchor</label>
           <select onchange="appActions.updateSchemeBlueprint('${curScheme}', 'targetRpe', Number(this.value))" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-accent font-bold text-xs focus:outline-none">
-            ${rpeOpts.map(r => `
-              <option value="${r}" ${roundRpe(bp.targetRpe \vert{}\vert{} 8.0) === r ? 'selected' : ''}>@${r.toFixed(1)}</option>
-            `).join('')}
+            ${targetRpeOptionsHtml}
           </select>
         </div>
 
