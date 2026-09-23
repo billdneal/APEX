@@ -4258,7 +4258,7 @@ if (!state.editingRpeProfile) {
     }
   });
 
-  window.appActions = {
+  Object.assign(window.appActions, {
     // Navigation & Shell
     toggleDrawer(e) { if (e?.stopPropagation) e.stopPropagation(); state.drawerOpen = !state.drawerOpen; safeRender(); },
     navigate(screen, e) { if (e?.stopPropagation) e.stopPropagation(); state.screen = screen; state.drawerOpen = false; safeRender(); },
@@ -4757,14 +4757,7 @@ if (!state.editingRpeProfile) {
       safeRender();
     },
 
-    resetSchemeRecipes() {
-      state.schemeRecipes = JSON.parse(JSON.stringify(core.defaultSchemeRecipes || {}));
-      persist();
-      triggerCloudSync(1500);
-      showToast("Reset scheme recipes to system defaults");
-      safeRender();
-    },
-
+  
     exportProgrammingBuilderJson() {
       const chassisData = {
         version: core.APP_VERSION || 'v4.6.1-PWA',
@@ -5863,7 +5856,7 @@ if (!state.editingRpeProfile) {
       showToast("Signed out of Supabase");
       safeRender();
     }
-  };
+  });
 })();
 // ============================================================================
 // APEX TRAINING ENGINE - PART 4 OF 4: VIEW LAYER, RENDER PIPELINE & BOOTSTRAP
