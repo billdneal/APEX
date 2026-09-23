@@ -2918,6 +2918,90 @@ function renderRpeMatrixTable(profile) {
       ...(bpPool[cleanScheme] || {})
     };
 
+    // Microcycle RPE Progression Toggle: strict 0.5 RPE increments
+    const enableRpeProgression = recipe.enableRpeProgression !== undefined ? Boolean(recipe.enableRpeProgression) : true;
+    const weekRpeBump = enableRpeProgression ? Math.max(0, (w - 1) * 0.5) : 0; // Exactly 0.0, 0.5, 1.0...
+
+    // Working Set Volume Sizing Matrix
+    let baseWorkingSets = Number(recipe.setsCount || recipe.baseSets) || 3;
+    if (lifterType === 'Enhanced') {
+      baseWorkingSets = (tier === 'Main') ? baseWorkingSets : baseWorkingSets + 1;
+      if (w === 1) baseWorkingSets = Math.max(2, baseWorkingSets - 1);
+      else if (w >= 3) baseWorkingSets += 1;
+    } else {
+      if (w === 1) baseWorkingSets = Math.max(2, baseWorkingSets - 1);
+      else if (w >= 3 && tier !== 'Main') baseWorkingSets += 1;
+    }
+
+    if (phase === 'Deload') baseWorkingSets = Math.max(2, Math.floor(baseWorkingSets * 0.6));
+    baseWorkingSets = Math.max(2, baseWorkingSets - setReduction);
+
+    let setArray = [];
+
+    // Optional Over-Warmup Heavy Primer Single (1@8.0)
+    if (tier === 'Main' && state.settings?.includeTopSingle && cleanScheme !== 'e1RM Grounding AMRAP' && cleanScheme !== 'Primer Single + % Back-offs' && ready >= 65 && phase !== 'Deload' && !isGrounding) {
+      const top1 = calcLoad(adj, 92);
+      setArray.push({
+        label: '1@8.0 Primer',
+        targetLoad: meta.w ? top1 : 0,
+        targetReps: 1,
+        targetTime: 0,
+        targetRpe: 8.0,
+        actualWeight: meta.w ? top1 : 0,
+        actualReps: 1,
+        actualTime: 0,
+        actualRpe: 8.0,
+        done: false,
+        lapRunning: false
+      });
+    }
+
+    // Dual-Bound Rep Range Derivation: Check Scheme-Level Recipe Override First
+    let minRep = 6;
+    let maxRep = 8;
+    const hasRecipeRepLock = (Number(recipe.minReps) > 0 && Number(recipe.maxReps) > 0);
+
+    if (hasRecipeRepLock) {
+      minRep = Number(recipe.minReps);
+      maxRep = Number(recipe.maxReps);
+    } else {
+      const repResolver = resolveTargetReps || window.apexCore?.resolveTargetReps || function(ex, t, p) {
+        if (t === 'Assistance') return { min: 10, max: 15 };
+        if (t === 'Secondary') return { min: 6, max: 8 };
+        return { min: 4, max: 6 };
+      };
+      const rawBounds = repResolver(exName, tier, phase);
+      minRep = Number(rawBounds.min) || 6;
+      maxRep = Number(rawBounds.max) || 8;
+    }
+
+    if (minRep > maxRep) {
+      const temp = minRep;
+      minRep = maxRep;
+      maxRep = temp;
+    }
+
+    const hasSpecificOverride = state.exerciseRepOverrides && (
+      (state.exerciseRepOverrides[exName] && state.exerciseRepOverrides[exName][phase] !== undefined) ||
+      (state.exerciseRepOverrides[exName] && state.exerciseRepOverrides[exName]['All'] !== undefined)
+    );
+
+    // Only adjust reps for DUP or Week 1/3 if NOT locked by a scheme recipe definition
+    if (!hasRecipeRepLock) {
+      if (phase === 'DUP' && !hasSpecificOverride && tier !== 'Assistance') {
+        if (dow === 1 || dow === 5) { minRep = 3; maxRep = 5; }
+        else if (dow === 3) { minRep = 8; maxRep = 12; }
+        else { minRep = 5; maxRep = 7; }
+      }
+
+      if (w === 1 && tier !== 'Assistance') { minRep += 1; maxRep += 1; }
+      if (w === 3 && minRep > 2 && tier !== 'Assistance') { minRep -= 1; maxRep -= 1; }
+    }
+
+    const baseReps = Math.round((minRep + maxRep) / 2);
+    const isFixedRep = (minRep === maxRep);
+    const rangeStr = isFixedRep ? `${minRep}` : `${minRep}-${maxRep}`;
+
     // ====================================================
     // SCHEME ROUTING ENGINE: PARAMETRIC VS SPECIALIZED
     // ====================================================
@@ -2943,7 +3027,8 @@ function renderRpeMatrixTable(profile) {
       'Ascending Triplet + Load Drop'
     ];
 
-    const isCustomScheme = !DEFAULT_SCHEME_BLUEPRINTS[cleanScheme] || cleanScheme.startsWith('custom_');
+    const bpCatalog = (typeof DEFAULT_SCHEME_BLUEPRINTS !== 'undefined' ? DEFAULT_SCHEME_BLUEPRINTS : (state.schemeBlueprints || {}));
+    const isCustomScheme = !bpCatalog[cleanScheme] || cleanScheme.startsWith('custom_');
 
     // Only route custom schemes and basic parametric schemes through the generic blueprint generator.
     // Specialized schemes fall through directly to their dedicated mathematical engines below.
