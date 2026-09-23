@@ -6934,7 +6934,104 @@ function renderBottomNav() {
         <span class="text-slate-400">${s.targetLoad} lbs</span>
       </div>
     `).join('');
+const SPECIALIZED_SCHEMES = [
+      'Myo-reps', 'Rest-Pause (Dogcrapp)', 'Density Block', 'Wave Loading',
+      'Double Pyramid', 'Sawtooth', 'Primer Single + % Back-offs',
+      'Benchmark + Density Back-Off', 'Submaximal AMRAP Calibration',
+      'Dynamic Effort (Speed Waves)', 'Intra-Set Cluster (4x[2+2+2])',
+      'Strength Cluster', 'e1RM Grounding AMRAP', 'Drop Set',
+      'Force/Metabolic Interleave', 'Volume Pyramid', 'Tapered',
+      'Top Set + Back-off', 'Ascending Triplet + Load Drop'
+    ];
 
+    let parametersGridHtml = '';
+
+    if (SPECIALIZED_SCHEMES.includes(curScheme)) {
+      parametersGridHtml = Object.keys(recipe)
+        .filter(k => !['minReps', 'maxReps'].includes(k))
+        .map(key => {
+          const val = recipe[key];
+          const label = fieldLabels[key] || key;
+
+          if (typeof val === 'boolean' || key === 'enableRpeProgression') {
+            return `
+              <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1 sm:col-span-2 flex items-center justify-between">
+                <div>
+                  <label class="text-[10px] text-slate-300 font-bold uppercase">${label}</label>
+                  <div class="text-[9px] text-slate-500">Adds +0.5 RPE to targets each week of the block</div>
+                </div>
+                <input type="checkbox" ${val ? 'checked' : ''} 
+                  onchange="appActions.updateSchemeRecipe('${curScheme}', '${key}', this.checked)" 
+                  class="w-4 h-4 accent-blue-600 rounded">
+              </div>
+            `;
+          }
+
+          if (key.toLowerCase().includes('rpe')) {
+            const rOpts = [6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0].map(r => 
+              `<option value="${r}" ${roundRpe(val) === r ? 'selected' : ''}>@${r.toFixed(1)}</option>`
+            ).join('');
+
+            return `
+              <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
+                <label class="text-[9px] text-slate-400 font-bold uppercase">${label}</label>
+                <select onchange="appActions.updateSchemeRecipe('${curScheme}', '${key}', Number(this.value))" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-accent font-bold text-xs focus:outline-none">
+                  ${rOpts}
+                </select>
+              </div>
+            `;
+          }
+
+          return `
+            <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
+              <label class="text-[9px] text-slate-400 font-bold uppercase">${label}</label>
+              <input type="number" value="${val !== undefined ? val : 0}" 
+                onchange="appActions.updateSchemeRecipe('${curScheme}', '${key}', Number(this.value))" 
+                class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-white font-bold text-center text-xs focus:outline-none">
+            </div>
+          `;
+        }).join('');
+    } else {
+      parametersGridHtml = `
+        <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
+          <label class="text-[9px] text-slate-400 font-bold uppercase">Execution Pattern</label>
+          <select onchange="appActions.updateSchemeBlueprint('${curScheme}', 'pattern', this.value)" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-white font-bold text-xs focus:outline-none">
+            <option value="straight" ${bp.pattern === 'straight' ? 'selected' : ''}>Straight Sets (Uniform)</option>
+            <option value="load_drop" ${bp.pattern === 'load_drop' ? 'selected' : ''}>Load Drop (Down Sets)</option>
+            <option value="repeats" ${bp.pattern === 'repeats' ? 'selected' : ''}>Repeats (Fatigue Stop)</option>
+            <option value="ramp" ${bp.pattern === 'ramp' ? 'selected' : ''}>Ascending Ramp / Ladder</option>
+            <option value="rep_goal" ${bp.pattern === 'rep_goal' ? 'selected' : ''}>Rep-Goal System</option>
+            <option value="cluster" ${bp.pattern === 'cluster' ? 'selected' : ''}>Intra-Set Cluster</option>
+          </select>
+        </div>
+
+        <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
+          <label class="text-[9px] text-slate-400 font-bold uppercase">Total Working Sets</label>
+          <input type="number" min="1" max="10" value="${bp.baseSets || 3}" onchange="appActions.updateSchemeBlueprint('${curScheme}', 'baseSets', Number(this.value))" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-white font-bold text-center text-xs focus:outline-none">
+        </div>
+
+        <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
+          <label class="text-[9px] text-slate-400 font-bold uppercase">Prescribed Reps / Array</label>
+          <input type="text" value="${repDisplayVal}" placeholder="e.g. 8, 8-12, or 4, 6, 8" onchange="appActions.updateSchemeBlueprint('${curScheme}', 'reps', this.value)" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-white font-bold text-center text-xs focus:outline-none">
+        </div>
+
+        <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
+          <label class="text-[9px] text-slate-400 font-bold uppercase">Target Effort Anchor</label>
+          <select onchange="appActions.updateSchemeBlueprint('${curScheme}', 'targetRpe', Number(this.value))" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-accent font-bold text-xs focus:outline-none">
+            ${rpeOpts.map(r => `
+              <option value="${r}" ${roundRpe(bp.targetRpe \vert{}\vert{} 8.0) === r ? 'selected' : ''}>@${r.toFixed(1)}</option>
+            `).join('')}
+          </select>
+        </div>
+
+        <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
+          <label class="text-[9px] text-slate-400 font-bold uppercase">Inter-Set Rest (Sec)</label>
+          <input type="number" step="15" value="${bp.restSeconds || 120}" onchange="appActions.updateSchemeBlueprint('${curScheme}', 'restSeconds', Number(this.value))" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-slate-200 font-bold text-center text-xs focus:outline-none">
+        </div>
+
+        ${patternFieldsHtml}
+      `;
+    }
         html += `
           <main class="flex-1 min-h-0 overflow-y-auto space-y-3 max-w-4xl mx-auto w-full pr-0.5" onclick="appActions.closeCardMenu()">
             <div class="flex justify-between items-center border-b border-sub pb-2 text-xs font-bold text-white font-mono w-full">
@@ -7001,93 +7098,9 @@ function renderBottomNav() {
     </button>
   </div>
 
-  <!-- Dynamic Parameters Grid -->
+  <!-- Parameters Grid -->
   <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-    ${SPECIALIZED_SCHEMES.includes(curScheme) ? `
-      <!-- Archetype-Specific Parameter Controls -->
-      ${Object.keys(recipe).filter(k => !['minReps', 'maxReps'].includes(k)).map(key => {
-        const val = recipe[key];
-        const label = fieldLabels[key] || key;
-
-        // Boolean toggle for RPE progression
-        if (typeof val === 'boolean' || key === 'enableRpeProgression') {
-          return `
-            <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1 sm:col-span-2 flex items-center justify-between">
-              <div>
-                <label class="text-[10px] text-slate-300 font-bold uppercase">${label}</label>
-                <div class="text-[9px] text-slate-500">Adds +0.5 RPE to targets each week of the block</div>
-              </div>
-              <input type="checkbox" ${val ? 'checked' : ''} 
-                onchange="appActions.updateSchemeRecipe('${curScheme}', '${key}', this.checked)" 
-                class="w-4 h-4 accent-blue-600 rounded">
-            </div>
-          `;
-        }
-
-        // RPE Dropdown (Discrete 0.5 increments)
-        if (key.toLowerCase().includes('rpe')) {
-          return `
-            <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
-              <label class="text-[9px] text-slate-400 font-bold uppercase">${label}</label>
-              <select onchange="appActions.updateSchemeRecipe('${curScheme}', '${key}', Number(this.value))" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-accent font-bold text-xs focus:outline-none">
-                ${[6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0].map(r => `
-                  <option value="${r}" ${(roundRpe(val) === r) ? 'selected' : ''}>@${r.toFixed(1)}</option>
-                `).join('')}
-              </select>
-            </div>
-          `;
-        }
-
-        // General Numerical Fields (e.g. miniSets, intraRestSec, defaultMinutes, targetLoadPct)
-        return `
-          <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
-            <label class="text-[9px] text-slate-400 font-bold uppercase">${label}</label>
-            <input type="number" value="${val !== undefined ? val : 0}" 
-              onchange="appActions.updateSchemeRecipe('${curScheme}', '${key}', Number(this.value))" 
-              class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-white font-bold text-center text-xs focus:outline-none">
-          </div>
-        `;
-      }).join('')}
-    ` : `
-      <!-- Standard Parametric Blueprint Controls -->
-      <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
-        <label class="text-[9px] text-slate-400 font-bold uppercase">Execution Pattern</label>
-        <select onchange="appActions.updateSchemeBlueprint('${curScheme}', 'pattern', this.value)" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-white font-bold text-xs focus:outline-none">
-          <option value="straight" ${bp.pattern === 'straight' ? 'selected' : ''}>Straight Sets (Uniform)</option>
-          <option value="load_drop" ${bp.pattern === 'load_drop' ? 'selected' : ''}>Load Drop (Down Sets)</option>
-          <option value="repeats" ${bp.pattern === 'repeats' ? 'selected' : ''}>Repeats (Fatigue Stop)</option>
-          <option value="ramp" ${bp.pattern === 'ramp' ? 'selected' : ''}>Ascending Ramp / Ladder</option>
-          <option value="rep_goal" ${bp.pattern === 'rep_goal' ? 'selected' : ''}>Rep-Goal System</option>
-          <option value="cluster" ${bp.pattern === 'cluster' ? 'selected' : ''}>Intra-Set Cluster</option>
-        </select>
-      </div>
-
-      <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
-        <label class="text-[9px] text-slate-400 font-bold uppercase">Total Working Sets</label>
-        <input type="number" min="1" max="10" value="${bp.baseSets || 3}" onchange="appActions.updateSchemeBlueprint('${curScheme}', 'baseSets', Number(this.value))" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-white font-bold text-center text-xs focus:outline-none">
-      </div>
-
-      <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
-        <label class="text-[9px] text-slate-400 font-bold uppercase">Prescribed Reps / Array</label>
-        <input type="text" value="${repDisplayVal}" placeholder="e.g. 8, 8-12, or 4, 6, 8" onchange="appActions.updateSchemeBlueprint('${curScheme}', 'reps', this.value)" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-white font-bold text-center text-xs focus:outline-none">
-      </div>
-
-      <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
-        <label class="text-[9px] text-slate-400 font-bold uppercase">Target Effort Anchor</label>
-        <select onchange="appActions.updateSchemeBlueprint('${curScheme}', 'targetRpe', Number(this.value))" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-accent font-bold text-xs focus:outline-none">
-          ${rpeOpts.map(r => `
-            <option value="${r}" ${roundRpe(bp.targetRpe \vert{}\vert{} 8.0) === r ? 'selected' : ''}>@${r.toFixed(1)}</option>
-          `).join('')}
-        </select>
-      </div>
-
-      <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
-        <label class="text-[9px] text-slate-400 font-bold uppercase">Inter-Set Rest (Sec)</label>
-        <input type="number" step="15" value="${bp.restSeconds || 120}" onchange="appActions.updateSchemeBlueprint('${curScheme}', 'restSeconds', Number(this.value))" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-slate-200 font-bold text-center text-xs focus:outline-none">
-      </div>
-
-      ${patternFieldsHtml}
-    `}
+    ${parametersGridHtml}
   </div>
 
   <!-- Live Simulation Preview -->
