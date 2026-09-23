@@ -7001,64 +7001,93 @@ function renderBottomNav() {
     </button>
   </div>
 
-  <!-- Primary Parameters Grid -->
-  <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-    <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
-      <label class="text-[9px] text-slate-400 font-bold uppercase">Execution Pattern</label>
-      <select onchange="appActions.updateSchemeBlueprint('${curScheme}', 'pattern', this.value)" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-white font-bold text-xs focus:outline-none">
-        <option value="straight" ${bp.pattern === 'straight' ? 'selected' : ''}>Straight Sets (Uniform)</option>
-        <option value="load_drop" ${bp.pattern === 'load_drop' ? 'selected' : ''}>Load Drop (Down Sets)</option>
-        <option value="repeats" ${bp.pattern === 'repeats' ? 'selected' : ''}>Repeats (Fatigue Stop)</option>
-        <option value="ramp" ${bp.pattern === 'ramp' ? 'selected' : ''}>Ascending Ramp / Ladder</option>
-        <option value="rep_goal" ${bp.pattern === 'rep_goal' ? 'selected' : ''}>Rep-Goal System</option>
-        <option value="cluster" ${bp.pattern === 'cluster' ? 'selected' : ''}>Intra-Set Cluster</option>
-      </select>
-    </div>
+  <!-- Dynamic Parameters Grid -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+    ${SPECIALIZED_SCHEMES.includes(curScheme) ? `
+      <!-- Archetype-Specific Parameter Controls -->
+      ${Object.keys(recipe).filter(k => !['minReps', 'maxReps'].includes(k)).map(key => {
+        const val = recipe[key];
+        const label = fieldLabels[key] || key;
 
-    <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
-      <label class="text-[9px] text-slate-400 font-bold uppercase">Total Working Sets</label>
-      <input type="number" min="1" max="10" value="${bp.baseSets || 3}" onchange="appActions.updateSchemeBlueprint('${curScheme}', 'baseSets', Number(this.value))" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-white font-bold text-center text-xs focus:outline-none">
-    </div>
-${bp.pattern === 'load_drop' ? `
-  <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
-    <label class="text-[9px] text-slate-400 font-bold uppercase">Load Drop Per Set (%)</label>
-    <input type="number" step="0.5" min="1" max="30"
-      value="${bp.loadDropPct !== undefined ? bp.loadDropPct : 10}"
-      onchange="appActions.updateSchemeBlueprint('${curScheme}', 'loadDropPct', Number(this.value))"
-      class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-white font-bold text-xs focus:border-blue-500 focus:outline-none" />
-  </div>
-` : ''}
+        // Boolean toggle for RPE progression
+        if (typeof val === 'boolean' || key === 'enableRpeProgression') {
+          return `
+            <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1 sm:col-span-2 flex items-center justify-between">
+              <div>
+                <label class="text-[10px] text-slate-300 font-bold uppercase">${label}</label>
+                <div class="text-[9px] text-slate-500">Adds +0.5 RPE to targets each week of the block</div>
+              </div>
+              <input type="checkbox" ${val ? 'checked' : ''} 
+                onchange="appActions.updateSchemeRecipe('${curScheme}', '${key}', this.checked)" 
+                class="w-4 h-4 accent-blue-600 rounded">
+            </div>
+          `;
+        }
 
-${bp.pattern === 'ramp' ? `
-  <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
-    <label class="text-[9px] text-slate-400 font-bold uppercase">Load Ramp Step (%)</label>
-    <input type="number" step="0.5" min="1" max="30"
-      value="${bp.loadRampPct !== undefined ? bp.loadRampPct : 7.5}"
-      onchange="appActions.updateSchemeBlueprint('${curScheme}', 'loadRampPct', Number(this.value))"
-      class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-white font-bold text-xs focus:border-blue-500 focus:outline-none" />
-  </div>
-` : ''}
+        // RPE Dropdown (Discrete 0.5 increments)
+        if (key.toLowerCase().includes('rpe')) {
+          return `
+            <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
+              <label class="text-[9px] text-slate-400 font-bold uppercase">${label}</label>
+              <select onchange="appActions.updateSchemeRecipe('${curScheme}', '${key}', Number(this.value))" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-accent font-bold text-xs focus:outline-none">
+                ${[6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0].map(r => `
+                  <option value="${r}" ${(roundRpe(val) === r) ? 'selected' : ''}>@${r.toFixed(1)}</option>
+                `).join('')}
+              </select>
+            </div>
+          `;
+        }
 
-    <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
-      <label class="text-[9px] text-slate-400 font-bold uppercase">Prescribed Reps / Array</label>
-      <input type="text" value="${repDisplayVal}" placeholder="e.g. 8, 8-12, or 4, 6, 8" onchange="appActions.updateSchemeBlueprint('${curScheme}', 'reps', this.value)" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-white font-bold text-center text-xs focus:outline-none">
-    </div>
+        // General Numerical Fields (e.g. miniSets, intraRestSec, defaultMinutes, targetLoadPct)
+        return `
+          <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
+            <label class="text-[9px] text-slate-400 font-bold uppercase">${label}</label>
+            <input type="number" value="${val !== undefined ? val : 0}" 
+              onchange="appActions.updateSchemeRecipe('${curScheme}', '${key}', Number(this.value))" 
+              class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-white font-bold text-center text-xs focus:outline-none">
+          </div>
+        `;
+      }).join('')}
+    ` : `
+      <!-- Standard Parametric Blueprint Controls -->
+      <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
+        <label class="text-[9px] text-slate-400 font-bold uppercase">Execution Pattern</label>
+        <select onchange="appActions.updateSchemeBlueprint('${curScheme}', 'pattern', this.value)" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-white font-bold text-xs focus:outline-none">
+          <option value="straight" ${bp.pattern === 'straight' ? 'selected' : ''}>Straight Sets (Uniform)</option>
+          <option value="load_drop" ${bp.pattern === 'load_drop' ? 'selected' : ''}>Load Drop (Down Sets)</option>
+          <option value="repeats" ${bp.pattern === 'repeats' ? 'selected' : ''}>Repeats (Fatigue Stop)</option>
+          <option value="ramp" ${bp.pattern === 'ramp' ? 'selected' : ''}>Ascending Ramp / Ladder</option>
+          <option value="rep_goal" ${bp.pattern === 'rep_goal' ? 'selected' : ''}>Rep-Goal System</option>
+          <option value="cluster" ${bp.pattern === 'cluster' ? 'selected' : ''}>Intra-Set Cluster</option>
+        </select>
+      </div>
 
-    <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
-      <label class="text-[9px] text-slate-400 font-bold uppercase">Target Effort Anchor</label>
-      <select onchange="appActions.updateSchemeBlueprint('${curScheme}', 'targetRpe', Number(this.value))" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-accent font-bold text-xs focus:outline-none">
-        ${rpeOpts.map(r => `
-          <option value="${r}" ${roundRpe(bp.targetRpe || 8.0) === r ? 'selected' : ''}>@${r.toFixed(1)}</option>
-        `).join('')}
-      </select>
-    </div>
+      <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
+        <label class="text-[9px] text-slate-400 font-bold uppercase">Total Working Sets</label>
+        <input type="number" min="1" max="10" value="${bp.baseSets || 3}" onchange="appActions.updateSchemeBlueprint('${curScheme}', 'baseSets', Number(this.value))" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-white font-bold text-center text-xs focus:outline-none">
+      </div>
 
-    <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
-      <label class="text-[9px] text-slate-400 font-bold uppercase">Inter-Set Rest (Sec)</label>
-      <input type="number" step="15" value="${bp.restSeconds || 120}" onchange="appActions.updateSchemeBlueprint('${curScheme}', 'restSeconds', Number(this.value))" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-slate-200 font-bold text-center text-xs focus:outline-none">
-    </div>
+      <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
+        <label class="text-[9px] text-slate-400 font-bold uppercase">Prescribed Reps / Array</label>
+        <input type="text" value="${repDisplayVal}" placeholder="e.g. 8, 8-12, or 4, 6, 8" onchange="appActions.updateSchemeBlueprint('${curScheme}', 'reps', this.value)" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-white font-bold text-center text-xs focus:outline-none">
+      </div>
 
-    ${patternFieldsHtml}
+      <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
+        <label class="text-[9px] text-slate-400 font-bold uppercase">Target Effort Anchor</label>
+        <select onchange="appActions.updateSchemeBlueprint('${curScheme}', 'targetRpe', Number(this.value))" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-accent font-bold text-xs focus:outline-none">
+          ${rpeOpts.map(r => `
+            <option value="${r}" ${roundRpe(bp.targetRpe \vert{}\vert{} 8.0) === r ? 'selected' : ''}>@${r.toFixed(1)}</option>
+          `).join('')}
+        </select>
+      </div>
+
+      <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
+        <label class="text-[9px] text-slate-400 font-bold uppercase">Inter-Set Rest (Sec)</label>
+        <input type="number" step="15" value="${bp.restSeconds || 120}" onchange="appActions.updateSchemeBlueprint('${curScheme}', 'restSeconds', Number(this.value))" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-slate-200 font-bold text-center text-xs focus:outline-none">
+      </div>
+
+      ${patternFieldsHtml}
+    `}
   </div>
 
   <!-- Live Simulation Preview -->
