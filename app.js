@@ -7322,9 +7322,10 @@ const SPECIALIZED_SCHEMES = [
       if (calcState.directPct !== '' && !isNaN(Number(calcState.directPct))) {
         effectivePct = Number(calcState.directPct);
       } else {
-        const basePct = (typeof getPct === 'function' ? getPct(Number(calcState.reps) || 8, Number(calcState.rpe) || 8.0) : 0.75) * 100;
-        effectivePct = Math.round((basePct + (Number(calcState.modPct) || 0)) * 10) / 10;
-      }
+  const rawPct = typeof getPct === 'function' ? getPct(Number(calcState.reps) || 8, Number(calcState.rpe) || 8.0) : 80.7;
+  const basePct = rawPct <= 1 ? rawPct * 100 : rawPct;
+  effectivePct = Math.round((basePct + (Number(calcState.modPct) || 0)) * 10) / 10;
+}
 
       const calculatedLoad = exE1rm > 0 
         ? (typeof roundLoad === 'function' ? roundLoad(exE1rm * (effectivePct / 100), rounding) : Math.round((exE1rm * (effectivePct / 100)) / rounding) * rounding) 
@@ -9319,9 +9320,10 @@ const SPECIALIZED_SCHEMES = [
       if (calc.directPct !== '' && !isNaN(Number(calc.directPct))) {
         effectivePct = Number(calc.directPct);
       } else {
-        const basePct = (typeof getPct === 'function' ? getPct(Number(calc.reps) || 8, Number(calc.rpe) || 8.0) : 0.75) * 100;
-        effectivePct = Math.round((basePct + (Number(calc.modPct) || 0)) * 10) / 10;
-      }
+  const rawPct = typeof getPct === 'function' ? getPct(Number(calc.reps) || 8, Number(calc.rpe) || 8.0) : 80.7;
+  const basePct = rawPct <= 1 ? rawPct * 100 : rawPct;
+  effectivePct = Math.round((basePct + (Number(calc.modPct) || 0)) * 10) / 10;
+}
 
       const calculatedLoad = baseE1rm > 0 
         ? (typeof roundLoad === 'function' ? roundLoad(baseE1rm * (effectivePct / 100), rounding) : Math.round((baseE1rm * (effectivePct / 100)) / rounding) * rounding) 
