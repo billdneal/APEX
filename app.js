@@ -3947,8 +3947,7 @@ function renderRpeMatrixTable(profile) {
       // 29. STRENGTH CLUSTER
       // ----------------------------------------------------------------------
       if (cleanScheme === 'Strength Cluster') {
-        const clusterPct = Number(recipe.targetLoadPct !== undefined ? recipe.targetLoadPct : (recipe.loadPct || 75.0));
-  const clusterLoad = calcLoad(adj, clusterPct);
+        const cLoad = calcLoad(adj, Number(recipe.loadPct) || 88);
         const restSec = Number(recipe.intraRestSec) || 30;
         const reps = isFixedRep ? minRep : (Number(recipe.reps) || 2);
         const count = skipBackoffs ? 1 : (Number(recipe.setsCount) || 4);
