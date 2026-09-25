@@ -1555,6 +1555,7 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     baseSets: 4,
     reps: 6,
     targetRpe: 8.0,
+    targetLoadPct: 72.5,
     restSeconds: 120,
     intraSetRest: 20,
     densityPenalty: 0.90
@@ -1690,6 +1691,7 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     baseSets: 4,
     reps: 6,
     targetRpe: 8.5,
+    targetLoadPct: 75.0,
     restSeconds: 180,
     intraSetRest: 20,
     densityPenalty: 0.95
@@ -1898,17 +1900,22 @@ function generateSetsFromBlueprint(paramsOrName, metaArg, e1rmArg, baseWorkingSe
 
         const multiplier = Math.max(0.2, 1 - (stepsFromTop * rampPct));
         setLoad = roundLoad(topSetLoad * multiplier);
-      } else if (idx === 0) {
-        topSetLoad = calcLoad(e1rm, getPct(calcReps, baseEffort) * penalty);
-        setLoad = topSetLoad;
-      } else if (bp.pattern === 'load_drop' && idx >= topCount) {
-        const rawDrop = bp.loadDropPct !== undefined ? bp.loadDropPct : (bp.fatiguedDropPct || bp.loadStepPct || 10);
-        const dropPct = rawDrop > 1 ? rawDrop / 100 : rawDrop;
-        const multiplier = 1 - (dropPct * (idx - topCount + 1));
-        setLoad = roundLoad(topSetLoad * Math.max(0.1, multiplier));
-      } else {
-        setLoad = calcLoad(e1rm, getPct(calcReps, setRpe) * penalty);
-      }
+      } else if (bp.pattern === 'cluster') {
+      const rawClusterPct = bp.targetLoadPct !== undefined ? bp.targetLoadPct : (typeof recipe !== 'undefined' && recipe?.targetLoadPct ? recipe.targetLoadPct : 72.5);
+      const clusterPct = rawClusterPct > 1 ? rawClusterPct / 100 : rawClusterPct;
+      setLoad = calcLoad(e1rm, clusterPct * penalty);
+      if (idx === 0) topSetLoad = setLoad;
+    } else if (idx === 0) {
+      topSetLoad = calcLoad(e1rm, getPct(calcReps, baseEffort) * penalty);
+      setLoad = topSetLoad;
+    } else if (bp.pattern === 'load_drop' && idx >= topCount) {
+      const rawDrop = bp.loadDropPct !== undefined ? bp.loadDropPct : (bp.fatiguedDropPct || bp.loadStepPct || 10);
+      const dropPct = rawDrop > 1 ? rawDrop / 100 : rawDrop;
+      const multiplier = 1 - (dropPct * (idx - topCount + 1));
+      setLoad = roundLoad(topSetLoad * Math.max(0.1, multiplier));
+    } else {
+      setLoad = calcLoad(e1rm, getPct(calcReps, setRpe) * penalty);
+    }
     }
 
     // 4. Label resolution
@@ -3776,7 +3783,8 @@ function renderRpeMatrixTable(profile) {
       // 23. INTRA-SET CLUSTER (4x[2+2+2])
       // ----------------------------------------------------------------------
       if (cleanScheme === 'Intra-Set Cluster (4x[2+2+2])') {
-        const clusterLoad = calcLoad(adj, Number(recipe.loadPct) || 85);
+  const clusterPct = Number(recipe.targetLoadPct !== undefined ? recipe.targetLoadPct : (recipe.loadPct || 75.0));
+  const clusterLoad = calcLoad(adj, clusterPct);
         const restSec = Number(recipe.intraRestSec) || 15;
         const numClusters = skipBackoffs ? 1 : (phase === 'Deload' ? 2 : (Number(recipe.setsCount) || baseWorkingSets));
 
@@ -3939,7 +3947,8 @@ function renderRpeMatrixTable(profile) {
       // 29. STRENGTH CLUSTER
       // ----------------------------------------------------------------------
       if (cleanScheme === 'Strength Cluster') {
-        const cLoad = calcLoad(adj, Number(recipe.loadPct) || 88);
+        const clusterPct = Number(recipe.targetLoadPct !== undefined ? recipe.targetLoadPct : (recipe.loadPct || 75.0));
+  const clusterLoad = calcLoad(adj, clusterPct);
         const restSec = Number(recipe.intraRestSec) || 30;
         const reps = isFixedRep ? minRep : (Number(recipe.reps) || 2);
         const count = skipBackoffs ? 1 : (Number(recipe.setsCount) || 4);
@@ -4295,6 +4304,75 @@ if (!state.editingRpeProfile) {
 
   Object.assign(window.appActions, {
     // Navigation & Shell
+    // --- Inline Load & Planner Calculators ---
+  toggleExerciseCalc(exIdx) {
+    if (state.openExerciseCalc === exIdx) {
+      state.openExerciseCalc = null;
+    } else {
+      state.openExerciseCalc = exIdx;
+      if (!state.exerciseCalcState) state.exerciseCalcState = {};
+      if (!state.exerciseCalcState[exIdx]) {
+        state.exerciseCalcState[exIdx] = { reps: 8, rpe: 8.0, modPct: 0, directPct: '' };
+      }
+    }
+    safeRender();
+  },
+
+  updateExerciseCalc(exIdx, field, val) {
+    if (!state.exerciseCalcState) state.exerciseCalcState = {};
+    if (!state.exerciseCalcState[exIdx]) {
+      state.exerciseCalcState[exIdx] = { reps: 8, rpe: 8.0, modPct: 0, directPct: '' };
+    }
+    state.exerciseCalcState[exIdx][field] = val;
+    safeRender();
+  },
+
+  applyCalcToSet(exIdx, setIdx, targetLoad, targetReps) {
+    const activeWorkout = state.activeWorkout || state.stagedWorkout;
+    if (!activeWorkout) return;
+    const exList = Array.isArray(activeWorkout) ? activeWorkout : activeWorkout.exercises;
+    if (!exList || !exList[exIdx]) return;
+    const targetSet = exList[exIdx].sets?.[setIdx];
+    if (!targetSet) return;
+
+    if (targetLoad !== undefined && targetLoad !== null) {
+      targetSet.targetLoad = targetLoad;
+      targetSet.actualWeight = targetLoad;
+    }
+    if (targetReps !== undefined && targetReps !== null) {
+      targetSet.targetReps = targetReps;
+      targetSet.actualReps = targetReps;
+    }
+    
+    persist();
+    triggerHaptic(50);
+    showToast(`Applied ${targetLoad} lbs × ${targetReps} to S${setIdx + 1}`);
+    safeRender();
+  },
+
+  togglePlannerCalc() {
+    state.plannerCalcOpen = !state.plannerCalcOpen;
+    if (!state.plannerCalcState) {
+      state.plannerCalcState = { reps: 8, rpe: 8.0, modPct: 0, directPct: '' };
+    }
+    safeRender();
+  },
+
+  updatePlannerCalc(field, val) {
+    if (!state.plannerCalcState) {
+      state.plannerCalcState = { reps: 8, rpe: 8.0, modPct: 0, directPct: '' };
+    }
+    state.plannerCalcState[field] = val;
+    safeRender();
+  },
+
+  applyPlannerCalc(load, reps) {
+    if (!state.plannerModal) return;
+    if (load) appActions.updatePlannerInput('weight', load);
+    if (reps) appActions.updatePlannerInput('reps', reps);
+    triggerHaptic(50);
+    showToast(`Planner updated to ${load} lbs × ${reps}`);
+  },
     toggleDrawer(e) { if (e?.stopPropagation) e.stopPropagation(); state.drawerOpen = !state.drawerOpen; safeRender(); },
     navigate(screen, e) { if (e?.stopPropagation) e.stopPropagation(); state.screen = screen; state.drawerOpen = false; safeRender(); },
     changeMonth(delta) { state.month += delta; if (state.month > 11) { state.month = 0; state.year++; } if (state.month < 0) { state.month = 11; state.year--; } safeRender(); },
@@ -6885,22 +6963,35 @@ function renderBottomNav() {
         </div>
       `;
     } else if (bp.pattern === 'cluster') {
+      const clusterPct = bp.targetLoadPct !== undefined ? bp.targetLoadPct : (recipe?.targetLoadPct || 72.5);
+      const clusterIntraRest = Number(bp.intraSetRest !== undefined ? bp.intraSetRest : (bp.intraRestSec || 20));
+      const penalty = Number(bp.densityPenalty || 1.0);
+
       patternFieldsHtml = `
         <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
+          <label class="text-[9px] text-slate-400 font-bold uppercase">Prescribed Load (% e1RM)</label>
+          <input type="number" step="0.5" min="40" max="95" value="${clusterPct}" 
+            onchange="appActions.updateSchemeBlueprint('${curScheme}', 'targetLoadPct', Number(this.value)); if (appActions.updateSchemeRecipe) appActions.updateSchemeRecipe('${curScheme}', 'targetLoadPct', Number(this.value));" 
+            class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-blue-300 font-bold text-center text-xs focus:outline-none">
+        </div>
+
+        <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
           <label class="text-[9px] text-slate-400 font-bold uppercase">Intra-Cluster Rest (Sec)</label>
-          <select onchange="appActions.updateSchemeBlueprint('${curScheme}', 'intraSetRest', Number(this.value))" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-white font-bold text-xs focus:outline-none">
-            ${[15, 20, 25, 30].map(s => `
-              <option value="${s}" ${(Number(bp.intraSetRest) === s) ? 'selected' : ''}>${s} Seconds</option>
-            `).join('')}
+          <select onchange="appActions.updateSchemeBlueprint('${curScheme}', 'intraSetRest', Number(this.value)); if (appActions.updateSchemeRecipe) appActions.updateSchemeRecipe('${curScheme}', 'intraSetRest', Number(this.value));" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-white font-bold text-xs focus:outline-none">
+            <option value="15" ${clusterIntraRest === 15 ? 'selected' : ''}>15 Seconds</option>
+            <option value="20" ${clusterIntraRest === 20 ? 'selected' : ''}>20 Seconds</option>
+            <option value="25" ${clusterIntraRest === 25 ? 'selected' : ''}>25 Seconds</option>
+            <option value="30" ${clusterIntraRest === 30 ? 'selected' : ''}>30 Seconds</option>
           </select>
         </div>
+
         <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
           <label class="text-[9px] text-slate-400 font-bold uppercase">Density Load Penalty</label>
-          <select onchange="appActions.updateSchemeBlueprint('${curScheme}', 'densityPenalty', Number(this.value))" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-accent font-bold text-xs focus:outline-none">
-            <option value="1.0" ${(Number(bp.densityPenalty) === 1.0) ? 'selected' : ''}>1.00x (Standard Load)</option>
-            <option value="0.95" ${(Number(bp.densityPenalty) === 0.95) ? 'selected' : ''}>0.95x (-5% Density)</option>
-            <option value="0.90" ${(Number(bp.densityPenalty) === 0.90) ? 'selected' : ''}>0.90x (-10% Density)</option>
-            <option value="0.85" ${(Number(bp.densityPenalty) === 0.85) ? 'selected' : ''}>0.85x (-15% Density)</option>
+          <select onchange="appActions.updateSchemeBlueprint('${curScheme}', 'densityPenalty', Number(this.value))" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-white font-bold text-xs focus:outline-none">
+            <option value="1.0" ${penalty === 1.0 ? 'selected' : ''}>1.00x (Standard Load)</option>
+            <option value="0.95" ${penalty === 0.95 ? 'selected' : ''}>0.95x (-5% Density)</option>
+            <option value="0.90" ${penalty === 0.90 ? 'selected' : ''}>0.90x (-10% Density)</option>
+            <option value="0.85" ${penalty === 0.85 ? 'selected' : ''}>0.85x (-15% Density)</option>
           </select>
         </div>
       `;
@@ -7118,7 +7209,7 @@ const SPECIALIZED_SCHEMES = [
     <div class="space-y-1">
       ${simulationPreviewHtml}
     </div>
-  </div
+  </div>
 
                 <div class="pt-2 border-t border-sub/50 flex justify-between items-center text-[10px] text-slate-400">
                   <span>Rep window locks (e.g. 8-8r) override Global Matrix bookends.</span>
@@ -7221,6 +7312,86 @@ const SPECIALIZED_SCHEMES = [
             `;
           }).join('');
 
+// Build Inline Load Calculator Drawer
+    let calcDrawerHtml = '';
+    if (state.openExerciseCalc === exIdx) {
+      const calcState = (state.exerciseCalcState && state.exerciseCalcState[exIdx]) || { reps: 8, rpe: 8.0, modPct: 0, directPct: '' };
+      const exE1rm = Number(ex.anchorE1rm || ex.e1rm || (typeof getBaseAnchorE1rm === 'function' ? getBaseAnchorE1rm(ex.exercise, cleanMods) : (core.getBaseAnchorE1rm ? core.getBaseAnchorE1rm(ex.exercise, cleanMods) : (state.e1rms?.[variantKey] || state.e1rms?.[ex.exercise] || 0))));
+      const rounding = Number(state.settings?.rounding) || 5;
+
+      let effectivePct = 0;
+      if (calcState.directPct !== '' && !isNaN(Number(calcState.directPct))) {
+        effectivePct = Number(calcState.directPct);
+      } else {
+        const basePct = (typeof getPct === 'function' ? getPct(Number(calcState.reps) || 8, Number(calcState.rpe) || 8.0) : 0.75) * 100;
+        effectivePct = Math.round((basePct + (Number(calcState.modPct) || 0)) * 10) / 10;
+      }
+
+      const calculatedLoad = exE1rm > 0 
+        ? (typeof roundLoad === 'function' ? roundLoad(exE1rm * (effectivePct / 100), rounding) : Math.round((exE1rm * (effectivePct / 100)) / rounding) * rounding) 
+        : 0;
+
+      const firstOpenSetIdx = (ex.sets || []).findIndex(s => !s.done);
+      const targetSetIdx = firstOpenSetIdx !== -1 ? firstOpenSetIdx : 0;
+
+      let rpeOptions = '';
+      [6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0].forEach(r => {
+        rpeOptions += `<option value="${r}" ${Number(calcState.rpe) === r ? 'selected' : ''}>@${r.toFixed(1)}</option>`;
+      });
+
+      calcDrawerHtml = `
+        <div class="mb-2 p-2.5 rounded-xl bg-card-sub/95 border border-amber-500/30 font-mono space-y-2 text-xs" onclick="event.stopPropagation()">
+          <div class="flex justify-between items-center text-[10px]">
+            <span class="text-slate-400 uppercase tracking-wider">
+              Base e1RM: <strong class="text-accent">${exE1rm > 0 ? exE1rm + ' lbs' : 'None'}</strong>
+            </span>
+            <span class="text-xs font-bold text-amber-300">
+              Result: <span class="text-white text-sm font-bold">${calculatedLoad} lbs</span> @ ${effectivePct.toFixed(1)}%
+            </span>
+          </div>
+
+          <div class="grid grid-cols-4 gap-1.5">
+            <div>
+              <label class="block text-[8px] uppercase text-slate-400 mb-0.5">Reps</label>
+              <input type="number" min="1" max="30" value="${calcState.reps}" 
+                onchange="appActions.updateExerciseCalc(${exIdx}, 'reps', Number(this.value))"
+                class="w-full bg-input border border-sub rounded-lg py-1 text-center text-white text-xs font-bold focus:outline-none">
+            </div>
+            <div>
+              <label class="block text-[8px] uppercase text-slate-400 mb-0.5">RPE</label>
+              <select onchange="appActions.updateExerciseCalc(${exIdx}, 'rpe', Number(this.value))"
+                class="w-full bg-input border border-sub rounded-lg py-1 text-center text-accent text-xs font-bold focus:outline-none">
+                ${rpeOptions}
+              </select>
+            </div>
+            <div>
+              <label class="block text-[8px] uppercase text-slate-400 mb-0.5">% Mod</label>
+              <input type="number" step="0.5" value="${calcState.modPct || 0}" placeholder="±%" 
+                onchange="appActions.updateExerciseCalc(${exIdx}, 'modPct', Number(this.value))"
+                class="w-full bg-input border border-sub rounded-lg py-1 text-center text-amber-400 text-xs font-bold focus:outline-none">
+            </div>
+            <div>
+              <label class="block text-[8px] uppercase text-slate-400 mb-0.5">Direct %</label>
+              <input type="number" step="1" value="${calcState.directPct}" placeholder="Auto" 
+                oninput="appActions.updateExerciseCalc(${exIdx}, 'directPct', this.value)"
+                class="w-full bg-input border border-sub rounded-lg py-1 text-center text-blue-300 text-xs font-bold focus:outline-none">
+            </div>
+          </div>
+
+          <div class="flex justify-between items-center pt-1 border-t border-sub/50">
+            <span class="text-[9px] text-slate-500">
+              ${calcState.directPct ? 'Direct % active' : `${calcState.reps}r @${Number(calcState.rpe).toFixed(1)} ${Number(calcState.modPct) >= 0 ? '+' : ''}${calcState.modPct}%`}
+            </span>
+            <button type="button" 
+              onclick="appActions.applyCalcToSet(${exIdx}, ${targetSetIdx}, ${calculatedLoad}, ${Number(calcState.reps) || 8})"
+              class="px-2.5 py-1 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-[10px] font-bold shadow-sm transition-colors">
+              ↳ Apply ${calculatedLoad} lbs to S${targetSetIdx + 1}
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
           return `
             <div class="bg-card-sub rounded-2xl border ${isDensity ? 'border-blue-700/80 shadow-lg' : 'border-sub'} p-3 space-y-2 relative shadow-md">
               <div class="flex justify-between items-start border-b border-sub pb-1.5 cursor-pointer" onclick="appActions.toggleCardCollapse(${exIdx})">
@@ -7244,8 +7415,18 @@ const SPECIALIZED_SCHEMES = [
                   </div>
                 </div>
 
-                <div class="relative" onclick="event.stopPropagation()">
-                  <button type="button" onclick="appActions.toggleCardMenu(${exIdx}, event)" class="p-1 rounded-xl bg-input border border-sub text-slate-300 hover:text-white text-xs w-7 h-7 flex items-center justify-center font-bold tactile">⋮</button>
+                <div class="relative flex items-center gap-1.5" onclick="event.stopPropagation()">
+      <!-- Load Calculator Bolt Icon -->
+      <button type="button" 
+        onclick="appActions.toggleExerciseCalc(${exIdx})" 
+        title="Load Calculator"
+        class="p-1 rounded-xl border transition-colors flex items-center justify-center ${state.openExerciseCalc === exIdx ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm' : 'bg-input text-slate-400 hover:text-slate-200 border-sub'}">
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+        </svg>
+      </button>
+
+                        <button type="button" onclick="appActions.toggleCardMenu(${exIdx}, event)" class="p-1 rounded-xl bg-input border border-sub text-slate-300 hover:text-white text-xs w-7 h-7 flex items-center justify-center font-bold tactile">⋮</button>
                   ${state.cardMenuOpen === exIdx ? `
                     <div class="absolute right-0 top-8 w-48 bg-card border border-sub rounded-2xl shadow-2xl z-40 p-1.5 font-mono text-[11px] space-y-0.5">
                       <button type="button" onclick="appActions.openConfig(${exIdx}, true)" class="w-full text-left p-1.5 rounded-lg hover:bg-slate-800 flex items-center space-x-1.5 text-accent"><span>🏷️</span><span>Edit Modifiers / Lift</span></button>
@@ -7257,6 +7438,8 @@ const SPECIALIZED_SCHEMES = [
                   ` : ''}
                 </div>
               </div>
+
+              ${calcDrawerHtml}
 
               ${ex.tier === 'Main' ? `
                 <div class="flex items-center space-x-1.5 pt-0.5 font-mono">
@@ -9126,7 +9309,82 @@ const SPECIALIZED_SCHEMES = [
             </div>
           `;
         }).join('') : `<div class="text-center py-4 text-slate-500 text-[10px]">No completed sessions found for this ${withMods ? 'variant tag' : 'movement'}.</div>`;
+// Build Planner Load Calculator Drawer
+    let plannerCalcHtml = '';
+    if (state.plannerCalcOpen) {
+      const calc = state.plannerCalcState || { reps: 8, rpe: 8.0, modPct: 0, directPct: '' };
+      const baseE1rm = Number(pE1 || 0);
+      const rounding = Number(state.settings?.rounding) || 5;
 
+      let effectivePct = 0;
+      if (calc.directPct !== '' && !isNaN(Number(calc.directPct))) {
+        effectivePct = Number(calc.directPct);
+      } else {
+        const basePct = (typeof getPct === 'function' ? getPct(Number(calc.reps) || 8, Number(calc.rpe) || 8.0) : 0.75) * 100;
+        effectivePct = Math.round((basePct + (Number(calc.modPct) || 0)) * 10) / 10;
+      }
+
+      const calculatedLoad = baseE1rm > 0 
+        ? (typeof roundLoad === 'function' ? roundLoad(baseE1rm * (effectivePct / 100), rounding) : Math.round((baseE1rm * (effectivePct / 100)) / rounding) * rounding) 
+        : 0;
+
+      let rpeOptions = '';
+      [6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0].forEach(r => {
+        rpeOptions += `<option value="${r}" ${Number(calc.rpe) === r ? 'selected' : ''}>@${r.toFixed(1)}</option>`;
+      });
+
+      plannerCalcHtml = `
+        <div class="mb-3 p-2.5 rounded-xl bg-card-sub border border-amber-500/30 font-mono space-y-2 text-xs" onclick="event.stopPropagation()">
+          <div class="flex justify-between items-center text-[10px]">
+            <span class="text-slate-400 uppercase tracking-wider">
+              Planner e1RM: <strong class="text-accent">${baseE1rm > 0 ? baseE1rm + ' lbs' : 'None'}</strong>
+            </span>
+            <span class="text-xs font-bold text-amber-300">
+              Result: <span class="text-white text-sm font-bold">${calculatedLoad} lbs</span> @ ${effectivePct.toFixed(1)}%
+            </span>
+          </div>
+
+          <div class="grid grid-cols-4 gap-1.5">
+            <div>
+              <label class="block text-[8px] uppercase text-slate-400 mb-0.5">Reps</label>
+              <input type="number" min="1" max="30" value="${calc.reps}" 
+                onchange="appActions.updatePlannerCalc('reps', Number(this.value))"
+                class="w-full bg-input border border-sub rounded-lg py-1 text-center text-white text-xs font-bold focus:outline-none">
+            </div>
+            <div>
+              <label class="block text-[8px] uppercase text-slate-400 mb-0.5">RPE</label>
+              <select onchange="appActions.updatePlannerCalc('rpe', Number(this.value))"
+                class="w-full bg-input border border-sub rounded-lg py-1 text-center text-accent text-xs font-bold focus:outline-none">
+                ${rpeOptions}
+              </select>
+            </div>
+            <div>
+              <label class="block text-[8px] uppercase text-slate-400 mb-0.5">% Mod</label>
+              <input type="number" step="0.5" value="${calc.modPct || 0}" placeholder="±%" 
+                onchange="appActions.updatePlannerCalc('modPct', Number(this.value))"
+                class="w-full bg-input border border-sub rounded-lg py-1 text-center text-amber-400 text-xs font-bold focus:outline-none">
+            </div>
+            <div>
+              <label class="block text-[8px] uppercase text-slate-400 mb-0.5">Direct %</label>
+              <input type="number" step="1" value="${calc.directPct}" placeholder="Auto" 
+                oninput="appActions.updatePlannerCalc('directPct', this.value)"
+                class="w-full bg-input border border-sub rounded-lg py-1 text-center text-blue-300 text-xs font-bold focus:outline-none">
+            </div>
+          </div>
+
+          <div class="flex justify-between items-center pt-1 border-t border-sub/50">
+            <span class="text-[9px] text-slate-500">
+              ${calc.directPct ? 'Direct % active' : `${calc.reps}r @${Number(calc.rpe).toFixed(1)} ${Number(calc.modPct) >= 0 ? '+' : ''}${calc.modPct}%`}
+            </span>
+            <button type="button" 
+              onclick="appActions.applyPlannerCalc(${calculatedLoad}, ${Number(calc.reps) || 8})"
+              class="px-2.5 py-1 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-[10px] font-bold shadow-sm transition-colors">
+              ↳ Apply to Planner Input
+            </button>
+          </div>
+        </div>
+      `;
+    }
         html += `
           <div class="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center p-3 z-50 overflow-y-auto" onclick="event.stopPropagation()">
             <div class="bg-card border border-sub rounded-3xl w-full max-w-md p-4 space-y-3 shadow-2xl my-auto text-xs font-mono max-h-[88vh] flex flex-col">
@@ -9138,9 +9396,28 @@ const SPECIALIZED_SCHEMES = [
             <button type="button" onclick="appActions.openRpeMatrixModal('${ex}')" class="text-slate-400 hover:text-accent p-1" title="RPE Matrix">
               <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
             </button>
+            <div class="flex items-center space-x-1">
+        <button type="button" onclick="appActions.openRpeMatrixModal('${ex}')" class="text-slate-400 hover:text-accent p-1" title="RPE Matrix">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">...</svg>
+        </button>
+
+        <!-- INSERT BOLT BUTTON HERE -->
+        <button type="button" 
+          onclick="appActions.togglePlannerCalc()" 
+          title="Load Calculator"
+          class="p-1 rounded-lg border transition-colors flex items-center justify-center ${state.plannerCalcOpen ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm' : 'text-slate-400 hover:text-amber-400 border-transparent'}">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+          </svg>
+        </button>
+
+        <button type="button" onclick="appActions.closePlanner()" class="text-slate-400 hover:text-white p-1">☒</button>
+      </div>
             <button type="button" onclick="appActions.closePlanner()" class="text-slate-400 hover:text-white p-1">✕</button>
           </div>
               </div>
+
+              ${plannerCalcHtml}
 
               ${savedMsg ? `
                 <div class="p-2 bg-emerald-950/60 border border-emerald-800 text-emerald-300 rounded-xl text-[10px] text-center font-bold animate-pulse">
