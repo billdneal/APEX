@@ -4304,6 +4304,7 @@ if (!state.editingRpeProfile) {
   Object.assign(window.appActions, {
     // Navigation & Shell
     // --- Inline Load & Planner Calculators ---
+ // --- Inline Load & e1RM Calculator Actions ---
   toggleExerciseCalc(exIdx) {
     if (state.openExerciseCalc === exIdx) {
       state.openExerciseCalc = null;
@@ -4311,7 +4312,14 @@ if (!state.editingRpeProfile) {
       state.openExerciseCalc = exIdx;
       if (!state.exerciseCalcState) state.exerciseCalcState = {};
       if (!state.exerciseCalcState[exIdx]) {
-        state.exerciseCalcState[exIdx] = { reps: 8, rpe: 8.0, modPct: 0, directPct: '' };
+        state.exerciseCalcState[exIdx] = { 
+          calcMode: 'rpe', // 'rpe' | 'pct'
+          reps: 8, 
+          rpe: 8.0, 
+          modPct: 0, 
+          directPct: 75,
+          customE1rm: null 
+        };
       }
     }
     safeRender();
@@ -4320,9 +4328,74 @@ if (!state.editingRpeProfile) {
   updateExerciseCalc(exIdx, field, val) {
     if (!state.exerciseCalcState) state.exerciseCalcState = {};
     if (!state.exerciseCalcState[exIdx]) {
-      state.exerciseCalcState[exIdx] = { reps: 8, rpe: 8.0, modPct: 0, directPct: '' };
+      state.exerciseCalcState[exIdx] = { 
+        calcMode: 'rpe', 
+        reps: 8, 
+        rpe: 8.0, 
+        modPct: 0, 
+        directPct: 75, 
+        customE1rm: null 
+      };
     }
     state.exerciseCalcState[exIdx][field] = val;
+    safeRender();
+  },
+
+  updateCalcFromLoad(exIdx, loadVal) {
+    if (!state.exerciseCalcState) state.exerciseCalcState = {};
+    if (!state.exerciseCalcState[exIdx]) {
+      state.exerciseCalcState[exIdx] = { 
+        calcMode: 'rpe', 
+        reps: 8, 
+        rpe: 8.0, 
+        modPct: 0, 
+        directPct: 75, 
+        customE1rm: null 
+      };
+    }
+    const calc = state.exerciseCalcState[exIdx];
+    const load = Number(loadVal) || 0;
+
+    let effectiveDecimal = 0.75;
+    if (calc.calcMode === 'pct') {
+      effectiveDecimal = (Number(calc.directPct) || 75) / 100;
+    } else {
+      const rawPct = typeof getPct === 'function' ? getPct(Number(calc.reps) || 8, Number(calc.rpe) || 8.0) : 80.7;
+      const basePct = rawPct <= 1 ? rawPct * 100 : rawPct;
+      effectiveDecimal = (basePct + (Number(calc.modPct) || 0)) / 100;
+    }
+
+    if (load > 0 && effectiveDecimal > 0) {
+      calc.customE1rm = Math.round(load / effectiveDecimal);
+    }
+    safeRender();
+  },
+
+  resetExerciseCalcE1rm(exIdx) {
+    if (state.exerciseCalcState && state.exerciseCalcState[exIdx]) {
+      state.exerciseCalcState[exIdx].customE1rm = null;
+    }
+    safeRender();
+  },
+
+  useHistoryInCalc(exIdx, weight, reps, rpe) {
+    if (!state.exerciseCalcState) state.exerciseCalcState = {};
+    if (!state.exerciseCalcState[exIdx]) {
+      state.exerciseCalcState[exIdx] = { calcMode: 'rpe', reps: 8, rpe: 8.0, modPct: 0, directPct: 75, customE1rm: null };
+    }
+    const calc = state.exerciseCalcState[exIdx];
+    calc.reps = Number(reps) || 8;
+    calc.rpe = Number(rpe) || 8.0;
+    calc.calcMode = 'rpe';
+
+    if (weight && reps && rpe) {
+      const rawPct = typeof getPct === 'function' ? getPct(calc.reps, calc.rpe) : 80.7;
+      const decPct = (rawPct > 1 ? rawPct / 100 : rawPct) || 0.8;
+      calc.customE1rm = Math.round(Number(weight) / decPct);
+    }
+
+    triggerHaptic(40);
+    showToast(`Loaded ${weight} lbs × ${reps} @${Number(rpe).toFixed(1)} into calculator`);
     safeRender();
   },
 
@@ -7312,82 +7385,242 @@ const SPECIALIZED_SCHEMES = [
           }).join('');
 
 // Build Inline Load Calculator Drawer
+   // --- Inline Load & e1RM Calculator Actions ---
+ // Build Inline Load & e1RM Calculator Drawer
     let calcDrawerHtml = '';
     if (state.openExerciseCalc === exIdx) {
-      const calcState = (state.exerciseCalcState && state.exerciseCalcState[exIdx]) || { reps: 8, rpe: 8.0, modPct: 0, directPct: '' };
-      const exE1rm = Number(ex.anchorE1rm || ex.e1rm || (typeof getBaseAnchorE1rm === 'function' ? getBaseAnchorE1rm(ex.exercise, cleanMods) : (core.getBaseAnchorE1rm ? core.getBaseAnchorE1rm(ex.exercise, cleanMods) : (state.e1rms?.[variantKey] || state.e1rms?.[ex.exercise] || 0))));
+      const calcState = (state.exerciseCalcState && state.exerciseCalcState[exIdx]) || { 
+        calcMode: 'rpe', reps: 8, rpe: 8.0, modPct: 0, directPct: 75, customE1rm: null 
+      };
+      const isPctMode = calcState.calcMode === 'pct';
+
+      const cleanMods = sanitizeModifiers(ex.modifiers || []);
+      const variantKey = typeof getVariantKey === 'function' ? getVariantKey(ex.exercise, cleanMods) : ex.exercise;
+      const baseAnchor = Number(
+        (typeof getBaseAnchorE1rm === 'function' ? getBaseAnchorE1rm(ex.exercise, cleanMods) : null) || 
+        state.anchorE1rms?.[variantKey] || 
+        state.anchorE1rms?.[ex.exercise] || 
+        state.e1rms?.[variantKey] || 
+        state.e1rms?.[ex.exercise] || 0
+      );
+      
+      const prVal = Number(state.e1rms?.[variantKey] || state.e1rms?.[ex.exercise] || baseAnchor || 0);
+      const activeE1rm = calcState.customE1rm !== null && calcState.customE1rm !== undefined 
+        ? Number(calcState.customE1rm) 
+        : baseAnchor;
+
       const rounding = Number(state.settings?.rounding) || 5;
-
-      let effectivePct = 0;
-      if (calcState.directPct !== '' && !isNaN(Number(calcState.directPct))) {
-        effectivePct = Number(calcState.directPct);
-      } else {
-  const rawPct = typeof getPct === 'function' ? getPct(Number(calcState.reps) || 8, Number(calcState.rpe) || 8.0) : 80.7;
-  const basePct = rawPct <= 1 ? rawPct * 100 : rawPct;
-  effectivePct = Math.round((basePct + (Number(calcState.modPct) || 0)) * 10) / 10;
-}
-
-      const calculatedLoad = exE1rm > 0 
-        ? (typeof roundLoad === 'function' ? roundLoad(exE1rm * (effectivePct / 100), rounding) : Math.round((exE1rm * (effectivePct / 100)) / rounding) * rounding) 
-        : 0;
-
       const firstOpenSetIdx = (ex.sets || []).findIndex(s => !s.done);
       const targetSetIdx = firstOpenSetIdx !== -1 ? firstOpenSetIdx : 0;
 
+      // Calculate Effective Percentage based on mode
+      let effectivePct = 75.0;
+      if (isPctMode) {
+        effectivePct = Number(calcState.directPct) || 75.0;
+      } else {
+        const rawPct = typeof getPct === 'function' ? getPct(Number(calcState.reps) || 8, Number(calcState.rpe) || 8.0) : 80.7;
+        const basePct = rawPct <= 1 ? rawPct * 100 : rawPct;
+        effectivePct = Math.round((basePct + (Number(calcState.modPct) || 0)) * 10) / 10;
+      }
+
+      // Recommended Load calculation
+      const recommendedLoad = activeE1rm > 0 
+        ? (typeof roundLoad === 'function' ? roundLoad(activeE1rm * (effectivePct / 100), rounding) : Math.round((activeE1rm * (effectivePct / 100)) / rounding) * rounding) 
+        : 0;
+
+      // Delta against movement anchor
+      const isCustomE1rm = calcState.customE1rm !== null && calcState.customE1rm !== undefined && calcState.customE1rm !== baseAnchor;
+      const e1rmDiff = activeE1rm - baseAnchor;
+      const diffColor = e1rmDiff > 0 ? 'text-emerald-400' : (e1rmDiff < 0 ? 'text-rose-400' : 'text-slate-400');
+      const diffSign = e1rmDiff > 0 ? '+' : '';
+
+      // Pre-build RPE dropdown options
       let rpeOptions = '';
       [6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0].forEach(r => {
         rpeOptions += `<option value="${r}" ${Number(calcState.rpe) === r ? 'selected' : ''}>@${r.toFixed(1)}</option>`;
       });
 
+      // Fetch recent history for this exercise (up to 10 prior sessions)
+      const liftHistory = (typeof getLiftHistory === 'function' 
+        ? getLiftHistory(ex.exercise, false, cleanMods) 
+        : (core.getLiftHistory ? core.getLiftHistory(ex.exercise, false, cleanMods) : [])) || [];
+
+      const recentSets = [];
+      for (const h of liftHistory) {
+        if (!h.sets || !h.sets.length) continue;
+        const validSets = h.sets.filter(s => s && s.done && s.actualWeight && s.actualReps);
+        if (validSets.length) {
+          const topSet = validSets.reduce((prev, cur) => (cur.actualWeight > prev.actualWeight) ? cur : prev, validSets[0]);
+          recentSets.push({
+            date: h.date,
+            weight: topSet.actualWeight,
+            reps: topSet.actualReps,
+            rpe: topSet.actualRpe || topSet.rpe || 8.0,
+            e1rm: h.topE1 || Math.round(topSet.actualWeight / ((typeof getPct === 'function' ? getPct(topSet.actualReps, topSet.actualRpe || 8) : 80) / 100))
+          });
+        }
+        if (recentSets.length >= 10) break;
+      }
+
+      let historyRowsHtml = '';
+      if (recentSets.length) {
+        historyRowsHtml = recentSets.map(h => {
+          let formattedDate = h.date.slice(5);
+          if (h.date.includes('-')) {
+            const parts = h.date.split('-');
+            const mIdx = Number(parts[1]) - 1;
+            const shortMonths = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            if (shortMonths[mIdx]) formattedDate = `${shortMonths[mIdx]} ${Number(parts[2])}`;
+          }
+
+          return `
+            <div class="flex items-center justify-between py-1.5 text-[10px] hover:bg-card-sub/40 transition-colors px-1 rounded-lg">
+              <span class="text-slate-400 font-medium w-16 shrink-0">${formattedDate}</span>
+              <span class="text-white font-bold flex-1 text-left pl-1">
+                ${h.weight} lbs × ${h.reps} <span class="text-accent font-normal">@${Number(h.rpe).toFixed(1)}</span>
+              </span>
+              <span class="text-slate-400 font-mono text-[9px] pr-2 shrink-0">${h.e1rm} e1RM</span>
+              <button type="button" 
+                onclick="appActions.useHistoryInCalc(${exIdx}, ${h.weight}, ${h.reps}, ${h.rpe})"
+                class="px-2 py-0.5 bg-input hover:bg-accent hover:text-black border border-sub text-slate-300 rounded text-[9px] font-bold transition-all tactile shrink-0">
+                Use
+              </button>
+            </div>
+          `;
+        }).join('');
+      } else {
+        historyRowsHtml = `<div class="text-[10px] text-slate-500 py-3 text-center">No prior completed sessions logged</div>`;
+      }
+
       calcDrawerHtml = `
-        <div class="mb-2 p-2.5 rounded-xl bg-card-sub/95 border border-amber-500/30 font-mono space-y-2 text-xs" onclick="event.stopPropagation()">
-          <div class="flex justify-between items-center text-[10px]">
-            <span class="text-slate-400 uppercase tracking-wider">
-              Base e1RM: <strong class="text-accent">${exE1rm > 0 ? exE1rm + ' lbs' : 'None'}</strong>
-            </span>
-            <span class="text-xs font-bold text-amber-300">
-              Result: <span class="text-white text-sm font-bold">${calculatedLoad} lbs</span> @ ${effectivePct.toFixed(1)}%
-            </span>
-          </div>
+        <div class="mb-2 p-3 rounded-2xl bg-card-sub/95 border border-amber-500/30 font-mono space-y-3 text-xs shadow-xl" onclick="event.stopPropagation()">
+          
+          <!-- Top Row: Editable e1RM + Reset & PR -->
+          <div class="flex justify-between items-center pb-2 border-b border-sub/50">
+            <div class="flex items-center space-x-1.5">
+              <span class="text-[9px] uppercase font-bold text-slate-400">e1RM</span>
+              <div class="flex items-center bg-input border border-sub rounded-lg px-2 py-0.5">
+                <input type="number" step="2.5" value="${activeE1rm}" 
+                  onchange="appActions.updateExerciseCalc(${exIdx}, 'customE1rm', Number(this.value))"
+                  class="w-14 bg-transparent text-white font-bold text-center text-xs focus:outline-none" />
+                <span class="text-[9px] text-slate-400 ml-1">lbs</span>
+              </div>
+              <button type="button" 
+                onclick="appActions.resetExerciseCalcE1rm(${exIdx})" 
+                title="Reset to Anchor (${baseAnchor} lbs)" 
+                class="text-slate-400 hover:text-accent p-1 text-sm transition-colors">
+                ↺
+              </button>
+              ${isCustomE1rm ? `
+                <span class="${diffColor} text-[10px] font-bold">
+                  (${diffSign}${e1rmDiff} lbs)
+                </span>
+              ` : ''}
+            </div>
 
-          <div class="grid grid-cols-4 gap-1.5">
-            <div>
-              <label class="block text-[8px] uppercase text-slate-400 mb-0.5">Reps</label>
-              <input type="number" min="1" max="30" value="${calcState.reps}" 
-                onchange="appActions.updateExerciseCalc(${exIdx}, 'reps', Number(this.value))"
-                class="w-full bg-input border border-sub rounded-lg py-1 text-center text-white text-xs font-bold focus:outline-none">
-            </div>
-            <div>
-              <label class="block text-[8px] uppercase text-slate-400 mb-0.5">RPE</label>
-              <select onchange="appActions.updateExerciseCalc(${exIdx}, 'rpe', Number(this.value))"
-                class="w-full bg-input border border-sub rounded-lg py-1 text-center text-accent text-xs font-bold focus:outline-none">
-                ${rpeOptions}
-              </select>
-            </div>
-            <div>
-              <label class="block text-[8px] uppercase text-slate-400 mb-0.5">% Mod</label>
-              <input type="number" step="0.5" value="${calcState.modPct || 0}" placeholder="±%" 
-                onchange="appActions.updateExerciseCalc(${exIdx}, 'modPct', Number(this.value))"
-                class="w-full bg-input border border-sub rounded-lg py-1 text-center text-amber-400 text-xs font-bold focus:outline-none">
-            </div>
-            <div>
-              <label class="block text-[8px] uppercase text-slate-400 mb-0.5">Direct %</label>
-              <input type="number" step="1" value="${calcState.directPct}" placeholder="Auto" 
-                oninput="appActions.updateExerciseCalc(${exIdx}, 'directPct', this.value)"
-                class="w-full bg-input border border-sub rounded-lg py-1 text-center text-blue-300 text-xs font-bold focus:outline-none">
+            <div class="text-[10px] text-slate-400">
+              PR: <span class="text-white font-bold">${prVal > 0 ? prVal + ' lbs' : 'None'}</span>
             </div>
           </div>
 
-          <div class="flex justify-between items-center pt-1 border-t border-sub/50">
-            <span class="text-[9px] text-slate-500">
-              ${calcState.directPct ? 'Direct % active' : `${calcState.reps}r @${Number(calcState.rpe).toFixed(1)} ${Number(calcState.modPct) >= 0 ? '+' : ''}${calcState.modPct}%`}
-            </span>
-            <button type="button" 
-              onclick="appActions.applyCalcToSet(${exIdx}, ${targetSetIdx}, ${calculatedLoad}, ${Number(calcState.reps) || 8})"
-              class="px-2.5 py-1 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-[10px] font-bold shadow-sm transition-colors">
-              ↳ Apply ${calculatedLoad} lbs to S${targetSetIdx + 1}
-            </button>
+          <!-- Section: Inputs + RPE/% Toggle Switch -->
+          <div class="space-y-1.5">
+            <div class="flex justify-between items-center">
+              <span class="text-[9px] font-bold uppercase tracking-wider text-slate-400">Inputs</span>
+              
+              <!-- Segmented RPE vs % Switch -->
+              <div class="flex items-center space-x-1.5 bg-input px-2 py-0.5 rounded-lg border border-sub">
+                <span class="text-[8.5px] font-bold ${!isPctMode ? 'text-accent' : 'text-slate-500'}">RPE</span>
+                <button type="button" 
+                  onclick="appActions.updateExerciseCalc(${exIdx}, 'calcMode', '${isPctMode ? 'rpe' : 'pct'}')"
+                  class="w-7 h-3.5 bg-card-sub border border-sub rounded-full p-0.5 transition-colors relative flex items-center">
+                  <span class="w-2.5 h-2.5 rounded-full transition-transform transform ${isPctMode ? 'translate-x-3 bg-accent' : 'translate-x-0 bg-slate-400'}"></span>
+                </button>
+                <span class="text-[8.5px] font-bold ${isPctMode ? 'text-accent' : 'text-slate-500'}">%</span>
+              </div>
+            </div>
+
+            ${!isPctMode ? `
+              <!-- RPE Mode: Reps, RPE, % Mod -->
+              <div class="grid grid-cols-3 gap-2">
+                <div>
+                  <label class="block text-[8px] uppercase text-slate-400 mb-0.5">Reps</label>
+                  <input type="number" min="1" max="30" value="${calcState.reps}" 
+                    onchange="appActions.updateExerciseCalc(${exIdx}, 'reps', Number(this.value))"
+                    class="w-full bg-input border border-sub rounded-xl py-1.5 text-center text-white text-xs font-bold focus:outline-none focus:border-accent">
+                </div>
+                <div>
+                  <label class="block text-[8px] uppercase text-slate-400 mb-0.5">RPE</label>
+                  <select onchange="appActions.updateExerciseCalc(${exIdx}, 'rpe', Number(this.value))"
+                    class="w-full bg-input border border-sub rounded-xl py-1.5 text-center text-accent text-xs font-bold focus:outline-none focus:border-accent">
+                    ${rpeOptions}
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-[8px] uppercase text-slate-400 mb-0.5">Percent Mod</label>
+                  <input type="number" step="0.5" value="${calcState.modPct || 0}" placeholder="±%" 
+                    onchange="appActions.updateExerciseCalc(${exIdx}, 'modPct', Number(this.value))"
+                    class="w-full bg-input border border-sub rounded-xl py-1.5 text-center text-amber-400 text-xs font-bold focus:outline-none focus:border-accent">
+                </div>
+              </div>
+            ` : `
+              <!-- Percent Mode: Direct Percent Input -->
+              <div>
+                <label class="block text-[8px] uppercase text-slate-400 mb-0.5">Percent</label>
+                <input type="number" step="0.5" min="10" max="120" value="${calcState.directPct || 75}" placeholder="e.g. 75" 
+                  onchange="appActions.updateExerciseCalc(${exIdx}, 'directPct', Number(this.value))"
+                  class="w-full bg-input border border-sub rounded-xl py-1.5 text-center text-accent text-xs font-bold focus:outline-none focus:border-accent">
+              </div>
+            `}
           </div>
+
+          <!-- Section: Recommendation -->
+          <div class="space-y-1 pt-1 border-t border-sub/40">
+            <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400">Recommendation</div>
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center space-x-2">
+                <div class="bg-input border border-sub rounded-xl px-2 py-1 text-center min-w-[70px]">
+                  <span class="block text-[8px] uppercase text-slate-400">Load</span>
+                  <input type="number" step="2.5" value="${recommendedLoad}" 
+                    onchange="appActions.updateCalcFromLoad(${exIdx}, this.value)"
+                    title="Edit to reverse-project e1RM"
+                    class="w-full bg-transparent text-sm font-black text-white text-center focus:outline-none focus:text-accent">
+                </div>
+                <div class="bg-input border border-sub rounded-xl px-2 py-1 text-center min-w-[50px]">
+                  <span class="block text-[8px] uppercase text-slate-400">Reps</span>
+                  <input type="number" min="1" max="30" value="${calcState.reps}"
+                    onchange="appActions.updateExerciseCalc(${exIdx}, 'reps', Number(this.value))"
+                    title="Target reps for this set"
+                    class="w-full bg-transparent text-sm font-bold text-slate-200 text-center focus:outline-none focus:text-accent">
+                </div>
+                <div class="text-[10px] text-slate-400 pl-1 leading-tight">
+                  <span class="text-amber-300 font-bold text-xs">${effectivePct.toFixed(1)}%</span><br>of e1RM
+                </div>
+              </div>
+
+              <button type="button" 
+                onclick="appActions.applyCalcToSet(${exIdx}, ${targetSetIdx}, ${recommendedLoad}, ${Number(calcState.reps) || 8})"
+                class="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[10px] font-bold shadow-md transition-colors whitespace-nowrap tactile">
+                ↳ Apply to S${targetSetIdx + 1}
+              </button>
+            </div>
+          </div>
+
+          <!-- Section: Recent History (Scrollable Window) -->
+          <div class="pt-2 border-t border-sub/40 space-y-1.5">
+            <div class="flex justify-between items-center text-[9px] font-bold uppercase tracking-wider text-slate-400">
+              <span class="flex items-center gap-1">
+                <span>Recent History</span>
+                <span class="text-[8px] bg-input border border-sub px-1.5 py-0.2 rounded text-slate-300 font-mono">${recentSets.length}</span>
+              </span>
+              <span class="text-[8px] text-slate-500 font-normal">Scroll for past entries</span>
+            </div>
+
+            <div class="bg-input/40 rounded-xl p-1 border border-sub/30 max-h-32 overflow-y-auto divide-y divide-sub/20 space-y-0.5" style="scrollbar-width: thin;">
+              ${historyRowsHtml}
+            </div>
+          </div>
+
         </div>
       `;
     }
