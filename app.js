@@ -911,6 +911,16 @@ function getIcon(name, cls = 'w-4 h-4') {
         }
       }
 
+      const savedBlueprints = localStorage.getItem('apex_schemeBlueprints');
+      if (savedBlueprints) {
+        try {
+          const p = JSON.parse(savedBlueprints);
+          if (p && typeof p === 'object') {
+            state.schemeBlueprints = { ...DEFAULT_SCHEME_BLUEPRINTS, ...p };
+          }
+        } catch(e) {}
+      }
+
       const savedRepOverrides = localStorage.getItem('apex_exerciseRepOverrides');
       if (savedRepOverrides) {
         const p = JSON.parse(savedRepOverrides);
@@ -998,6 +1008,7 @@ function getIcon(name, cls = 'w-4 h-4') {
         localStorage.setItem('apex_exercises', JSON.stringify(state.exercises));
         localStorage.setItem('apex_phaseRepMatrix', JSON.stringify(state.phaseRepMatrix));
         localStorage.setItem('apex_schemeRecipes', JSON.stringify(state.schemeRecipes));
+        localStorage.setItem('apex_schemeBlueprints', JSON.stringify(state.schemeBlueprints || {}));
         localStorage.setItem('apex_exerciseRepOverrides', JSON.stringify(state.exerciseRepOverrides));
         localStorage.setItem('apex_modifierCats', JSON.stringify(state.modifierCats));
         localStorage.setItem('apex_stagedSlots', JSON.stringify(state.stagedSlots));
@@ -1369,6 +1380,19 @@ function extendRpeMatrix(baseMatrix, maxReps = 50) {
   return extended;
 }
 window.extendRpeMatrix = extendRpeMatrix;
+function resolveBlueprintForPhase(bp, phase) {
+  if (!bp) return null;
+  if (!phase || phase === 'Global' || !bp.phaseOverrides || !bp.phaseOverrides[phase]) {
+    return bp;
+  }
+  // Merge phase overrides on top of global blueprint properties
+  return {
+    ...bp,
+    ...bp.phaseOverrides[phase],
+    isOverridden: true
+  };
+}
+window.resolveBlueprintForPhase = resolveBlueprintForPhase;
 window.generateSetsFromBlueprint = generateSetsFromBlueprint;
 // ==========================================
 // SCHEME BLUEPRINTS & UNIVERSAL GENERATOR
@@ -1822,9 +1846,13 @@ function generateSetsFromBlueprint(paramsOrName, metaArg, e1rmArg, baseWorkingSe
     isGrounding = false;
   }
 
-  const pool = state.schemeBlueprints || DEFAULT_SCHEME_BLUEPRINTS;
-  const bp = pool[schemeName] || DEFAULT_SCHEME_BLUEPRINTS[schemeName];
-  if (!bp) return null; // Fallback to legacy ladder if custom scheme is unmapped
+ const pool = state.schemeBlueprints || DEFAULT_SCHEME_BLUEPRINTS;
+const rawBp = pool[schemeName] || DEFAULT_SCHEME_BLUEPRINTS[schemeName];
+if (!rawBp) return null; // Fallback to legacy ladder if custom scheme is unmapped
+
+// Resolve phase-specific overrides if a target phase is provided
+const targetPhase = (typeof paramsOrName === 'object' && paramsOrName?.phase) ? paramsOrName.phase : 'Hypertrophy';
+const bp = resolveBlueprintForPhase(rawBp, targetPhase);
 
   const totalSets = Number(bp.baseSets) || baseWorkingSets || 3;
   const baseEffort = roundRpe(isGrounding ? 9.0 : ((Number(bp.targetRpe) || 8.0) + (weekRpeBump || 0)));
@@ -1975,7 +2003,23 @@ window.appActions.selectRecipeScheme = function(schemeName) {
   else if (typeof window.render === 'function') window.render();
 };
 
-// 2. Dynamic Input Updater
+// --- Rep Scheme Builder Actions (Phase Scope & Persistence) ---
+
+// 1. Phase Scope Selector
+window.appActions.setBuilderPhaseScope = function(phase) {
+  state.builderPhaseScope = phase;
+  if (typeof safeRender === 'function') safeRender();
+  else if (typeof window.render === 'function') window.render();
+};
+
+// 2. Simulation Week Selector
+window.appActions.setBuilderSimWeek = function(week) {
+  state.builderSimWeek = Number(week) || 1;
+  if (typeof safeRender === 'function') safeRender();
+  else if (typeof window.render === 'function') window.render();
+};
+
+// 3. Dynamic Blueprint Input Updater (Phase-Aware)
 window.appActions.updateSchemeBlueprint = function(schemeName, key, value) {
   if (!state.schemeBlueprints) {
     state.schemeBlueprints = JSON.parse(JSON.stringify(state.schemeRecipes || DEFAULT_SCHEME_BLUEPRINTS));
@@ -1986,60 +2030,75 @@ window.appActions.updateSchemeBlueprint = function(schemeName, key, value) {
     state.schemeBlueprints[schemeName].name = schemeName;
   }
 
-  // Handle comma-separated arrays (e.g. "4, 6, 8" -> [4, 6, 8])
+  const bp = state.schemeBlueprints[schemeName];
+  const currentScope = state.builderPhaseScope || 'Global';
+
+  // Parse comma-separated rep arrays or numbers
   if (key === 'reps' && typeof value === 'string' && value.includes(',')) {
     value = value.split(',').map(s => {
       const trimmed = s.trim();
       return isNaN(Number(trimmed)) ? trimmed : Number(trimmed);
     });
-  } else if (['baseSets', 'topSetCount', 'restSeconds', 'intraSetRest', 'targetRpe', 'fatigueDropPct', 'densityPenalty', 'repGoal', 'rpeStepDelta'].includes(key)) {
-    // Cast numeric inputs
+  } else if (['baseSets', 'topSetCount', 'restSeconds', 'intraSetRest', 'targetRpe', 'fatigueDropPct', 'densityPenalty', 'repGoal', 'rpeStepDelta', 'targetLoadPct'].includes(key)) {
     const num = Number(value);
     if (!isNaN(num)) value = num;
   }
 
-  state.schemeBlueprints[schemeName][key] = value;
-
-  // Mirror legacy cache for backward compatibility
-  if (state.schemeRecipes && state.schemeRecipes[schemeName]) {
-    state.schemeRecipes[schemeName][key] = value;
-  }
-
-  if (typeof saferRender === 'function') saferRender();
-  else if (typeof window.render === 'function') window.render();
-};
-
-// 3. Save Blueprint to Persistent Storage
-window.appActions.saveSchemeBlueprint = function(schemeName) {
-  if (typeof saveState === 'function') {
-    saveState();
+  // Save either as global baseline or under the selected phase override
+  if (currentScope === 'Global') {
+    bp[key] = value;
+    if (state.schemeRecipes && state.schemeRecipes[schemeName]) {
+      state.schemeRecipes[schemeName][key] = value;
+    }
   } else {
-    localStorage.setItem('apex_state', JSON.stringify(state));
+    if (!bp.phaseOverrides) bp.phaseOverrides = {};
+    if (!bp.phaseOverrides[currentScope]) bp.phaseOverrides[currentScope] = {};
+    bp.phaseOverrides[currentScope][key] = value;
   }
 
-  if (typeof showToast === 'function') {
-    showToast(`Blueprint Saved: ${schemeName}`);
-  }
-  if (typeof saferRender === 'function') saferRender();
+  if (typeof persist === 'function') persist();
+  if (typeof safeRender === 'function') safeRender();
   else if (typeof window.render === 'function') window.render();
 };
 
-// 4. Reset Blueprints to Canonical Factory Defaults
+// 4. Clear Overrides for a Specific Phase
+window.appActions.clearPhaseOverride = function(schemeName, phase) {
+  if (state.schemeBlueprints?.[schemeName]?.phaseOverrides?.[phase]) {
+    delete state.schemeBlueprints[schemeName].phaseOverrides[phase];
+    if (Object.keys(state.schemeBlueprints[schemeName].phaseOverrides).length === 0) {
+      delete state.schemeBlueprints[schemeName].phaseOverrides;
+    }
+    if (typeof persist === 'function') persist();
+    if (typeof showToast === 'function') showToast(`Reverted ${phase} to Global defaults`);
+    if (typeof safeRender === 'function') safeRender();
+    else if (typeof window.render === 'function') window.render();
+  }
+};
+
+// 5. Save Blueprint to Persistent Storage & Cloud
+window.appActions.saveSchemeBlueprint = function(schemeName) {
+  if (typeof persist === 'function') persist();
+  if (typeof window.pushToCloud === 'function') window.pushToCloud(false);
+  if (typeof showToast === 'function') showToast(`Blueprint Saved: ${schemeName}`);
+  if (typeof safeRender === 'function') safeRender();
+  else if (typeof window.render === 'function') window.render();
+};
+
+// 6. Reset Blueprints to Canonical Factory Defaults
 window.appActions.resetSchemeRecipes = function() {
   if (confirm("Reset all 32 scheme blueprints back to factory default parameters?")) {
     state.schemeBlueprints = JSON.parse(JSON.stringify(DEFAULT_SCHEME_BLUEPRINTS));
     state.schemeRecipes = JSON.parse(JSON.stringify(DEFAULT_SCHEME_BLUEPRINTS));
     
-    if (typeof saveState === 'function') saveState();
-    else localStorage.setItem('apex_state', JSON.stringify(state));
-
+    if (typeof persist === 'function') persist();
+    if (typeof window.pushToCloud === 'function') window.pushToCloud(false);
     if (typeof showToast === 'function') showToast("Blueprints reset to factory defaults");
-    if (typeof saferRender === 'function') saferRender();
+    if (typeof safeRender === 'function') safeRender();
     else if (typeof window.render === 'function') window.render();
   }
 };
 
-// 5. Create New Custom Blueprint
+// 7. Create New Custom Blueprint
 window.appActions.createCustomBlueprint = function() {
   const newId = 'custom_' + Date.now();
   if (!state.schemeBlueprints) state.schemeBlueprints = {};
@@ -2058,16 +2117,10 @@ window.appActions.createCustomBlueprint = function() {
 
   state.activeRecipeScheme = newId;
 
-  if (typeof saveState === 'function') {
-    saveState();
-  } else {
-    localStorage.setItem('apex_state', JSON.stringify(state));
-  }
-
-  if (typeof showToast === 'function') {
-    showToast('New Custom Blueprint Created');
-  }
-  if (typeof saferRender === 'function') saferRender();
+  if (typeof persist === 'function') persist();
+  if (typeof window.pushToCloud === 'function') window.pushToCloud(false);
+  if (typeof showToast === 'function') showToast('New Custom Blueprint Created');
+  if (typeof safeRender === 'function') safeRender();
   else if (typeof window.render === 'function') window.render();
 };
 // Aliases for legacy button bindings
@@ -2916,13 +2969,18 @@ function renderRpeMatrixTable(profile) {
       const meta = getExMeta(exName);
       const roundingStep = Number(state.settings?.rounding) || 5.0;
 
-     // Pull Declarative Recipe from Programming Builder & Blueprints (Unified Model)
+    // Pull Declarative Recipe from Programming Builder & Blueprints (Unified Model)
     const bpPool = state.schemeBlueprints || (typeof DEFAULT_SCHEME_BLUEPRINTS !== 'undefined' ? DEFAULT_SCHEME_BLUEPRINTS : {});
     const activeRecipes = state.schemeRecipes || defaultSchemeRecipes || {};
+    const baseBp = bpPool[cleanScheme] || {};
+    const resolvedBp = (typeof resolveBlueprintForPhase === 'function') 
+      ? resolveBlueprintForPhase(baseBp, phase) 
+      : baseBp;
+
     const recipe = {
       ...(defaultSchemeRecipes?.[cleanScheme] || {}),
       ...(activeRecipes[cleanScheme] || {}),
-      ...(bpPool[cleanScheme] || {})
+      ...resolvedBp
     };
 
     // Microcycle RPE Progression Toggle: strict 0.5 RPE increments
@@ -3049,7 +3107,8 @@ function renderRpeMatrixTable(profile) {
         maxRep,
         rangeStr,
         weekRpeBump,
-        isGrounding
+        isGrounding,
+        phase
       });
       if (blueprintSets && blueprintSets.length > 0) {
         return blueprintSets;
@@ -4675,9 +4734,15 @@ if (!state.editingRpeProfile) {
         s.scheme = normalizeSchemeName(s.scheme);
       });
       state.savedStaged[k] = JSON.parse(JSON.stringify(state.stagedSlots));
+
+      // Persist to recurring split blueprint so future weeks inherit these slots
+      const focus = getDayFocus(state.selectedDay);
+      if (!state.customSplitBlueprints) state.customSplitBlueprints = {};
+      state.customSplitBlueprints[focus] = JSON.parse(JSON.stringify(state.stagedSlots));
+
       persist();
       window.pushToCloud(false);
-      showToast(`Saved plan for ${monthNames[state.month]} ${state.selectedDay}!`);
+      showToast(`Saved plan and updated template for ${focus}!`);
       triggerHaptic(40);
       safeRender();
     },
@@ -4735,6 +4800,13 @@ if (!state.editingRpeProfile) {
       const cleanVal = normalizeSchemeName(val);
       state.stagedSlots[i].scheme = cleanVal; 
       const slot = state.stagedSlots[i];
+
+      // Update recurring day template so next week automatically inherits this scheme
+      const focus = getDayFocus(state.selectedDay);
+      if (state.customSplitBlueprints && state.customSplitBlueprints[focus] && state.customSplitBlueprints[focus][i]) {
+        state.customSplitBlueprints[focus][i].scheme = cleanVal;
+      }
+
       const anchorE1 = getBaseAnchorE1rm(slot.exercise, slot.modifiers);
       const targetDateKey = formatIsoDate(state.year, state.month, state.selectedDay);
       slot.sets = dispatchBuildSets(cleanVal, anchorE1, 1.0, slot.tier, slot.exercise, slot.modifiers, {
@@ -4917,15 +4989,21 @@ if (!state.editingRpeProfile) {
       if (!state.schemeRecipes) state.schemeRecipes = JSON.parse(JSON.stringify(core.defaultSchemeRecipes || {}));
       if (!state.schemeRecipes[cleanScheme]) state.schemeRecipes[cleanScheme] = {};
       
+      let parsedVal = val;
       if (field === 'enableRpeProgression') {
-        state.schemeRecipes[cleanScheme][field] = Boolean(val === true || val === 'true');
-      } else if (Array.isArray(val)) {
-        state.schemeRecipes[cleanScheme][field] = val;
+        parsedVal = Boolean(val === true || val === 'true');
       } else if (typeof field === 'string' && field.toLowerCase().includes('rpe')) {
-        state.schemeRecipes[cleanScheme][field] = roundRpe(val);
-      } else {
+        parsedVal = roundRpe(val);
+      } else if (!Array.isArray(val)) {
         const num = Number(val);
-        state.schemeRecipes[cleanScheme][field] = isNaN(num) ? val : num;
+        parsedVal = isNaN(num) ? val : num;
+      }
+      
+      state.schemeRecipes[cleanScheme][field] = parsedVal;
+
+      // Pipe to blueprint updater to capture active phase scope overrides
+      if (typeof window.appActions.updateSchemeBlueprint === 'function') {
+        window.appActions.updateSchemeBlueprint(cleanScheme, field, parsedVal);
       }
       
       persist();
@@ -6994,7 +7072,15 @@ function renderBottomNav() {
     if (!state.schemeBlueprints) {
       state.schemeBlueprints = JSON.parse(JSON.stringify(state.schemeRecipes || DEFAULT_SCHEME_BLUEPRINTS));
     }
-    const bp = state.schemeBlueprints[curScheme] || DEFAULT_SCHEME_BLUEPRINTS[curScheme] || DEFAULT_SCHEME_BLUEPRINTS['Straight Sets'];
+    const activeScope = state.builderPhaseScope || 'Global';
+    const simWeek = state.builderSimWeek || 1;
+    const simPhase = activeScope === 'Global' ? 'Hypertrophy' : activeScope;
+
+    const rawBp = state.schemeBlueprints[curScheme] || DEFAULT_SCHEME_BLUEPRINTS[curScheme] || DEFAULT_SCHEME_BLUEPRINTS['Straight Sets'];
+    const bp = (typeof resolveBlueprintForPhase === 'function') 
+      ? resolveBlueprintForPhase(rawBp, activeScope) 
+      : rawBp;
+    const hasOverride = Boolean(rawBp.phaseOverrides?.[activeScope]);
 
     const repDisplayVal = Array.isArray(bp.reps) ? bp.reps.join(', ') : (bp.reps || 8);
     const rpeOpts = [6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0];
@@ -7080,15 +7166,19 @@ function renderBottomNav() {
       `;
     }
 
-    // Simulated set preview
-    const previewSets = (typeof buildSets === 'function' 
-      ? buildSets(curScheme, 200, 1.0, 'Main', 'Squat', []) 
-      : generateSetsFromBlueprint({
+    // Simulated set preview reflecting the active Phase & Sim Week
+    const previewSets = (typeof generateSetsFromBlueprint === 'function') 
+      ? generateSetsFromBlueprint({
           schemeName: curScheme,
           meta: { w: true, r: true },
           e1rm: 200,
-          baseWorkingSets: Number(bp.baseSets) || 3
-        })) || [];
+          baseWorkingSets: Number(bp.baseSets) || 3,
+          phase: simPhase,
+          weekRpeBump: (simWeek - 1) * 0.5
+        })
+      : ((typeof buildSets === 'function') 
+          ? buildSets(curScheme, 200, 1.0, 'Main', 'Squat', [], { dateKey: null, phase: simPhase }) 
+          : []);
 
     const simulationPreviewHtml = previewSets.map(s => `
       <div class="bg-input/60 p-1.5 rounded-xl border border-sub/50 flex justify-between items-center text-[9.5px]">
@@ -7266,6 +7356,54 @@ const SPECIALIZED_SCHEMES = [
       Save Blueprint
     </button>
   </div>
+
+ <!-- Phase Scope & Simulation Lens Bar -->
+  <div class="p-3 bg-input/70 rounded-2xl border border-sub/80 space-y-2">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      
+      <!-- Phase Scope Selector -->
+      <div class="flex items-center space-x-2">
+        <span class="text-[9px] font-mono uppercase text-slate-400 font-bold">Scope:</span>
+        <select onchange="appActions.setBuilderPhaseScope(this.value)" class="bg-card border border-sub rounded-xl px-2.5 py-1 text-xs font-mono font-bold text-accent focus:outline-none">
+          <option value="Global" ${activeScope === 'Global' ? 'selected' : ''}>🌐 Global Default (All Phases)</option>
+          <optgroup label="Phase-Specific Overrides">
+            ${(availablePhases || []).map(ph => `
+              <option value="${ph}" ${activeScope === ph ? 'selected' : ''}>
+                ${ph} ${rawBp.phaseOverrides?.[ph] ? '★ (Overridden)' : ''}
+              </option>
+            `).join('')}
+          </optgroup>
+        </select>
+      </div>
+
+      <!-- Simulation Week Selector -->
+      <div class="flex items-center space-x-2">
+        <span class="text-[9px] font-mono uppercase text-slate-400 font-bold">Sim Week:</span>
+        <div class="flex bg-card p-0.5 rounded-xl border border-sub text-xs font-mono">
+          ${[1, 2, 3, 4].map(w => `
+            <button type="button" onclick="appActions.setBuilderSimWeek(${w})" class="px-2 py-0.5 rounded-lg font-bold transition tactile ${simWeek === w ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}">
+              W${w}
+            </button>
+          `).join('')}
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Override Status Indicator -->
+    ${activeScope !== 'Global' ? `
+      <div class="flex justify-between items-center text-[10px] font-mono pt-1 border-t border-sub/40">
+        <span class="${hasOverride ? 'text-amber-400 font-bold' : 'text-slate-400'}">
+          ${hasOverride ? `⚡ Customizing ${activeScope} rules` : `🔗 Inheriting Global defaults for ${activeScope}`}
+        </span>
+        ${hasOverride ? `
+          <button type="button" onclick="appActions.clearPhaseOverride('${curScheme}', '${activeScope}')" class="text-rose-400 hover:text-rose-300 underline font-semibold">
+            Revert ${activeScope} to Global
+          </button>
+        ` : ''}
+      </div>
+    ` : ''}
+  </div> 
 
   <!-- Parameters Grid -->
   <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
