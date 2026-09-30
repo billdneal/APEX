@@ -32,7 +32,7 @@
     const availableThemes = ['Midnight', 'Onyx', 'Slate', 'Forest', 'Crimson', 'Nordic', 'Amber', 'Cyberpunk'];
     const availableFonts = ['JetBrains Mono', 'Inter', 'Roboto', 'Geist', 'Cinzel'];
 
-    // Neutralized Scheme Definitions
+   // Neutralized Scheme Definitions
     const hypertrophySchemes = [
       'Straight Sets',
       'Dynamic Double Progression (Rep Range)',
@@ -50,7 +50,10 @@
       'Hypertrophy Cluster',
       'Ascending Triplet + Load Drop',
       'Ascending RPE Ladder',
-      'Intensity Matched'
+      'Intensity Matched',
+      'The 3/7 Tension Ladder',
+      'Integrated Lengthened Partials',
+      'Statodynamic Occlusion Waves'
     ];
 
     const strengthSchemes = [
@@ -68,7 +71,9 @@
       'Sawtooth',
       'Strength Cluster',
       'e1RM Grounding AMRAP',
-      'Intensity Matched'
+      'Intensity Matched',
+      'Rest-Redistribution Singles',
+      'Reciprocal Antagonist Potentiation'
     ];
 
     // Backward-Compatibility Aliases
@@ -1623,6 +1628,67 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     intraSetRest: 0,
     densityPenalty: 1.0
   },
+'The 3/7 Tension Ladder': {
+    id: 'tension_ladder_37',
+    name: 'The 3/7 Tension Ladder',
+    category: 'Hypertrophy',
+    pattern: 'cluster',
+    baseSets: 5,
+    reps: [3, 4, 5, 6, 7],
+    targetLoadPct: 70.0,
+    targetRpe: 9.5,
+    restSeconds: 180,
+    intraSetRest: 15,
+    densityPenalty: 0.90,
+    directive: 'Advance load (+5 lbs) when all 7 reps of the 5th cluster are completed at or below RPE 9.5 on strict 15s intra-rest.',
+    sfrRating: 'A',
+    tierScaling: {
+      Main: { baseSets: 5, intraSetRest: 15, restSeconds: 180 },
+      Secondary: { baseSets: 5, intraSetRest: 15, restSeconds: 150 },
+      Assistance: { baseSets: 5, intraSetRest: 12, restSeconds: 120 }
+    }
+  },
+  'Integrated Lengthened Partials': {
+    id: 'lengthened_partials_cascade',
+    name: 'Integrated Lengthened Partials',
+    category: 'Hypertrophy',
+    pattern: 'load_drop',
+    baseSets: 3,
+    topSetCount: 1,
+    reps: [8, 10, 12],
+    targetRpe: 8.5,
+    fatigueDropPct: 0.10,
+    restSeconds: 150,
+    intraSetRest: 0,
+    densityPenalty: 1.0,
+    directive: 'Complete full ROM target reps, then immediately pulse 4-6 partials in the deep lengthened stretch to failure before re-racking.',
+    sfrRating: 'A+',
+    tierScaling: {
+      Main: { targetRpe: 8.5, restSeconds: 180 },
+      Secondary: { targetRpe: 9.0, restSeconds: 120 },
+      Assistance: { targetRpe: 9.5, restSeconds: 90 }
+    }
+  },
+  'Statodynamic Occlusion Waves': {
+    id: 'statodynamic_waves',
+    name: 'Statodynamic Occlusion Waves',
+    category: 'Hypertrophy',
+    pattern: 'cluster',
+    baseSets: 3,
+    reps: 10,
+    targetLoadPct: 58.0,
+    targetRpe: 9.0,
+    restSeconds: 120,
+    intraSetRest: 30,
+    densityPenalty: 0.90,
+    directive: 'Continuous tension: 2s down, 2s up, zero lockouts, zero bottom pauses. 3 bursts of 30s continuous work with 30s intra-rest.',
+    sfrRating: 'A',
+    tierScaling: {
+      Main: { baseSets: 3, intraSetRest: 30 },
+      Secondary: { baseSets: 3, intraSetRest: 30 },
+      Assistance: { baseSets: 4, intraSetRest: 20 }
+    }
+  },
 
   // ==========================================
   // STRENGTH SCHEMES
@@ -1810,9 +1876,90 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     restSeconds: 180,
     intraSetRest: 0,
     densityPenalty: 1.0
+  },
+  'Rest-Redistribution Singles': {
+    id: 'rest_redistribution_singles',
+    name: 'Rest-Redistribution Singles',
+    category: 'Strength',
+    pattern: 'cluster',
+    baseSets: 12,
+    reps: 1,
+    targetLoadPct: 82.5,
+    targetRpe: 7.5,
+    restSeconds: 180,
+    intraSetRest: 20,
+    densityPenalty: 1.0,
+    directive: 'Execute every single with maximal bar acceleration. Terminate cluster series early if bar speed visibly drops (RPE > 8.5).',
+    sfrRating: 'S',
+    tierScaling: {
+      Main: { baseSets: 12, targetLoadPct: 82.5, intraSetRest: 20 },
+      Secondary: { baseSets: 8, targetLoadPct: 80.0, intraSetRest: 15 },
+      Assistance: { baseSets: 6, targetLoadPct: 75.0, intraSetRest: 15 }
+    }
+  },
+  'Reciprocal Antagonist Potentiation': {
+    id: 'reciprocal_potentiation_waves',
+    name: 'Reciprocal Antagonist Potentiation',
+    category: 'Strength',
+    pattern: 'ramp',
+    baseSets: 4,
+    reps: [5, 4, 3, 2],
+    targetRpe: 8.5,
+    rpeStepDelta: 0.5,
+    restSeconds: 150,
+    intraSetRest: 0,
+    densityPenalty: 1.0,
+    directive: 'Perform a heavy submaximal antagonist movement (e.g. Row @7.0) 60s before each pressing effort.',
+    sfrRating: 'B+',
+    tierScaling: {
+      Main: { restSeconds: 180, targetRpe: 8.5 },
+      Secondary: { restSeconds: 120, targetRpe: 8.0 },
+      Assistance: { restSeconds: 90, targetRpe: 8.5 }
+    }
   }
 };
 window.DEFAULT_SCHEME_BLUEPRINTS = DEFAULT_SCHEME_BLUEPRINTS;
+
+// ============================================================================
+// STIMULUS-TO-FATIGUE (SFR) & SCHEME STRAIN ENGINE (Clean / No Amber)
+// ============================================================================
+function calculateSchemeStrain(sets) {
+  if (!Array.isArray(sets) || !sets.length) {
+    return { score: 0, level: 'Low', badge: 'bg-emerald-500/20 text-emerald-300 border-emerald-500' };
+  }
+  let totalStrain = 0;
+  sets.forEach(s => {
+    const reps = Number(s.actualReps || s.targetReps) || 5;
+    const load = Number(s.actualWeight || s.targetLoad) || 100;
+    const rpe = Number(s.actualRpe || s.targetRpe) || 8.0;
+    totalStrain += (reps * load * (rpe * rpe)) / 1000;
+  });
+  const score = Math.round(totalStrain);
+  let level = 'Moderate';
+  let badge = 'bg-blue-500/20 text-blue-300 border-blue-500';
+
+  if (score > 320) {
+    level = 'Severe';
+    badge = 'bg-rose-500/20 text-rose-300 border-rose-500';
+  } else if (score > 220) {
+    level = 'High';
+    badge = 'bg-indigo-500/20 text-indigo-300 border-indigo-500';
+  } else if (score < 120) {
+    level = 'Low / Recovery';
+    badge = 'bg-teal-500/20 text-teal-300 border-teal-500';
+  }
+  return { score, level, badge };
+}
+window.calculateSchemeStrain = calculateSchemeStrain;
+
+function getReadinessStrainCeiling(readinessScore) {
+  const score = Number(readinessScore) || 75;
+  if (score >= 85) return { max: 1000, label: 'High Capacity', badge: 'text-emerald-400' };
+  if (score >= 65) return { max: 800, label: 'Optimal Capacity', badge: 'text-blue-400' };
+  if (score >= 50) return { max: 550, label: 'Guarded Capacity', badge: 'text-slate-300' };
+  return { max: 380, label: 'Fatigued / Deload', badge: 'text-rose-400' };
+}
+window.getReadinessStrainCeiling = getReadinessStrainCeiling;
 
 function generateSetsFromBlueprint(paramsOrName, metaArg, e1rmArg, baseWorkingSetsArg = 3, landmarkOffsetArg = 0) {
   // Self-heal: automatically migrate or initialize blueprints
@@ -1847,12 +1994,21 @@ function generateSetsFromBlueprint(paramsOrName, metaArg, e1rmArg, baseWorkingSe
   }
 
  const pool = state.schemeBlueprints || DEFAULT_SCHEME_BLUEPRINTS;
-const rawBp = pool[schemeName] || DEFAULT_SCHEME_BLUEPRINTS[schemeName];
-if (!rawBp) return null; // Fallback to legacy ladder if custom scheme is unmapped
+  const rawBp = pool[schemeName] || DEFAULT_SCHEME_BLUEPRINTS[schemeName];
+  if (!rawBp) return null;
 
-// Resolve phase-specific overrides if a target phase is provided
-const targetPhase = (typeof paramsOrName === 'object' && paramsOrName?.phase) ? paramsOrName.phase : 'Hypertrophy';
-const bp = resolveBlueprintForPhase(rawBp, targetPhase);
+  // Resolve phase-specific overrides if a target phase is provided
+  const targetPhase = (typeof paramsOrName === 'object' && paramsOrName?.phase) ? paramsOrName.phase : 'Hypertrophy';
+  let bp = resolveBlueprintForPhase(rawBp, targetPhase);
+
+  // Extract Tier (Main, Secondary, Assistance) and merge Tier-Aware parameter scaling
+  const currentTier = (typeof paramsOrName === 'object' && paramsOrName?.tier) ? paramsOrName.tier : 'Main';
+  if (bp.tierScaling && bp.tierScaling[currentTier]) {
+    bp = {
+      ...bp,
+      ...bp.tierScaling[currentTier]
+    };
+  }
 
   const totalSets = Number(bp.baseSets) || baseWorkingSets || 3;
   const baseEffort = roundRpe(isGrounding ? 9.0 : ((Number(bp.targetRpe) || 8.0) + (weekRpeBump || 0)));
@@ -2120,6 +2276,84 @@ window.appActions.createCustomBlueprint = function() {
   if (typeof persist === 'function') persist();
   if (typeof window.pushToCloud === 'function') window.pushToCloud(false);
   if (typeof showToast === 'function') showToast('New Custom Blueprint Created');
+  if (typeof safeRender === 'function') safeRender();
+  else if (typeof window.render === 'function') window.render();
+};
+// 8. Duplicate Scheme Blueprint (Forking)
+window.appActions.duplicateSchemeBlueprint = function(sourceSchemeName) {
+  const srcKey = sourceSchemeName || state.activeRecipeScheme || 'Straight Sets';
+  const pool = state.schemeBlueprints || DEFAULT_SCHEME_BLUEPRINTS;
+  const sourceBp = pool[srcKey] || DEFAULT_SCHEME_BLUEPRINTS[srcKey] || DEFAULT_SCHEME_BLUEPRINTS['Straight Sets'];
+  
+  const newId = 'custom_' + Date.now();
+  const newName = `${sourceBp.name || srcKey} (Custom)`;
+  
+  const cloned = JSON.parse(JSON.stringify(sourceBp));
+  cloned.id = newId;
+  cloned.name = newName;
+  
+  if (!state.schemeBlueprints) state.schemeBlueprints = JSON.parse(JSON.stringify(DEFAULT_SCHEME_BLUEPRINTS));
+  state.schemeBlueprints[newId] = cloned;
+  state.activeRecipeScheme = newId;
+  state.selectedRecipeScheme = newId;
+
+  if (typeof persist === 'function') persist();
+  if (typeof window.pushToCloud === 'function') window.pushToCloud(false);
+  if (typeof showToast === 'function') showToast(`Cloned into "${newName}"`);
+  if (typeof safeRender === 'function') safeRender();
+  else if (typeof window.render === 'function') window.render();
+};
+
+// 9. Delete Custom Blueprint
+window.appActions.deleteCustomBlueprint = function(schemeKey) {
+  const targetId = schemeKey || state.activeRecipeScheme;
+  const bpName = state.schemeBlueprints?.[targetId]?.name || targetId;
+  
+  if (!confirm(`Permanently delete custom scheme "${bpName}"?`)) return;
+
+  if (state.schemeBlueprints && state.schemeBlueprints[targetId]) {
+    delete state.schemeBlueprints[targetId];
+  }
+  if (state.schemeRecipes && state.schemeRecipes[targetId]) {
+    delete state.schemeRecipes[targetId];
+  }
+
+  state.activeRecipeScheme = 'Straight Sets';
+  state.selectedRecipeScheme = 'Straight Sets';
+
+  if (typeof persist === 'function') persist();
+  if (typeof window.pushToCloud === 'function') window.pushToCloud(false);
+  if (typeof showToast === 'function') showToast("Custom scheme deleted");
+  if (typeof safeRender === 'function') safeRender();
+  else if (typeof window.render === 'function') window.render();
+};
+
+// 10. Update Progression Directive
+window.appActions.updateSchemeDirective = function(schemeName, directiveText) {
+  if (!state.schemeBlueprints) state.schemeBlueprints = JSON.parse(JSON.stringify(DEFAULT_SCHEME_BLUEPRINTS));
+  if (!state.schemeBlueprints[schemeName]) {
+    const fallback = DEFAULT_SCHEME_BLUEPRINTS[schemeName] || DEFAULT_SCHEME_BLUEPRINTS['Straight Sets'];
+    state.schemeBlueprints[schemeName] = JSON.parse(JSON.stringify(fallback));
+  }
+  state.schemeBlueprints[schemeName].directive = directiveText;
+  if (typeof persist === 'function') persist();
+  if (typeof safeRender === 'function') safeRender();
+  else if (typeof window.render === 'function') window.render();
+};
+
+// 11. Update Tier-Aware Scaling Parameter
+window.appActions.updateTierScalingParam = function(schemeName, tier, field, val) {
+  if (!state.schemeBlueprints) state.schemeBlueprints = JSON.parse(JSON.stringify(DEFAULT_SCHEME_BLUEPRINTS));
+  if (!state.schemeBlueprints[schemeName]) {
+    const fallback = DEFAULT_SCHEME_BLUEPRINTS[schemeName] || DEFAULT_SCHEME_BLUEPRINTS['Straight Sets'];
+    state.schemeBlueprints[schemeName] = JSON.parse(JSON.stringify(fallback));
+  }
+  const bp = state.schemeBlueprints[schemeName];
+  if (!bp.tierScaling) bp.tierScaling = { Main: {}, Secondary: {}, Assistance: {} };
+  if (!bp.tierScaling[tier]) bp.tierScaling[tier] = {};
+  
+  bp.tierScaling[tier][field] = Number(val) || val;
+  if (typeof persist === 'function') persist();
   if (typeof safeRender === 'function') safeRender();
   else if (typeof window.render === 'function') window.render();
 };
@@ -2905,11 +3139,11 @@ function renderRpeMatrixTable(profile) {
       let phase = 'Hypertrophy';
       let w = 1;
 
-      if (typeof getMesocyclePosition === 'function') {
+     if (typeof getMesocyclePosition === 'function') {
         const pos = getMesocyclePosition(targetDateKey);
         curBlock = pos.block;
-        phase = pos.phase;
-        w = pos.week;
+        phase = opts.phase || pos.phase;
+        w = opts.week || pos.week;
       } else {
         curBlock = getActiveBlock(targetDateKey);
         phase = curBlock.phase || 'Hypertrophy';
@@ -3108,7 +3342,8 @@ function renderRpeMatrixTable(profile) {
         rangeStr,
         weekRpeBump,
         isGrounding,
-        phase
+        phase,
+        tier // <-- Passes tier to unlock tier-aware scaling (Main/Secondary/Assistance)
       });
       if (blueprintSets && blueprintSets.length > 0) {
         return blueprintSets;
@@ -7081,7 +7316,9 @@ function renderBottomNav() {
       ? resolveBlueprintForPhase(rawBp, activeScope) 
       : rawBp;
     const hasOverride = Boolean(rawBp.phaseOverrides?.[activeScope]);
-
+    const customSchemeKeys = Object.keys(state.schemeBlueprints || {}).filter(k => 
+      !hypertrophySchemes.includes(k) && !strengthSchemes.includes(k)
+    );
     const repDisplayVal = Array.isArray(bp.reps) ? bp.reps.join(', ') : (bp.reps || 8);
     const rpeOpts = [6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0];
 
@@ -7166,27 +7403,49 @@ function renderBottomNav() {
       `;
     }
 
-    // Simulated set preview reflecting the active Phase & Sim Week
-    const previewSets = (typeof generateSetsFromBlueprint === 'function') 
-      ? generateSetsFromBlueprint({
-          schemeName: curScheme,
-          meta: { w: true, r: true },
-          e1rm: 200,
-          baseWorkingSets: Number(bp.baseSets) || 3,
-          phase: simPhase,
-          weekRpeBump: (simWeek - 1) * 0.5
+   // Simulated set preview prioritizing dedicated mathematical engines
+    const previewSets = (typeof buildSets === 'function')
+      ? buildSets(curScheme, 200, 1.0, 'Main', 'Squat', [], { 
+          dateKey: null, 
+          phase: simPhase, 
+          week: simWeek 
         })
-      : ((typeof buildSets === 'function') 
-          ? buildSets(curScheme, 200, 1.0, 'Main', 'Squat', [], { dateKey: null, phase: simPhase }) 
+      : ((typeof generateSetsFromBlueprint === 'function')
+          ? generateSetsFromBlueprint({
+              schemeName: curScheme,
+              meta: { w: true, r: true },
+              e1rm: 200,
+              baseWorkingSets: Number(bp.baseSets) || 3,
+              phase: simPhase,
+              weekRpeBump: (simWeek - 1) * 0.5,
+              tier: 'Main'
+            })
           : []);
 
-    const simulationPreviewHtml = previewSets.map(s => `
-      <div class="bg-input/60 p-1.5 rounded-xl border border-sub/50 flex justify-between items-center text-[9.5px]">
-        <span class="font-bold text-slate-200">${s.label}</span>
-        <span class="text-accent font-mono font-bold">${s.targetReps} reps @ ${s.targetRpe ? s.targetRpe.toFixed(1) : '8.0'}</span>
-        <span class="text-slate-400">${s.targetLoad} lbs</span>
-      </div>
-    `).join('');
+    // Calculate live Scheme Strain for the builder preview
+    const strainInfo = (typeof calculateSchemeStrain === 'function')
+      ? calculateSchemeStrain(previewSets)
+      : { score: 180, level: 'Moderate', badge: 'bg-blue-500/20 text-blue-300 border-blue-500' };
+
+    // Enhanced preview pills rendering rest intervals, RPE, and exact step math (No Amber)
+    const simulationPreviewHtml = previewSets.map(s => {
+      const restNote = s.targetTime ? `⏱ ${s.targetTime}s rest` : '';
+      const rpeNum = Number(s.targetRpe || 8.0);
+      const rpeLabel = rpeNum <= 5.5 ? '<6.0' : rpeNum.toFixed(1);
+
+      return `
+        <div class="bg-input/70 p-2 rounded-xl border border-sub/60 flex items-center justify-between text-[10px] font-mono">
+          <div class="flex items-center space-x-1.5 min-w-0">
+            <span class="font-bold text-white truncate">${s.label}</span>
+            ${restNote ? `<span class="text-[8px] bg-card px-1.5 py-0.5 rounded border border-sub text-slate-300 font-semibold shrink-0">${restNote}</span>` : ''}
+          </div>
+          <div class="flex items-center space-x-3 shrink-0">
+            <span class="text-accent font-bold">${s.targetReps} reps @${rpeLabel}</span>
+            <span class="text-slate-300 font-bold bg-card-sub px-1.5 py-0.5 rounded border border-sub/50">${s.targetLoad} lbs</span>
+          </div>
+        </div>
+      `;
+    }).join('');
 const SPECIALIZED_SCHEMES = [
       'Myo-reps', 'Rest-Pause (Dogcrapp)', 'Density Block', 'Wave Loading',
       'Double Pyramid', 'Sawtooth', 'Primer Single + % Back-offs',
@@ -7330,6 +7589,14 @@ const SPECIALIZED_SCHEMES = [
   </button>
 </div>
                 <div class="space-y-1 max-h-96 overflow-y-auto pr-1">
+                  ${customSchemeKeys.length ? `
+                    <div class="text-[9px] text-emerald-400 uppercase font-bold pt-1">Custom Schemes</div>
+                    ${customSchemeKeys.map(k => `
+                      <button type="button" onclick="appActions.selectRecipeScheme('${k}')" class="w-full text-left p-2 rounded-xl border transition truncate tactile ${curScheme === k ? 'bg-emerald-600 text-white font-bold border-emerald-500 shadow' : 'bg-input text-emerald-300 border-sub hover:bg-slate-800'}">
+                        ${state.schemeBlueprints[k]?.name || k}
+                      </button>
+                    `).join('')}
+                  ` : ''}
                   <div class="text-[9px] text-slate-500 uppercase font-bold pt-1">Hypertrophy Schemes</div>
                   ${(hypertrophySchemes || []).map(s => `
                     <button type="button" onclick="appActions.selectRecipeScheme('${s}')" class="w-full text-left p-2 rounded-xl border transition truncate tactile ${curScheme === s ? 'bg-blue-600 text-white font-bold border-blue-500 shadow' : 'bg-input text-slate-300 border-sub hover:bg-slate-800'}">
@@ -7352,9 +7619,19 @@ const SPECIALIZED_SCHEMES = [
       <h3 class="text-sm font-bold text-white mt-0.5">${curScheme}</h3>
       <div class="text-[10px] text-slate-400 mt-0.5">${bp.category || 'Dynamic'} • Pattern: <b class="text-slate-200 capitalize">${(bp.pattern || 'straight').replace('_', ' ')}</b></div>
     </div>
-    <button type="button" onclick="appActions.saveSchemeBlueprint('${curScheme}')" class="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs tactile shadow-md">
-      Save Blueprint
-    </button>
+    <div class="flex items-center space-x-1.5">
+      <button type="button" onclick="appActions.duplicateSchemeBlueprint('${curScheme}')" class="px-2.5 py-1.5 bg-input hover:bg-slate-700 border border-sub text-slate-200 rounded-xl text-xs font-bold tactile shadow-md" title="Clone scheme into a new custom blueprint">
+        📋 Duplicate
+      </button>
+      ${(curScheme.startsWith('custom_') || !DEFAULT_SCHEME_BLUEPRINTS[curScheme]) ? `
+        <button type="button" onclick="appActions.deleteCustomBlueprint('${curScheme}')" class="px-2.5 py-1.5 bg-rose-950/80 hover:bg-rose-900 border border-rose-700 text-rose-300 font-bold rounded-xl text-xs tactile shadow-md">
+          ✕ Delete
+        </button>
+      ` : ''}
+      <button type="button" onclick="appActions.saveSchemeBlueprint('${curScheme}')" class="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs tactile shadow-md">
+        Save Blueprint
+      </button>
+    </div>
   </div>
 
  <!-- Phase Scope & Simulation Lens Bar -->
@@ -7393,7 +7670,7 @@ const SPECIALIZED_SCHEMES = [
     <!-- Override Status Indicator -->
     ${activeScope !== 'Global' ? `
       <div class="flex justify-between items-center text-[10px] font-mono pt-1 border-t border-sub/40">
-        <span class="${hasOverride ? 'text-amber-400 font-bold' : 'text-slate-400'}">
+        <span class="${hasOverride ? 'text-accent font-bold' : 'text-slate-400'}">
           ${hasOverride ? `⚡ Customizing ${activeScope} rules` : `🔗 Inheriting Global defaults for ${activeScope}`}
         </span>
         ${hasOverride ? `
@@ -7410,14 +7687,41 @@ const SPECIALIZED_SCHEMES = [
     ${parametersGridHtml}
   </div>
 
-  <!-- Live Simulation Preview -->
-  <div class="pt-2 border-t border-sub/50 space-y-1.5">
-    <div class="flex justify-between items-center text-[9px] text-slate-400 uppercase font-bold px-1">
-      <span>Simulation Preview (200 lbs e1RM Anchor)</span>
-      <span class="text-accent">${previewSets.length} Sets Total</span>
+  <!-- Strain & Overload Directives Header (Clean / Slate & Indigo) -->
+  <div class="pt-2 border-t border-sub/50 space-y-2">
+    <div class="flex flex-wrap items-center justify-between gap-2 bg-input/40 p-2.5 rounded-2xl border border-sub/60">
+      <div class="flex items-center space-x-2">
+        <span class="text-[9px] font-mono uppercase text-slate-400 font-bold">Strain Index:</span>
+        <span class="text-[10px] font-mono px-2 py-0.5 rounded-lg border font-bold ${strainInfo.badge}">
+          ${strainInfo.score} • ${strainInfo.level}
+        </span>
+      </div>
+      <div class="text-[10px] font-mono text-slate-400">
+        SFR: <b class="text-accent">${bp.sfrRating || 'Standard'}</b>
+      </div>
     </div>
-    <div class="space-y-1">
-      ${simulationPreviewHtml}
+
+    <!-- Progression Directive Input (Slate Text / No Amber) -->
+    <div class="bg-input/70 p-2.5 rounded-2xl border border-sub space-y-1">
+      <div class="flex justify-between items-center text-[9px] font-mono uppercase font-bold text-slate-400">
+        <span>📌 Progression Directive (If-Then Overload Rule)</span>
+      </div>
+      <input type="text" 
+        value="${bp.directive || ''}" 
+        placeholder="e.g. Add 5 lbs when all sets hit top rep ceiling at target RPE"
+        onchange="appActions.updateSchemeDirective('${curScheme}', this.value)" 
+        class="w-full bg-card border border-sub rounded-xl px-2.5 py-1 text-xs font-mono text-slate-200 focus:outline-none focus:border-accent">
+    </div>
+
+    <!-- Live Simulation Preview -->
+    <div class="space-y-1 pt-1">
+      <div class="flex justify-between items-center text-[9px] text-slate-400 uppercase font-bold px-1">
+        <span>Simulation Preview (${previewSets.length} Sets Total)</span>
+        <span class="text-accent">200 lbs Anchor Load</span>
+      </div>
+      <div class="space-y-1">
+        ${simulationPreviewHtml}
+      </div>
     </div>
   </div>
 
@@ -7780,6 +8084,14 @@ const SPECIALIZED_SCHEMES = [
                         🏷️ Edit
                       </button>
                     </div>
+                    ${(() => {
+                      const curBp = (state.schemeBlueprints && state.schemeBlueprints[ex.scheme]) || (DEFAULT_SCHEME_BLUEPRINTS && DEFAULT_SCHEME_BLUEPRINTS[ex.scheme]);
+                      return curBp?.directive ? `
+                        <div class="text-[9px] font-mono text-slate-300 bg-input/80 border border-sub/80 px-2.5 py-1.5 rounded-xl mt-1 leading-relaxed">
+                          📌 <b class="text-accent">Rule:</b> ${curBp.directive}
+                        </div>
+                      ` : '';
+                    })()}
                     <div class="flex flex-wrap gap-1 mt-1 cursor-pointer" onclick="event.stopPropagation(); appActions.openConfig(${exIdx}, true)" title="Tap to adjust modifiers">
                       ${cleanMods.length ? cleanMods.map(m => `<span class="text-[8px] font-mono bg-input text-slate-300 hover:text-white px-1.5 py-0.2 rounded border border-sub">${m}</span>`).join('') : `<span class="text-[8px] font-mono text-slate-500 hover:text-accent">+ Add Modifiers</span>`}
                     </div>
@@ -7940,6 +8252,18 @@ const SPECIALIZED_SCHEMES = [
       // 4. STAGING SCREEN
       else if (state.screen === 'staging') {
         const targetDateKey = formatIsoDate(state.year, state.month, state.selectedDay);
+        const totalPlannedStrain = (state.stagedSlots || []).reduce((acc, slot) => {
+          const sets = slot.sets || [];
+          return acc + (typeof calculateSchemeStrain === 'function' ? calculateSchemeStrain(sets).score : 0);
+        }, 0);
+
+        const curReadinessScore = typeof getReadinessScore === 'function' ? getReadinessScore() : 80;
+        const ceiling = typeof getReadinessStrainCeiling === 'function' 
+          ? getReadinessStrainCeiling(curReadinessScore) 
+          : { max: 800, label: 'Optimal Capacity', badge: 'text-blue-400' };
+
+        const strainPct = Math.min(100, Math.round((totalPlannedStrain / ceiling.max) * 100));
+        const isOverCeiling = totalPlannedStrain > ceiling.max;
         const stagedPos = getMesocyclePosition(targetDateKey);
         const curPhase = stagedPos.phase;
         const curWeek = stagedPos.week;
@@ -8013,7 +8337,22 @@ const SPECIALIZED_SCHEMES = [
                   <button type="button" onclick="appActions.navigate('calendar', event)" class="text-xs text-slate-400 underline font-mono">Calendar</button>
                 </div>
               </div>
-
+            <div class="bg-card-sub p-3 rounded-2xl border ${isOverCeiling ? 'border-rose-500/80' : 'border-sub'} font-mono space-y-1.5 shadow-sm">
+      <div class="flex justify-between items-center text-xs">
+        <span class="text-[10px] uppercase font-bold text-slate-400">Planned Session Strain:</span>
+        <span class="font-bold ${isOverCeiling ? 'text-rose-400 animate-pulse' : 'text-slate-200'}">
+          ${totalPlannedStrain} / ${ceiling.max} (${ceiling.label})
+        </span>
+      </div>
+      <div class="w-full bg-input rounded-full h-2 overflow-hidden border border-sub">
+        <div class="h-full rounded-full transition-all duration-300 ${isOverCeiling ? 'bg-rose-500' : (strainPct > 80 ? 'bg-indigo-500' : 'bg-blue-500')}" style="width: ${strainPct}%"></div>
+      </div>
+      ${isOverCeiling ? `
+        <div class="text-[9.5px] text-rose-300 font-semibold pt-0.5">
+          ⚠️ High Fatigue Warning: Planned density exceeds your recovery threshold (${curReadinessScore}% Readiness). Consider substituting high-SFR clusters or trimming set volume.
+        </div>
+      ` : ''}
+    </div>
               <div class="p-3 bg-card-sub rounded-2xl border border-sub flex justify-between items-center text-xs font-mono shadow-sm">
                 <div>
                   <div class="flex items-center space-x-2">
