@@ -834,571 +834,6 @@ function getIcon(name, cls = 'w-4 h-4') {
       const valid = getAllValidModifiers();
       return mods.filter(m => valid.has(m));
     }
-
-    // Complete Non-Destructive Offline LocalStorage Rehydration
-    try {
-      const savedStagedDict = localStorage.getItem('apex_savedStaged');
-      if (savedStagedDict) {
-        const p = JSON.parse(savedStagedDict);
-        if (p && typeof p === 'object') {
-          const normStaged = {};
-          Object.keys(p).forEach(k => {
-            const normKey = normalizeDateKey(k);
-            if (Array.isArray(p[k])) {
-              p[k].forEach(item => { 
-                item.modifiers = sanitizeModifiers(item.modifiers); 
-                item.scheme = normalizeSchemeName(item.scheme);
-              });
-            }
-            normStaged[normKey] = p[k];
-          });
-          state.savedStaged = normStaged;
-        }
-      }
-      const savedPRs = localStorage.getItem('apex_prLedger');
-      if (savedPRs) {
-        const p = JSON.parse(savedPRs);
-        if (Array.isArray(p)) {
-          state.prLedger = p.map(item => ({ ...item, date: normalizeDateKey(item.date) }));
-        }
-      }
-      const savedSet = localStorage.getItem('apex_settings');
-      if (savedSet) {
-        const p = JSON.parse(savedSet);
-        if (p && typeof p === 'object') {
-          state.settings = { ...state.settings, ...p };
-          if (p.customSplitBlueprints) state.customSplitBlueprints = p.customSplitBlueprints;
-          if (p.schemeRecipes) state.schemeRecipes = { ...defaultSchemeRecipes, ...p.schemeRecipes };
-          if (p.anchorE1rms) state.anchorE1rms = { ...state.e1rms, ...p.anchorE1rms };
-          if (p.oneRmFormula) state.settings.oneRmFormula = p.oneRmFormula;
-        }
-      }
-      const savedProf = localStorage.getItem('apex_profile');
-      if (savedProf) { const p = JSON.parse(savedProf); if (p && typeof p === 'object') state.profile = { ...state.profile, ...p }; }
-      const savedStart = localStorage.getItem('apex_mesocycleStartDate');
-      if (savedStart) state.mesocycleStartDate = normalizeDateKey(savedStart);
-      const savedMacro = localStorage.getItem('apex_mesocycle');
-      if (savedMacro) { const p = JSON.parse(savedMacro); if (Array.isArray(p) && p.length > 0) state.mesocycle = p; }
-      const savedSplit = localStorage.getItem('apex_weekdaySplit');
-      if (savedSplit) { const p = JSON.parse(savedSplit); if (p && typeof p === 'object') state.weekdaySplit = { ...state.weekdaySplit, ...p }; }
-      const savedCustomSplits = localStorage.getItem('apex_customSplitBlueprints');
-      if (savedCustomSplits) { const p = JSON.parse(savedCustomSplits); if (p && typeof p === 'object') state.customSplitBlueprints = p; }
-      const savedMeta = localStorage.getItem('apex_exerciseMeta');
-      if (savedMeta) { const p = JSON.parse(savedMeta); if (p && typeof p === 'object') state.exerciseMeta = { ...state.exerciseMeta, ...p }; }
-      const savedEx = localStorage.getItem('apex_exercises');
-      if (savedEx) { const p = JSON.parse(savedEx); if (p && typeof p === 'object') state.exercises = { ...state.exercises, ...p }; }
-      
-      const savedPhaseReps = localStorage.getItem('apex_phaseRepMatrix');
-      if (savedPhaseReps) {
-        const p = JSON.parse(savedPhaseReps);
-        if (p && typeof p === 'object') {
-          const normMatrix = {};
-          availablePhases.forEach(ph => {
-            normMatrix[ph] = {
-              Main: normalizeRepBookends(p[ph]?.Main, defaultPhaseRepMatrix[ph].Main.min, defaultPhaseRepMatrix[ph].Main.max),
-              Secondary: normalizeRepBookends(p[ph]?.Secondary, defaultPhaseRepMatrix[ph].Secondary.min, defaultPhaseRepMatrix[ph].Secondary.max),
-              Assistance: normalizeRepBookends(p[ph]?.Assistance, defaultPhaseRepMatrix[ph].Assistance.min, defaultPhaseRepMatrix[ph].Assistance.max)
-            };
-          });
-          state.phaseRepMatrix = normMatrix;
-        }
-      }
-
-      const savedRecipes = localStorage.getItem('apex_schemeRecipes');
-      if (savedRecipes) {
-        const p = JSON.parse(savedRecipes);
-        if (p && typeof p === 'object') {
-          const normalizedRecs = {};
-          Object.keys(p).forEach(k => {
-            normalizedRecs[normalizeSchemeName(k)] = p[k];
-          });
-          state.schemeRecipes = { ...defaultSchemeRecipes, ...normalizedRecs };
-        }
-      }
-
-      const savedBlueprints = localStorage.getItem('apex_schemeBlueprints');
-      if (savedBlueprints) {
-        try {
-          const p = JSON.parse(savedBlueprints);
-          if (p && typeof p === 'object') {
-            state.schemeBlueprints = { ...DEFAULT_SCHEME_BLUEPRINTS, ...p };
-          }
-        } catch(e) {}
-      }
-
-      const savedRepOverrides = localStorage.getItem('apex_exerciseRepOverrides');
-      if (savedRepOverrides) {
-        const p = JSON.parse(savedRepOverrides);
-        if (p && typeof p === 'object') {
-          const normOverrides = {};
-          Object.keys(p).forEach(exName => {
-            normOverrides[exName] = {};
-            Object.keys(p[exName] || {}).forEach(slotKey => {
-              normOverrides[exName][slotKey] = normalizeRepBookends(p[exName][slotKey], 8, 12);
-            });
-          });
-          state.exerciseRepOverrides = normOverrides;
-        }
-      }
-
-      const savedAnchors = localStorage.getItem('apex_anchorE1rms');
-      if (savedAnchors) {
-        const p = JSON.parse(savedAnchors);
-        if (p && typeof p === 'object') {
-          state.anchorE1rms = { ...state.e1rms, ...p };
-        }
-      }
-
-      const savedMods = localStorage.getItem('apex_modifierCats');
-      if (savedMods) {
-        const parsed = JSON.parse(savedMods);
-        if (Array.isArray(parsed)) {
-          defaultModifierCats.forEach(defCat => {
-            if (!parsed.some(c => c.name === defCat.name)) parsed.push(defCat);
-          });
-          state.modifierCats = parsed;
-        }
-      }
-      const savedStaged = localStorage.getItem('apex_stagedSlots');
-      if (savedStaged) {
-        const p = JSON.parse(savedStaged);
-        if (Array.isArray(p)) {
-          p.forEach(item => { 
-            item.modifiers = sanitizeModifiers(item.modifiers); 
-            item.scheme = normalizeSchemeName(item.scheme);
-          });
-          state.stagedSlots = p;
-        }
-      }
-      const savedDateKey = localStorage.getItem('apex_activeWorkoutDateKey');
-      if (savedDateKey) state.activeWorkoutDateKey = normalizeDateKey(savedDateKey);
-    } catch(e) {
-      console.warn("Storage rehydration bypassed:", e);
-    }
-
-    // Dynamic Rep Resolver: returns explicit { min, max } rep window
-    function resolveTargetReps(exName, tier = 'Main', phase = 'Hypertrophy') {
-      if (state.exerciseRepOverrides && state.exerciseRepOverrides[exName]) {
-        const ov = state.exerciseRepOverrides[exName];
-        if (ov[phase] !== undefined) return normalizeRepBookends(ov[phase]);
-        if (ov['All'] !== undefined) return normalizeRepBookends(ov['All']);
-      }
-      const matrix = state.phaseRepMatrix || defaultPhaseRepMatrix;
-      const pDefaults = matrix[phase] || defaultPhaseRepMatrix[phase] || defaultPhaseRepMatrix['Hypertrophy'];
-      const tierFallback = tier === 'Assistance' ? { min: 10, max: 15 } : (tier === 'Secondary' ? { min: 6, max: 8 } : { min: 4, max: 6 });
-      const raw = pDefaults[tier] || tierFallback;
-      return normalizeRepBookends(raw, tierFallback.min, tierFallback.max);
-    }
-
-    // Global Persistence Engine with Database-Safe Settings Mirroring
-    function persist() {
-      try {
-        state.settings.customSplitBlueprints = state.customSplitBlueprints;
-        state.settings.schemeRecipes = state.schemeRecipes;
-        state.settings.anchorE1rms = state.anchorE1rms;
-        state.settings.oneRmFormula = state.settings.oneRmFormula || 'apex';
-
-        localStorage.setItem('apex_dayLogs', JSON.stringify(state.dayLogs));
-        localStorage.setItem('apex_savedStaged', JSON.stringify(state.savedStaged));
-        localStorage.setItem('apex_e1rms', JSON.stringify(state.e1rms));
-        localStorage.setItem('apex_anchorE1rms', JSON.stringify(state.anchorE1rms || {}));
-        localStorage.setItem('apex_prLedger', JSON.stringify(state.prLedger));
-        localStorage.setItem('apex_settings', JSON.stringify(state.settings));
-        localStorage.setItem('apex_profile', JSON.stringify(state.profile));
-        localStorage.setItem('apex_mesocycleStartDate', state.mesocycleStartDate);
-        localStorage.setItem('apex_mesocycle', JSON.stringify(state.mesocycle));
-        localStorage.setItem('apex_weekdaySplit', JSON.stringify(state.weekdaySplit));
-        localStorage.setItem('apex_customSplitBlueprints', JSON.stringify(state.customSplitBlueprints));
-        localStorage.setItem('apex_exerciseMeta', JSON.stringify(state.exerciseMeta));
-        localStorage.setItem('apex_exercises', JSON.stringify(state.exercises));
-        localStorage.setItem('apex_phaseRepMatrix', JSON.stringify(state.phaseRepMatrix));
-        localStorage.setItem('apex_schemeRecipes', JSON.stringify(state.schemeRecipes));
-        localStorage.setItem('apex_schemeBlueprints', JSON.stringify(state.schemeBlueprints || {}));
-        localStorage.setItem('apex_exerciseRepOverrides', JSON.stringify(state.exerciseRepOverrides));
-        localStorage.setItem('apex_modifierCats', JSON.stringify(state.modifierCats));
-        localStorage.setItem('apex_stagedSlots', JSON.stringify(state.stagedSlots));
-        if (state.activeWorkout && state.activeWorkout.length) {
-          const sanitizedWorkout = state.activeWorkout.map(ex => ({
-            ...ex,
-            densityTimerObj: null,
-            sets: (ex.sets || []).map(s => ({ ...s, lapTimerObj: null }))
-          }));
-          localStorage.setItem('apex_activeWorkout', JSON.stringify(sanitizedWorkout));
-          localStorage.setItem('apex_activeWorkoutDay', String(state.activeWorkoutDay));
-          localStorage.setItem('apex_activeWorkoutDateKey', state.activeWorkoutDateKey || getCurKey());
-          localStorage.setItem('apex_sStart', String(state.sStart));
-          localStorage.setItem('apex_restStart', String(state.restStart));
-        } else {
-          localStorage.removeItem('apex_activeWorkout');
-          localStorage.removeItem('apex_activeWorkoutDay');
-          localStorage.removeItem('apex_activeWorkoutDateKey');
-          localStorage.removeItem('apex_sStart');
-          localStorage.removeItem('apex_restStart');
-        }
-      } catch(e) {}
-    }
-
-    window.persist = persist;
-    window.state = state;
-
-    // Global Shared Timer Bus
-    window.apexTimers = {
-      sInterval: null,
-      restInterval: null,
-      wakeLock: null,
-      wakeLockIdleTimeout: null,
-      IDLE_LIMIT_MS: 15 * 60 * 1000
-    };
-
-    function hasActiveRunningTimers() {
-      if (!state.activeWorkout || !state.activeWorkout.length) return false;
-      return state.activeWorkout.some(ex => 
-        Boolean(ex.densityRunning) || Boolean(ex.sets && ex.sets.some(s => s.lapRunning))
-      );
-    }
-
-    function resetWakeLockIdleTimer() {
-      if (window.apexTimers.wakeLockIdleTimeout) clearTimeout(window.apexTimers.wakeLockIdleTimeout);
-      if (window.apexTimers.wakeLock) {
-        window.apexTimers.wakeLockIdleTimeout = setTimeout(() => {
-          releaseWakeLock(true);
-        }, window.apexTimers.IDLE_LIMIT_MS);
-      }
-    }
-
-    ['touchstart', 'pointerdown', 'mousemove', 'keydown', 'scroll'].forEach(evt => {
-      window.addEventListener(evt, () => {
-        if (window.apexTimers.wakeLock) resetWakeLockIdleTimer();
-      }, { passive: true });
-    });
-
-    async function requestWakeLock() {
-      try {
-        if ('wakeLock' in navigator && !window.apexTimers.wakeLock) {
-          window.apexTimers.wakeLock = await navigator.wakeLock.request('screen');
-          window.apexTimers.wakeLock.addEventListener('release', () => {
-            window.apexTimers.wakeLock = null;
-            if (window.apexTimers.wakeLockIdleTimeout) clearTimeout(window.apexTimers.wakeLockIdleTimeout);
-          });
-        }
-        resetWakeLockIdleTimer();
-      } catch(e) {}
-    }
-
-    async function releaseWakeLock(force = false) {
-      try {
-        if (!force && hasActiveRunningTimers()) return;
-        if (window.apexTimers.wakeLockIdleTimeout) {
-          clearTimeout(window.apexTimers.wakeLockIdleTimeout);
-          window.apexTimers.wakeLockIdleTimeout = null;
-        }
-        if (window.apexTimers.wakeLock) {
-          await window.apexTimers.wakeLock.release();
-          window.apexTimers.wakeLock = null;
-        }
-      } catch(e) {}
-    }
-
-    // Date-Aware Mesocycle Position Resolver
-    function getMesocyclePosition(targetDate = new Date()) {
-      if (!state.mesocycle || !state.mesocycle.length || !state.mesocycleStartDate) {
-        return { blockIdx: 0, week: 1, phase: 'Hypertrophy', block: { phase: 'Hypertrophy', weeks: 3 } };
-      }
-      try {
-        const [sY, sM, sD] = state.mesocycleStartDate.split('-').map(Number);
-        const startDate = new Date(sY, sM - 1, sD);
-        startDate.setHours(0, 0, 0, 0);
-
-        let cur;
-        if (targetDate instanceof Date) {
-          cur = new Date(targetDate);
-        } else if (typeof targetDate === 'string' && targetDate.includes('-')) {
-          const [tY, tM, tD] = targetDate.split('-').map(Number);
-          cur = new Date(tY, tM - 1, tD);
-        } else {
-          cur = new Date();
-        }
-        cur.setHours(0, 0, 0, 0);
-
-        const diffTime = cur - startDate;
-        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-
-        if (diffDays < 0) {
-          return { blockIdx: 0, week: 1, phase: state.mesocycle[0].phase, block: state.mesocycle[0] };
-        }
-
-        let totalWeeksElapsed = Math.floor(diffDays / 7);
-        const totalMacroWeeks = state.mesocycle.reduce((sum, b) => sum + (Number(b.weeks) || 1), 0);
-        if (totalMacroWeeks > 0) {
-          totalWeeksElapsed = totalWeeksElapsed % totalMacroWeeks;
-        }
-
-        let accumulatedWeeks = 0;
-        for (let i = 0; i < state.mesocycle.length; i++) {
-          const bWeeks = Number(state.mesocycle[i].weeks) || 1;
-          if (totalWeeksElapsed < accumulatedWeeks + bWeeks) {
-            const weekNum = (totalWeeksElapsed - accumulatedWeeks) + 1;
-            return {
-              blockIdx: i,
-              week: weekNum,
-              phase: state.mesocycle[i].phase,
-              block: state.mesocycle[i]
-            };
-          }
-          accumulatedWeeks += bWeeks;
-        }
-      } catch (e) {}
-      return { blockIdx: 0, week: 1, phase: state.mesocycle[0]?.phase || 'Hypertrophy', block: state.mesocycle[0] };
-    }
-
-    function syncMesocycleProgression(targetDate = new Date()) {
-      const pos = getMesocyclePosition(targetDate);
-      state.activeBlockIdx = pos.blockIdx;
-      state.activeWeek = pos.week;
-    }
-
-    function getVariantKey(ex, mods = []) {
-      const cleanMods = sanitizeModifiers(mods);
-      const sorted = cleanMods.slice().sort();
-      if (!sorted.length) return ex;
-      return `${ex} [${sorted.join(', ')}]`;
-    }
-
-    function showToast(msg) {
-      state.toastMsg = msg;
-      renderToast();
-      setTimeout(() => {
-        state.toastMsg = '';
-        renderToast();
-      }, 3500);
-    }
-
-    function renderToast() {
-      let el = document.getElementById('apex-toast');
-      if (!el) {
-        el = document.createElement('div');
-        el.id = 'apex-toast';
-        document.body.appendChild(el);
-      }
-      if (state.toastMsg) {
-        el.className = 'fixed bottom-5 left-1/2 -translate-x-1/2 bg-slate-900 border border-blue-500 text-white font-mono text-xs px-4 py-2.5 rounded-2xl shadow-2xl z-50 transition-all duration-300 max-w-[90vw] text-center';
-        el.innerText = state.toastMsg;
-        el.style.display = 'block';
-      } else {
-        el.style.display = 'none';
-      }
-    }
-
-    function getExMeta(exName) {
-      if (state.exerciseMeta && state.exerciseMeta[exName]) return state.exerciseMeta[exName];
-      if (exName && (exName.startsWith('BW ') || exName === 'Push Up' || exName === 'Plank' || exName === 'Ab Wheel' || exName === 'Hanging Leg Raise')) {
-        return { w: false, r: exName !== 'Plank', t: exName === 'Plank', rpe: true };
-      }
-      return { w: true, r: true, t: false, rpe: true };
-    }
-
-    function getLatestBodyweight(targetDateKey = null) {
-      if (!state.dayLogs) return Number(state.profile?.bodyweight || 196.2);
-      const allKeys = Object.keys(state.dayLogs).filter(k => state.dayLogs[k] && state.dayLogs[k].weight);
-      if (!allKeys.length) return Number(state.profile?.bodyweight || 196.2);
-
-      const normalizedTarget = targetDateKey ? normalizeDateKey(targetDateKey) : null;
-      if (normalizedTarget && state.dayLogs[normalizedTarget]?.weight) {
-        return Number(state.dayLogs[normalizedTarget].weight);
-      }
-
-      const parseKey = (k) => {
-        const [y, m, d] = k.split('-').map(Number);
-        return new Date(y, m - 1, d).getTime();
-      };
-
-      const targetTime = normalizedTarget ? parseKey(normalizedTarget) : Date.now();
-      const priorKeys = allKeys.filter(k => parseKey(k) <= targetTime).sort((a, b) => parseKey(b) - parseKey(a));
-      if (priorKeys.length > 0) return Number(state.dayLogs[priorKeys[0]].weight);
-
-      const futureKeys = allKeys.filter(k => parseKey(k) > targetTime).sort((a, b) => parseKey(a) - parseKey(b));
-      if (futureKeys.length > 0) return Number(state.dayLogs[futureKeys[0]].weight);
-
-      return Number(state.profile?.bodyweight || 196.2);
-    }
-    state.formMetrics.weight = getLatestBodyweight();
-
-    function getReadinessScore() {
-      const { sleep, pushSoreness, pullSoreness, legSoreness, energy, stress, motivation } = state.formMetrics;
-      const isRest = Number(motivation) === 0;
-      const physicalTotal = (Number(sleep) || 3) + 
-                            (Number(pushSoreness) || 4) + 
-                            (Number(pullSoreness) || 4) + 
-                            (Number(legSoreness) || 4) + 
-                            (Number(energy) || 4) + 
-                            (Number(stress) || 4);
-
-      if (isRest) {
-        return Math.round((physicalTotal / 30) * 100);
-      }
-      return Math.round(((physicalTotal + (Number(motivation) || 4)) / 35) * 100);
-    }
-
-    function getReadinessBand(score) {
-      if (score >= 85) {
-        return { name: 'Primed', badge: 'bg-emerald-500/20 text-emerald-300 border-emerald-500', desc: 'Primed (+2.5% Boost)', factor: 1.025, rpeCap: 10.0, setReduction: 0 };
-      } else if (score >= 65) {
-        return { name: 'Optimal', badge: 'bg-blue-500/20 text-blue-300 border-blue-500', desc: 'Optimal Baseline', factor: 1.0, rpeCap: 10.0, setReduction: 0 };
-      } else if (score >= 50) {
-        return { name: 'Guarded', badge: 'bg-amber-500/20 text-amber-300 border-amber-500', desc: 'Guarded (-1 Set Trim)', factor: 1.0, rpeCap: 8.5, setReduction: 1 };
-      } else {
-        return { name: 'Fatigued', badge: 'bg-red-500/20 text-red-300 border-red-500', desc: 'Fatigued (-5% Load, -1 Set)', factor: 0.95, rpeCap: 7.5, setReduction: 1 };
-      }
-    }
-
-    function getRollingReadiness(targetDateKey, windowDays = 3) {
-      if (!state.dayLogs) return 85;
-      const curDate = targetDateKey 
-        ? (() => {
-            const [y, m, d] = normalizeDateKey(targetDateKey).split('-').map(Number);
-            return new Date(y, m - 1, d);
-          })() 
-        : new Date(state.year, state.month, state.selectedDay);
-      
-      let scores = [];
-      let srpeFatiguePenalty = 0;
-
-      for (let i = 0; i < windowDays; i++) {
-        const d = new Date(curDate);
-        d.setDate(d.getDate() - i);
-        const k = formatIsoDate(d.getFullYear(), d.getMonth(), d.getDate());
-        const dayLog = state.dayLogs[k];
-
-        if (dayLog?.recovery?.score) {
-          scores.push(dayLog.recovery.score);
-        }
-
-        if (i > 0 && dayLog?.workout?.done && dayLog.workout.srpe) {
-          const srpe = Number(dayLog.workout.srpe);
-          if (srpe >= 9.0) srpeFatiguePenalty += 8;
-          else if (srpe >= 8.0) srpeFatiguePenalty += 4;
-        }
-      }
-
-      let baselineScore = scores.length > 0 
-        ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
-        : (state.dayLogs[getCurKey()]?.recovery?.score || 78);
-
-      return Math.max(30, Math.min(100, baselineScore - srpeFatiguePenalty));
-    }
-
-    function roundLoad(val) {
-      const inc = Number(state.settings?.rounding) || 5.0;
-      return Math.round((Number(val) || 0) / inc) * inc;
-    }
-
-    // Multi-Formula 1RM Prediction Engine
-    function calculate1RmEquivalent(weight, reps, formula = 'apex') {
-      const w = Number(weight) || 0;
-      const r = Math.max(1, Number(reps) || 1);
-      if (w <= 0) return 0;
-      if (r === 1) return w;
-
-      if (formula === 'epley') {
-        return Math.round(w * (1 + (r / 30)));
-      } else if (formula === 'brzycki') {
-        return Math.round(w * (36 / (37 - r)));
-      } else if (formula === 'wathan') {
-        return Math.round((100 * w) / (48.8 + (53.8 * Math.exp(-0.075 * r))));
-      } else if (formula === 'lombardi') {
-        return Math.round(w * Math.pow(r, 0.10));
-      }
-      // Default: APEX Autoregulated Table Formula
-      const rirTablePct = Math.max(40, (100 - (r - 1) * 2.15));
-      return Math.round(w / (rirTablePct / 100));
-    }
-
-    // Dynamic Percentage Resolver Linked to Selected 1RM Engine
-    function getPct(reps, rpe, formulaOverride = null) {
-      const r = Math.min(Math.max(1, Number(reps) || 1), 30);
-      const cleanRpe = roundRpe(rpe);
-      const rir = 10.0 - cleanRpe;
-      const effReps = r + rir;
-      const activeFormula = formulaOverride || state.settings?.oneRmFormula || 'apex';
-
-      if (activeFormula === 'epley') {
-        return Math.max(35, Math.round((3000 / (30 + effReps)) * 10) / 10);
-      } else if (activeFormula === 'brzycki') {
-        return Math.max(35, Math.round(((100 * (37 - Math.min(36, effReps))) / 36) * 10) / 10);
-      } else if (activeFormula === 'wathan') {
-        return Math.max(35, Math.round((48.8 + (53.8 * Math.exp(-0.075 * effReps))) * 10) / 10);
-      } else if (activeFormula === 'lombardi') {
-        return Math.max(35, Math.round((100 / Math.pow(effReps, 0.10)) * 10) / 10);
-      }
-
-      // Default APEX Standard / High Capacity RPE matrix
-      if (state.settings && state.settings.rpeTable === 'Standard') {
-        return Math.max(35, Math.round((100 - (effReps - 1) * 2.85) * 10) / 10);
-      }
-      return Math.max(40, Math.round((100 - (effReps - 1) * 2.15) * 10) / 10);
-    }
-// ==========================================
-// RPE MATRIX & E1RM ENGINE
-// ==========================================
-
-const RPE_COLS = [10, 9.5, 9, 8.5, 8, 7.5, 7, 6.5, 6, 5.5, 5];
-
-const DEFAULT_HIGH_CAPACITY_BASE = {
-  1:  { 10: 100.0, 9.5: 99.1, 9: 98.1, 8.5: 97.2, 8: 96.2, 7.5: 95.3, 7: 94.4, 6.5: 93.5, 6: 92.6, 5.5: 91.8, 5: 90.9 },
-  2:  { 10: 98.1,  9.5: 97.2, 9: 96.2, 8.5: 95.3, 8: 94.4, 7.5: 93.5, 7: 92.6, 6.5: 91.8, 6: 90.9, 5.5: 90.1, 5: 89.2 },
-  3:  { 10: 96.2,  9.5: 95.3, 9: 94.4, 8.5: 93.5, 8: 92.6, 7.5: 91.8, 7: 90.9, 6.5: 90.1, 6: 89.2, 5.5: 88.4, 5: 87.5 },
-  4:  { 10: 94.4,  9.5: 93.5, 9: 92.6, 8.5: 91.8, 8: 90.9, 7.5: 90.1, 7: 89.2, 6.5: 88.4, 6: 87.5, 5.5: 86.7, 5: 85.8 },
-  5:  { 10: 92.6,  9.5: 91.8, 9: 90.9, 8.5: 90.1, 8: 89.2, 7.5: 88.4, 7: 87.5, 6.5: 86.7, 6: 85.8, 5.5: 85.0, 5: 84.2 },
-  6:  { 10: 90.9,  9.5: 90.1, 9: 89.2, 8.5: 88.4, 8: 87.5, 7.5: 86.7, 7: 85.8, 6.5: 85.0, 6: 84.2, 5.5: 83.5, 5: 82.7 },
-  7:  { 10: 89.2,  9.5: 88.4, 9: 87.5, 8.5: 86.7, 8: 85.8, 7.5: 85.0, 7: 84.2, 6.5: 83.5, 6: 82.7, 5.5: 81.9, 5: 81.1 },
-  8:  { 10: 87.5,  9.5: 86.7, 9: 85.8, 8.5: 85.0, 8: 84.2, 7.5: 83.5, 7: 82.7, 6.5: 81.9, 6: 81.1, 5.5: 80.4, 5: 79.6 },
-  9:  { 10: 85.8,  9.5: 85.0, 9: 84.2, 8.5: 83.5, 8: 82.7, 7.5: 81.9, 7: 81.1, 6.5: 80.4, 6: 79.6, 5.5: 78.9, 5: 78.1 },
-  10: { 10: 84.2,  9.5: 83.5, 9: 82.7, 8.5: 81.9, 8: 81.1, 7.5: 80.4, 7: 79.6, 6.5: 78.9, 6: 78.1, 5.5: 77.4, 5: 76.6 },
-  11: { 10: 82.7,  9.5: 81.9, 9: 81.1, 8.5: 80.4, 8: 79.6, 7.5: 78.9, 7: 78.1, 6.5: 77.4, 6: 76.6, 5.5: 75.9, 5: 75.2 },
-  12: { 10: 81.1,  9.5: 80.4, 9: 79.6, 8.5: 78.9, 8: 78.1, 7.5: 77.4, 7: 76.6, 6.5: 75.9, 6: 75.2, 5.5: 74.5, 5: 73.8 }
-};
-window.DEFAULT_HIGH_CAPACITY_BASE = DEFAULT_HIGH_CAPACITY_BASE;
-
-// Autonomously extends 1-12 slope out to 50 reps using dampened decay
-function extendRpeMatrix(baseMatrix, maxReps = 50) {
-  const extended = JSON.parse(JSON.stringify(baseMatrix));
-  for (let rep = 13; rep <= maxReps; rep++) {
-    extended[rep] = {};
-    let dropPerRep;
-    if (rep <= 16) dropPerRep = 1.50;
-    else if (rep <= 22) dropPerRep = 1.20;
-    else if (rep <= 30) dropPerRep = 0.90;
-    else if (rep <= 40) dropPerRep = 0.65;
-    else dropPerRep = 0.50;
-
-    const prevRep10 = extended[rep - 1][10];
-    const currentRep10 = Math.round((prevRep10 - dropPerRep) * 10) / 10;
-    extended[rep][10] = currentRep10;
-
-    const stepOffset = Math.max(0.45, Math.round((currentRep10 * 0.01) * 100) / 100);
-    for (let i = 1; i < RPE_COLS.length; i++) {
-      const rpe = RPE_COLS[i];
-      const prevRpe = RPE_COLS[i - 1];
-      extended[rep][rpe] = Math.round((extended[rep][prevRpe] - stepOffset) * 10) / 10;
-    }
-  }
-  return extended;
-}
-window.extendRpeMatrix = extendRpeMatrix;
-function resolveBlueprintForPhase(bp, phase) {
-  if (!bp) return null;
-  if (!phase || phase === 'Global' || !bp.phaseOverrides || !bp.phaseOverrides[phase]) {
-    return bp;
-  }
-  // Merge phase overrides on top of global blueprint properties
-  return {
-    ...bp,
-    ...bp.phaseOverrides[phase],
-    isOverridden: true
-  };
-}
-window.resolveBlueprintForPhase = resolveBlueprintForPhase;
-window.generateSetsFromBlueprint = generateSetsFromBlueprint;
 // ==========================================
 // SCHEME BLUEPRINTS & UNIVERSAL GENERATOR
 // ==========================================
@@ -1920,6 +1355,575 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
 };
 window.DEFAULT_SCHEME_BLUEPRINTS = DEFAULT_SCHEME_BLUEPRINTS;
 
+    // Complete Non-Destructive Offline LocalStorage Rehydration
+    try {
+      const savedStagedDict = localStorage.getItem('apex_savedStaged');
+      if (savedStagedDict) {
+        const p = JSON.parse(savedStagedDict);
+        if (p && typeof p === 'object') {
+          const normStaged = {};
+          Object.keys(p).forEach(k => {
+            const normKey = normalizeDateKey(k);
+            if (Array.isArray(p[k])) {
+              p[k].forEach(item => { 
+                item.modifiers = sanitizeModifiers(item.modifiers); 
+                item.scheme = normalizeSchemeName(item.scheme);
+              });
+            }
+            normStaged[normKey] = p[k];
+          });
+          state.savedStaged = normStaged;
+        }
+      }
+      const savedPRs = localStorage.getItem('apex_prLedger');
+      if (savedPRs) {
+        const p = JSON.parse(savedPRs);
+        if (Array.isArray(p)) {
+          state.prLedger = p.map(item => ({ ...item, date: normalizeDateKey(item.date) }));
+        }
+      }
+      const savedSet = localStorage.getItem('apex_settings');
+      if (savedSet) {
+        const p = JSON.parse(savedSet);
+        if (p && typeof p === 'object') {
+          state.settings = { ...state.settings, ...p };
+          if (p.customSplitBlueprints) state.customSplitBlueprints = p.customSplitBlueprints;
+          if (p.schemeRecipes) state.schemeRecipes = { ...defaultSchemeRecipes, ...p.schemeRecipes };
+          if (p.anchorE1rms) state.anchorE1rms = { ...state.e1rms, ...p.anchorE1rms };
+          if (p.oneRmFormula) state.settings.oneRmFormula = p.oneRmFormula;
+        }
+      }
+      const savedProf = localStorage.getItem('apex_profile');
+      if (savedProf) { const p = JSON.parse(savedProf); if (p && typeof p === 'object') state.profile = { ...state.profile, ...p }; }
+      const savedStart = localStorage.getItem('apex_mesocycleStartDate');
+      if (savedStart) state.mesocycleStartDate = normalizeDateKey(savedStart);
+      const savedMacro = localStorage.getItem('apex_mesocycle');
+      if (savedMacro) { const p = JSON.parse(savedMacro); if (Array.isArray(p) && p.length > 0) state.mesocycle = p; }
+      const savedSplit = localStorage.getItem('apex_weekdaySplit');
+      if (savedSplit) { const p = JSON.parse(savedSplit); if (p && typeof p === 'object') state.weekdaySplit = { ...state.weekdaySplit, ...p }; }
+      const savedCustomSplits = localStorage.getItem('apex_customSplitBlueprints');
+      if (savedCustomSplits) { const p = JSON.parse(savedCustomSplits); if (p && typeof p === 'object') state.customSplitBlueprints = p; }
+      const savedMeta = localStorage.getItem('apex_exerciseMeta');
+      if (savedMeta) { const p = JSON.parse(savedMeta); if (p && typeof p === 'object') state.exerciseMeta = { ...state.exerciseMeta, ...p }; }
+      const savedEx = localStorage.getItem('apex_exercises');
+      if (savedEx) { const p = JSON.parse(savedEx); if (p && typeof p === 'object') state.exercises = { ...state.exercises, ...p }; }
+      
+      const savedPhaseReps = localStorage.getItem('apex_phaseRepMatrix');
+      if (savedPhaseReps) {
+        const p = JSON.parse(savedPhaseReps);
+        if (p && typeof p === 'object') {
+          const normMatrix = {};
+          availablePhases.forEach(ph => {
+            normMatrix[ph] = {
+              Main: normalizeRepBookends(p[ph]?.Main, defaultPhaseRepMatrix[ph].Main.min, defaultPhaseRepMatrix[ph].Main.max),
+              Secondary: normalizeRepBookends(p[ph]?.Secondary, defaultPhaseRepMatrix[ph].Secondary.min, defaultPhaseRepMatrix[ph].Secondary.max),
+              Assistance: normalizeRepBookends(p[ph]?.Assistance, defaultPhaseRepMatrix[ph].Assistance.min, defaultPhaseRepMatrix[ph].Assistance.max)
+            };
+          });
+          state.phaseRepMatrix = normMatrix;
+        }
+      }
+
+      const savedRecipes = localStorage.getItem('apex_schemeRecipes');
+      if (savedRecipes) {
+        const p = JSON.parse(savedRecipes);
+        if (p && typeof p === 'object') {
+          const normalizedRecs = {};
+          Object.keys(p).forEach(k => {
+            normalizedRecs[normalizeSchemeName(k)] = p[k];
+          });
+          state.schemeRecipes = { ...defaultSchemeRecipes, ...normalizedRecs };
+        }
+      }
+
+      const savedBlueprints = localStorage.getItem('apex_schemeBlueprints');
+      if (savedBlueprints) {
+        try {
+          const p = JSON.parse(savedBlueprints);
+          if (p && typeof p === 'object' && Object.keys(p).length > 0) {
+            state.schemeBlueprints = { ...DEFAULT_SCHEME_BLUEPRINTS, ...p };
+          }
+        } catch(e) {}
+      }
+      if (!state.schemeBlueprints) {
+        state.schemeBlueprints = JSON.parse(JSON.stringify(DEFAULT_SCHEME_BLUEPRINTS));
+      }
+
+      const savedRepOverrides = localStorage.getItem('apex_exerciseRepOverrides');
+      if (savedRepOverrides) {
+        const p = JSON.parse(savedRepOverrides);
+        if (p && typeof p === 'object') {
+          const normOverrides = {};
+          Object.keys(p).forEach(exName => {
+            normOverrides[exName] = {};
+            Object.keys(p[exName] || {}).forEach(slotKey => {
+              normOverrides[exName][slotKey] = normalizeRepBookends(p[exName][slotKey], 8, 12);
+            });
+          });
+          state.exerciseRepOverrides = normOverrides;
+        }
+      }
+
+      const savedAnchors = localStorage.getItem('apex_anchorE1rms');
+      if (savedAnchors) {
+        const p = JSON.parse(savedAnchors);
+        if (p && typeof p === 'object') {
+          state.anchorE1rms = { ...state.e1rms, ...p };
+        }
+      }
+
+      const savedMods = localStorage.getItem('apex_modifierCats');
+      if (savedMods) {
+        const parsed = JSON.parse(savedMods);
+        if (Array.isArray(parsed)) {
+          defaultModifierCats.forEach(defCat => {
+            if (!parsed.some(c => c.name === defCat.name)) parsed.push(defCat);
+          });
+          state.modifierCats = parsed;
+        }
+      }
+      const savedStaged = localStorage.getItem('apex_stagedSlots');
+      if (savedStaged) {
+        const p = JSON.parse(savedStaged);
+        if (Array.isArray(p)) {
+          p.forEach(item => { 
+            item.modifiers = sanitizeModifiers(item.modifiers); 
+            item.scheme = normalizeSchemeName(item.scheme);
+          });
+          state.stagedSlots = p;
+        }
+      }
+      const savedDateKey = localStorage.getItem('apex_activeWorkoutDateKey');
+      if (savedDateKey) state.activeWorkoutDateKey = normalizeDateKey(savedDateKey);
+    } catch(e) {
+      console.warn("Storage rehydration bypassed:", e);
+    }
+
+    // Dynamic Rep Resolver: returns explicit { min, max } rep window
+    function resolveTargetReps(exName, tier = 'Main', phase = 'Hypertrophy') {
+      if (state.exerciseRepOverrides && state.exerciseRepOverrides[exName]) {
+        const ov = state.exerciseRepOverrides[exName];
+        if (ov[phase] !== undefined) return normalizeRepBookends(ov[phase]);
+        if (ov['All'] !== undefined) return normalizeRepBookends(ov['All']);
+      }
+      const matrix = state.phaseRepMatrix || defaultPhaseRepMatrix;
+      const pDefaults = matrix[phase] || defaultPhaseRepMatrix[phase] || defaultPhaseRepMatrix['Hypertrophy'];
+      const tierFallback = tier === 'Assistance' ? { min: 10, max: 15 } : (tier === 'Secondary' ? { min: 6, max: 8 } : { min: 4, max: 6 });
+      const raw = pDefaults[tier] || tierFallback;
+      return normalizeRepBookends(raw, tierFallback.min, tierFallback.max);
+    }
+
+    // Global Persistence Engine with Database-Safe Settings Mirroring
+    function persist() {
+      try {
+        state.settings.customSplitBlueprints = state.customSplitBlueprints;
+        state.settings.schemeRecipes = state.schemeRecipes;
+        state.settings.anchorE1rms = state.anchorE1rms;
+        state.settings.oneRmFormula = state.settings.oneRmFormula || 'apex';
+
+        localStorage.setItem('apex_dayLogs', JSON.stringify(state.dayLogs));
+        localStorage.setItem('apex_savedStaged', JSON.stringify(state.savedStaged));
+        localStorage.setItem('apex_e1rms', JSON.stringify(state.e1rms));
+        localStorage.setItem('apex_anchorE1rms', JSON.stringify(state.anchorE1rms || {}));
+        localStorage.setItem('apex_prLedger', JSON.stringify(state.prLedger));
+        localStorage.setItem('apex_settings', JSON.stringify(state.settings));
+        localStorage.setItem('apex_profile', JSON.stringify(state.profile));
+        localStorage.setItem('apex_mesocycleStartDate', state.mesocycleStartDate);
+        localStorage.setItem('apex_mesocycle', JSON.stringify(state.mesocycle));
+        localStorage.setItem('apex_weekdaySplit', JSON.stringify(state.weekdaySplit));
+        localStorage.setItem('apex_customSplitBlueprints', JSON.stringify(state.customSplitBlueprints));
+        localStorage.setItem('apex_exerciseMeta', JSON.stringify(state.exerciseMeta));
+        localStorage.setItem('apex_exercises', JSON.stringify(state.exercises));
+        localStorage.setItem('apex_phaseRepMatrix', JSON.stringify(state.phaseRepMatrix));
+        localStorage.setItem('apex_schemeRecipes', JSON.stringify(state.schemeRecipes));
+        localStorage.setItem('apex_schemeBlueprints', JSON.stringify(state.schemeBlueprints || {}));
+        localStorage.setItem('apex_exerciseRepOverrides', JSON.stringify(state.exerciseRepOverrides));
+        localStorage.setItem('apex_modifierCats', JSON.stringify(state.modifierCats));
+        localStorage.setItem('apex_stagedSlots', JSON.stringify(state.stagedSlots));
+        if (state.activeWorkout && state.activeWorkout.length) {
+          const sanitizedWorkout = state.activeWorkout.map(ex => ({
+            ...ex,
+            densityTimerObj: null,
+            sets: (ex.sets || []).map(s => ({ ...s, lapTimerObj: null }))
+          }));
+          localStorage.setItem('apex_activeWorkout', JSON.stringify(sanitizedWorkout));
+          localStorage.setItem('apex_activeWorkoutDay', String(state.activeWorkoutDay));
+          localStorage.setItem('apex_activeWorkoutDateKey', state.activeWorkoutDateKey || getCurKey());
+          localStorage.setItem('apex_sStart', String(state.sStart));
+          localStorage.setItem('apex_restStart', String(state.restStart));
+        } else {
+          localStorage.removeItem('apex_activeWorkout');
+          localStorage.removeItem('apex_activeWorkoutDay');
+          localStorage.removeItem('apex_activeWorkoutDateKey');
+          localStorage.removeItem('apex_sStart');
+          localStorage.removeItem('apex_restStart');
+        }
+      } catch(e) {}
+    }
+
+    window.persist = persist;
+    window.state = state;
+
+    // Global Shared Timer Bus
+    window.apexTimers = {
+      sInterval: null,
+      restInterval: null,
+      wakeLock: null,
+      wakeLockIdleTimeout: null,
+      IDLE_LIMIT_MS: 15 * 60 * 1000
+    };
+
+    function hasActiveRunningTimers() {
+      if (!state.activeWorkout || !state.activeWorkout.length) return false;
+      return state.activeWorkout.some(ex => 
+        Boolean(ex.densityRunning) || Boolean(ex.sets && ex.sets.some(s => s.lapRunning))
+      );
+    }
+
+    function resetWakeLockIdleTimer() {
+      if (window.apexTimers.wakeLockIdleTimeout) clearTimeout(window.apexTimers.wakeLockIdleTimeout);
+      if (window.apexTimers.wakeLock) {
+        window.apexTimers.wakeLockIdleTimeout = setTimeout(() => {
+          releaseWakeLock(true);
+        }, window.apexTimers.IDLE_LIMIT_MS);
+      }
+    }
+
+    ['touchstart', 'pointerdown', 'mousemove', 'keydown', 'scroll'].forEach(evt => {
+      window.addEventListener(evt, () => {
+        if (window.apexTimers.wakeLock) resetWakeLockIdleTimer();
+      }, { passive: true });
+    });
+
+    async function requestWakeLock() {
+      try {
+        if ('wakeLock' in navigator && !window.apexTimers.wakeLock) {
+          window.apexTimers.wakeLock = await navigator.wakeLock.request('screen');
+          window.apexTimers.wakeLock.addEventListener('release', () => {
+            window.apexTimers.wakeLock = null;
+            if (window.apexTimers.wakeLockIdleTimeout) clearTimeout(window.apexTimers.wakeLockIdleTimeout);
+          });
+        }
+        resetWakeLockIdleTimer();
+      } catch(e) {}
+    }
+
+    async function releaseWakeLock(force = false) {
+      try {
+        if (!force && hasActiveRunningTimers()) return;
+        if (window.apexTimers.wakeLockIdleTimeout) {
+          clearTimeout(window.apexTimers.wakeLockIdleTimeout);
+          window.apexTimers.wakeLockIdleTimeout = null;
+        }
+        if (window.apexTimers.wakeLock) {
+          await window.apexTimers.wakeLock.release();
+          window.apexTimers.wakeLock = null;
+        }
+      } catch(e) {}
+    }
+
+    // Date-Aware Mesocycle Position Resolver
+    function getMesocyclePosition(targetDate = new Date()) {
+      if (!state.mesocycle || !state.mesocycle.length || !state.mesocycleStartDate) {
+        return { blockIdx: 0, week: 1, phase: 'Hypertrophy', block: { phase: 'Hypertrophy', weeks: 3 } };
+      }
+      try {
+        const [sY, sM, sD] = state.mesocycleStartDate.split('-').map(Number);
+        const startDate = new Date(sY, sM - 1, sD);
+        startDate.setHours(0, 0, 0, 0);
+
+        let cur;
+        if (targetDate instanceof Date) {
+          cur = new Date(targetDate);
+        } else if (typeof targetDate === 'string' && targetDate.includes('-')) {
+          const [tY, tM, tD] = targetDate.split('-').map(Number);
+          cur = new Date(tY, tM - 1, tD);
+        } else {
+          cur = new Date();
+        }
+        cur.setHours(0, 0, 0, 0);
+
+        const diffTime = cur - startDate;
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+        if (diffDays < 0) {
+          return { blockIdx: 0, week: 1, phase: state.mesocycle[0].phase, block: state.mesocycle[0] };
+        }
+
+        let totalWeeksElapsed = Math.floor(diffDays / 7);
+        const totalMacroWeeks = state.mesocycle.reduce((sum, b) => sum + (Number(b.weeks) || 1), 0);
+        if (totalMacroWeeks > 0) {
+          totalWeeksElapsed = totalWeeksElapsed % totalMacroWeeks;
+        }
+
+        let accumulatedWeeks = 0;
+        for (let i = 0; i < state.mesocycle.length; i++) {
+          const bWeeks = Number(state.mesocycle[i].weeks) || 1;
+          if (totalWeeksElapsed < accumulatedWeeks + bWeeks) {
+            const weekNum = (totalWeeksElapsed - accumulatedWeeks) + 1;
+            return {
+              blockIdx: i,
+              week: weekNum,
+              phase: state.mesocycle[i].phase,
+              block: state.mesocycle[i]
+            };
+          }
+          accumulatedWeeks += bWeeks;
+        }
+      } catch (e) {}
+      return { blockIdx: 0, week: 1, phase: state.mesocycle[0]?.phase || 'Hypertrophy', block: state.mesocycle[0] };
+    }
+
+    function syncMesocycleProgression(targetDate = new Date()) {
+      const pos = getMesocyclePosition(targetDate);
+      state.activeBlockIdx = pos.blockIdx;
+      state.activeWeek = pos.week;
+    }
+
+    function getVariantKey(ex, mods = []) {
+      const cleanMods = sanitizeModifiers(mods);
+      const sorted = cleanMods.slice().sort();
+      if (!sorted.length) return ex;
+      return `${ex} [${sorted.join(', ')}]`;
+    }
+
+    function showToast(msg) {
+      state.toastMsg = msg;
+      renderToast();
+      setTimeout(() => {
+        state.toastMsg = '';
+        renderToast();
+      }, 3500);
+    }
+
+    function renderToast() {
+      let el = document.getElementById('apex-toast');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'apex-toast';
+        document.body.appendChild(el);
+      }
+      if (state.toastMsg) {
+        el.className = 'fixed bottom-5 left-1/2 -translate-x-1/2 bg-slate-900 border border-blue-500 text-white font-mono text-xs px-4 py-2.5 rounded-2xl shadow-2xl z-50 transition-all duration-300 max-w-[90vw] text-center';
+        el.innerText = state.toastMsg;
+        el.style.display = 'block';
+      } else {
+        el.style.display = 'none';
+      }
+    }
+
+    function getExMeta(exName) {
+      if (state.exerciseMeta && state.exerciseMeta[exName]) return state.exerciseMeta[exName];
+      if (exName && (exName.startsWith('BW ') || exName === 'Push Up' || exName === 'Plank' || exName === 'Ab Wheel' || exName === 'Hanging Leg Raise')) {
+        return { w: false, r: exName !== 'Plank', t: exName === 'Plank', rpe: true };
+      }
+      return { w: true, r: true, t: false, rpe: true };
+    }
+
+    function getLatestBodyweight(targetDateKey = null) {
+      if (!state.dayLogs) return Number(state.profile?.bodyweight || 196.2);
+      const allKeys = Object.keys(state.dayLogs).filter(k => state.dayLogs[k] && state.dayLogs[k].weight);
+      if (!allKeys.length) return Number(state.profile?.bodyweight || 196.2);
+
+      const normalizedTarget = targetDateKey ? normalizeDateKey(targetDateKey) : null;
+      if (normalizedTarget && state.dayLogs[normalizedTarget]?.weight) {
+        return Number(state.dayLogs[normalizedTarget].weight);
+      }
+
+      const parseKey = (k) => {
+        const [y, m, d] = k.split('-').map(Number);
+        return new Date(y, m - 1, d).getTime();
+      };
+
+      const targetTime = normalizedTarget ? parseKey(normalizedTarget) : Date.now();
+      const priorKeys = allKeys.filter(k => parseKey(k) <= targetTime).sort((a, b) => parseKey(b) - parseKey(a));
+      if (priorKeys.length > 0) return Number(state.dayLogs[priorKeys[0]].weight);
+
+      const futureKeys = allKeys.filter(k => parseKey(k) > targetTime).sort((a, b) => parseKey(a) - parseKey(b));
+      if (futureKeys.length > 0) return Number(state.dayLogs[futureKeys[0]].weight);
+
+      return Number(state.profile?.bodyweight || 196.2);
+    }
+    state.formMetrics.weight = getLatestBodyweight();
+
+    function getReadinessScore() {
+      const { sleep, pushSoreness, pullSoreness, legSoreness, energy, stress, motivation } = state.formMetrics;
+      const isRest = Number(motivation) === 0;
+      const physicalTotal = (Number(sleep) || 3) + 
+                            (Number(pushSoreness) || 4) + 
+                            (Number(pullSoreness) || 4) + 
+                            (Number(legSoreness) || 4) + 
+                            (Number(energy) || 4) + 
+                            (Number(stress) || 4);
+
+      if (isRest) {
+        return Math.round((physicalTotal / 30) * 100);
+      }
+      return Math.round(((physicalTotal + (Number(motivation) || 4)) / 35) * 100);
+    }
+
+    function getReadinessBand(score) {
+      if (score >= 85) {
+        return { name: 'Primed', badge: 'bg-emerald-500/20 text-emerald-300 border-emerald-500', desc: 'Primed (+2.5% Boost)', factor: 1.025, rpeCap: 10.0, setReduction: 0 };
+      } else if (score >= 65) {
+        return { name: 'Optimal', badge: 'bg-blue-500/20 text-blue-300 border-blue-500', desc: 'Optimal Baseline', factor: 1.0, rpeCap: 10.0, setReduction: 0 };
+      } else if (score >= 50) {
+        return { name: 'Guarded', badge: 'bg-amber-500/20 text-amber-300 border-amber-500', desc: 'Guarded (-1 Set Trim)', factor: 1.0, rpeCap: 8.5, setReduction: 1 };
+      } else {
+        return { name: 'Fatigued', badge: 'bg-red-500/20 text-red-300 border-red-500', desc: 'Fatigued (-5% Load, -1 Set)', factor: 0.95, rpeCap: 7.5, setReduction: 1 };
+      }
+    }
+
+    function getRollingReadiness(targetDateKey, windowDays = 3) {
+      if (!state.dayLogs) return 85;
+      const curDate = targetDateKey 
+        ? (() => {
+            const [y, m, d] = normalizeDateKey(targetDateKey).split('-').map(Number);
+            return new Date(y, m - 1, d);
+          })() 
+        : new Date(state.year, state.month, state.selectedDay);
+      
+      let scores = [];
+      let srpeFatiguePenalty = 0;
+
+      for (let i = 0; i < windowDays; i++) {
+        const d = new Date(curDate);
+        d.setDate(d.getDate() - i);
+        const k = formatIsoDate(d.getFullYear(), d.getMonth(), d.getDate());
+        const dayLog = state.dayLogs[k];
+
+        if (dayLog?.recovery?.score) {
+          scores.push(dayLog.recovery.score);
+        }
+
+        if (i > 0 && dayLog?.workout?.done && dayLog.workout.srpe) {
+          const srpe = Number(dayLog.workout.srpe);
+          if (srpe >= 9.0) srpeFatiguePenalty += 8;
+          else if (srpe >= 8.0) srpeFatiguePenalty += 4;
+        }
+      }
+
+      let baselineScore = scores.length > 0 
+        ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
+        : (state.dayLogs[getCurKey()]?.recovery?.score || 78);
+
+      return Math.max(30, Math.min(100, baselineScore - srpeFatiguePenalty));
+    }
+
+    function roundLoad(val) {
+      const inc = Number(state.settings?.rounding) || 5.0;
+      return Math.round((Number(val) || 0) / inc) * inc;
+    }
+
+    // Multi-Formula 1RM Prediction Engine
+    function calculate1RmEquivalent(weight, reps, formula = 'apex') {
+      const w = Number(weight) || 0;
+      const r = Math.max(1, Number(reps) || 1);
+      if (w <= 0) return 0;
+      if (r === 1) return w;
+
+      if (formula === 'epley') {
+        return Math.round(w * (1 + (r / 30)));
+      } else if (formula === 'brzycki') {
+        return Math.round(w * (36 / (37 - r)));
+      } else if (formula === 'wathan') {
+        return Math.round((100 * w) / (48.8 + (53.8 * Math.exp(-0.075 * r))));
+      } else if (formula === 'lombardi') {
+        return Math.round(w * Math.pow(r, 0.10));
+      }
+      // Default: APEX Autoregulated Table Formula
+      const rirTablePct = Math.max(40, (100 - (r - 1) * 2.15));
+      return Math.round(w / (rirTablePct / 100));
+    }
+
+    // Dynamic Percentage Resolver Linked to Selected 1RM Engine
+    function getPct(reps, rpe, formulaOverride = null) {
+      const r = Math.min(Math.max(1, Number(reps) || 1), 30);
+      const cleanRpe = roundRpe(rpe);
+      const rir = 10.0 - cleanRpe;
+      const effReps = r + rir;
+      const activeFormula = formulaOverride || state.settings?.oneRmFormula || 'apex';
+
+      if (activeFormula === 'epley') {
+        return Math.max(35, Math.round((3000 / (30 + effReps)) * 10) / 10);
+      } else if (activeFormula === 'brzycki') {
+        return Math.max(35, Math.round(((100 * (37 - Math.min(36, effReps))) / 36) * 10) / 10);
+      } else if (activeFormula === 'wathan') {
+        return Math.max(35, Math.round((48.8 + (53.8 * Math.exp(-0.075 * effReps))) * 10) / 10);
+      } else if (activeFormula === 'lombardi') {
+        return Math.max(35, Math.round((100 / Math.pow(effReps, 0.10)) * 10) / 10);
+      }
+
+      // Default APEX Standard / High Capacity RPE matrix
+      if (state.settings && state.settings.rpeTable === 'Standard') {
+        return Math.max(35, Math.round((100 - (effReps - 1) * 2.85) * 10) / 10);
+      }
+      return Math.max(40, Math.round((100 - (effReps - 1) * 2.15) * 10) / 10);
+    }
+// ==========================================
+// RPE MATRIX & E1RM ENGINE
+// ==========================================
+
+const RPE_COLS = [10, 9.5, 9, 8.5, 8, 7.5, 7, 6.5, 6, 5.5, 5];
+
+const DEFAULT_HIGH_CAPACITY_BASE = {
+  1:  { 10: 100.0, 9.5: 99.1, 9: 98.1, 8.5: 97.2, 8: 96.2, 7.5: 95.3, 7: 94.4, 6.5: 93.5, 6: 92.6, 5.5: 91.8, 5: 90.9 },
+  2:  { 10: 98.1,  9.5: 97.2, 9: 96.2, 8.5: 95.3, 8: 94.4, 7.5: 93.5, 7: 92.6, 6.5: 91.8, 6: 90.9, 5.5: 90.1, 5: 89.2 },
+  3:  { 10: 96.2,  9.5: 95.3, 9: 94.4, 8.5: 93.5, 8: 92.6, 7.5: 91.8, 7: 90.9, 6.5: 90.1, 6: 89.2, 5.5: 88.4, 5: 87.5 },
+  4:  { 10: 94.4,  9.5: 93.5, 9: 92.6, 8.5: 91.8, 8: 90.9, 7.5: 90.1, 7: 89.2, 6.5: 88.4, 6: 87.5, 5.5: 86.7, 5: 85.8 },
+  5:  { 10: 92.6,  9.5: 91.8, 9: 90.9, 8.5: 90.1, 8: 89.2, 7.5: 88.4, 7: 87.5, 6.5: 86.7, 6: 85.8, 5.5: 85.0, 5: 84.2 },
+  6:  { 10: 90.9,  9.5: 90.1, 9: 89.2, 8.5: 88.4, 8: 87.5, 7.5: 86.7, 7: 85.8, 6.5: 85.0, 6: 84.2, 5.5: 83.5, 5: 82.7 },
+  7:  { 10: 89.2,  9.5: 88.4, 9: 87.5, 8.5: 86.7, 8: 85.8, 7.5: 85.0, 7: 84.2, 6.5: 83.5, 6: 82.7, 5.5: 81.9, 5: 81.1 },
+  8:  { 10: 87.5,  9.5: 86.7, 9: 85.8, 8.5: 85.0, 8: 84.2, 7.5: 83.5, 7: 82.7, 6.5: 81.9, 6: 81.1, 5.5: 80.4, 5: 79.6 },
+  9:  { 10: 85.8,  9.5: 85.0, 9: 84.2, 8.5: 83.5, 8: 82.7, 7.5: 81.9, 7: 81.1, 6.5: 80.4, 6: 79.6, 5.5: 78.9, 5: 78.1 },
+  10: { 10: 84.2,  9.5: 83.5, 9: 82.7, 8.5: 81.9, 8: 81.1, 7.5: 80.4, 7: 79.6, 6.5: 78.9, 6: 78.1, 5.5: 77.4, 5: 76.6 },
+  11: { 10: 82.7,  9.5: 81.9, 9: 81.1, 8.5: 80.4, 8: 79.6, 7.5: 78.9, 7: 78.1, 6.5: 77.4, 6: 76.6, 5.5: 75.9, 5: 75.2 },
+  12: { 10: 81.1,  9.5: 80.4, 9: 79.6, 8.5: 78.9, 8: 78.1, 7.5: 77.4, 7: 76.6, 6.5: 75.9, 6: 75.2, 5.5: 74.5, 5: 73.8 }
+};
+window.DEFAULT_HIGH_CAPACITY_BASE = DEFAULT_HIGH_CAPACITY_BASE;
+
+// Autonomously extends 1-12 slope out to 50 reps using dampened decay
+function extendRpeMatrix(baseMatrix, maxReps = 50) {
+  const extended = JSON.parse(JSON.stringify(baseMatrix));
+  for (let rep = 13; rep <= maxReps; rep++) {
+    extended[rep] = {};
+    let dropPerRep;
+    if (rep <= 16) dropPerRep = 1.50;
+    else if (rep <= 22) dropPerRep = 1.20;
+    else if (rep <= 30) dropPerRep = 0.90;
+    else if (rep <= 40) dropPerRep = 0.65;
+    else dropPerRep = 0.50;
+
+    const prevRep10 = extended[rep - 1][10];
+    const currentRep10 = Math.round((prevRep10 - dropPerRep) * 10) / 10;
+    extended[rep][10] = currentRep10;
+
+    const stepOffset = Math.max(0.45, Math.round((currentRep10 * 0.01) * 100) / 100);
+    for (let i = 1; i < RPE_COLS.length; i++) {
+      const rpe = RPE_COLS[i];
+      const prevRpe = RPE_COLS[i - 1];
+      extended[rep][rpe] = Math.round((extended[rep][prevRpe] - stepOffset) * 10) / 10;
+    }
+  }
+  return extended;
+}
+window.extendRpeMatrix = extendRpeMatrix;
+function resolveBlueprintForPhase(bp, phase) {
+  if (!bp) return null;
+  if (!phase || phase === 'Global' || !bp.phaseOverrides || !bp.phaseOverrides[phase]) {
+    return bp;
+  }
+  // Merge phase overrides on top of global blueprint properties
+  return {
+    ...bp,
+    ...bp.phaseOverrides[phase],
+    isOverridden: true
+  };
+}
+window.resolveBlueprintForPhase = resolveBlueprintForPhase;
+window.generateSetsFromBlueprint = generateSetsFromBlueprint;
+
+
 // ============================================================================
 // STIMULUS-TO-FATIGUE (SFR) & SCHEME STRAIN ENGINE (Clean / No Amber)
 // ============================================================================
@@ -1964,7 +1968,7 @@ window.getReadinessStrainCeiling = getReadinessStrainCeiling;
 function generateSetsFromBlueprint(paramsOrName, metaArg, e1rmArg, baseWorkingSetsArg = 3, landmarkOffsetArg = 0) {
   // Self-heal: automatically migrate or initialize blueprints
   if (!state.schemeBlueprints) {
-    state.schemeBlueprints = JSON.parse(JSON.stringify(state.schemeRecipes || DEFAULT_SCHEME_BLUEPRINTS));
+    state.schemeBlueprints = JSON.parse(JSON.stringify(typeof DEFAULT_SCHEME_BLUEPRINTS !== 'undefined' ? DEFAULT_SCHEME_BLUEPRINTS : {}));
   }
 
   // Unpack whether passed as an object or positional arguments
@@ -2010,7 +2014,7 @@ function generateSetsFromBlueprint(paramsOrName, metaArg, e1rmArg, baseWorkingSe
     };
   }
 
-  const totalSets = Number(bp.baseSets) || baseWorkingSets || 3;
+  const totalSets = Number(bp.baseSets || bp.setsCount) || baseWorkingSets || 3;
   const baseEffort = roundRpe(isGrounding ? 9.0 : ((Number(bp.targetRpe) || 8.0) + (weekRpeBump || 0)));
   const topCount = Number(bp.topSetCount) || 1;
   const isPlank = meta && meta.t && !meta.r;
@@ -2085,10 +2089,9 @@ function generateSetsFromBlueprint(paramsOrName, metaArg, e1rmArg, baseWorkingSe
         const multiplier = Math.max(0.2, 1 - (stepsFromTop * rampPct));
         setLoad = roundLoad(topSetLoad * multiplier);
       } else if (bp.pattern === 'cluster') {
-      const rawClusterPct = bp.targetLoadPct !== undefined ? bp.targetLoadPct : (typeof recipe !== 'undefined' && recipe?.targetLoadPct ? recipe.targetLoadPct : 72.5);
-      const clusterPct = rawClusterPct > 1 ? rawClusterPct / 100 : rawClusterPct;
-      setLoad = calcLoad(e1rm, clusterPct * penalty);
-      if (idx === 0) topSetLoad = setLoad;
+        const rawClusterPct = Number(bp.targetLoadPct !== undefined ? bp.targetLoadPct : (typeof recipe !== 'undefined' && recipe?.targetLoadPct ? recipe.targetLoadPct : 72.5));
+        setLoad = calcLoad(e1rm, rawClusterPct * penalty);
+        if (idx === 0) topSetLoad = setLoad;
     } else if (idx === 0) {
       topSetLoad = calcLoad(e1rm, getPct(calcReps, baseEffort) * penalty);
       setLoad = topSetLoad;
@@ -2916,6 +2919,7 @@ function renderRpeMatrixTable(profile) {
           weekday_split: state.weekdaySplit,
           exercise_meta: state.exerciseMeta,
           phase_rep_matrix: state.phaseRepMatrix,
+          scheme_blueprints: state.schemeBlueprints,
           exercise_rep_overrides: state.exerciseRepOverrides,
           active_block_idx: state.activeBlockIdx,
           active_week: state.activeWeek,
@@ -2967,6 +2971,7 @@ function renderRpeMatrixTable(profile) {
           if (data.weekday_split) state.weekdaySplit = data.weekday_split;
           if (data.exercise_meta) state.exerciseMeta = { ...state.exerciseMeta, ...data.exercise_meta };
           if (data.phase_rep_matrix) state.phaseRepMatrix = data.phase_rep_matrix;
+          if (data.scheme_blueprints) state.schemeBlueprints = { ...(typeof DEFAULT_SCHEME_BLUEPRINTS !== 'undefined' ? DEFAULT_SCHEME_BLUEPRINTS : {}), ...data.scheme_blueprints };
           if (data.scheme_recipes) state.schemeRecipes = { ...defaultSchemeRecipes, ...data.scheme_recipes };
           if (data.exercise_rep_overrides) state.exerciseRepOverrides = data.exercise_rep_overrides;
           if (data.modifier_cats) state.modifierCats = data.modifier_cats;
@@ -3222,18 +3227,22 @@ function renderRpeMatrixTable(profile) {
     const weekRpeBump = enableRpeProgression ? Math.max(0, (w - 1) * 0.5) : 0; // Exactly 0.0, 0.5, 1.0...
 
     // Working Set Volume Sizing Matrix
-    let baseWorkingSets = Number(recipe.setsCount || recipe.baseSets) || 3;
-    if (lifterType === 'Enhanced') {
-      baseWorkingSets = (tier === 'Main') ? baseWorkingSets : baseWorkingSets + 1;
-      if (w === 1) baseWorkingSets = Math.max(2, baseWorkingSets - 1);
-      else if (w >= 3) baseWorkingSets += 1;
-    } else {
-      if (w === 1) baseWorkingSets = Math.max(2, baseWorkingSets - 1);
-      else if (w >= 3 && tier !== 'Main') baseWorkingSets += 1;
-    }
+    let baseWorkingSets = Number(recipe.baseSets || recipe.setsCount) || 3;
+    
+    // Do not apply live autoregulated set reductions during blueprint previews
+    if (!opts.isPreview) {
+      if (lifterType === 'Enhanced') {
+        baseWorkingSets = (tier === 'Main') ? baseWorkingSets : baseWorkingSets + 1;
+        if (w === 1) baseWorkingSets = Math.max(2, baseWorkingSets - 1);
+        else if (w >= 3) baseWorkingSets += 1;
+      } else {
+        if (w === 1) baseWorkingSets = Math.max(2, baseWorkingSets - 1);
+        else if (w >= 3 && tier !== 'Main') baseWorkingSets += 1;
+      }
 
-    if (phase === 'Deload') baseWorkingSets = Math.max(2, Math.floor(baseWorkingSets * 0.6));
-    baseWorkingSets = Math.max(2, baseWorkingSets - setReduction);
+      if (phase === 'Deload') baseWorkingSets = Math.max(2, Math.floor(baseWorkingSets * 0.6));
+      baseWorkingSets = Math.max(2, baseWorkingSets - setReduction);
+    }
 
     let setArray = [];
 
@@ -4342,6 +4351,7 @@ function renderRpeMatrixTable(profile) {
   const extendRpeMatrix = window.extendRpeMatrix;
   const DEFAULT_HIGH_CAPACITY_BASE = window.DEFAULT_HIGH_CAPACITY_BASE || {};
 const getE1RM = window.getE1RM || function() { return 0; };
+const DEFAULT_SCHEME_BLUEPRINTS = window.DEFAULT_SCHEME_BLUEPRINTS || {};
 
   // State initialization safeguards
   if (!state.anchorE1rms) state.anchorE1rms = {};
@@ -6379,6 +6389,7 @@ if (!state.editingRpeProfile) {
 const extendRpeMatrix = window.extendRpeMatrix;
   const generateSetsFromBlueprint = window.generateSetsFromBlueprint;
 const getE1RM = window.getE1RM || function() { return 0; };
+const DEFAULT_SCHEME_BLUEPRINTS = window.DEFAULT_SCHEME_BLUEPRINTS || {};
 
   const { 
     fmtTime = (sec) => {
@@ -7408,7 +7419,8 @@ function renderBottomNav() {
       ? buildSets(curScheme, 200, 1.0, 'Main', 'Squat', [], { 
           dateKey: null, 
           phase: simPhase, 
-          week: simWeek 
+          week: simWeek,
+          isPreview: true
         })
       : ((typeof generateSetsFromBlueprint === 'function')
           ? generateSetsFromBlueprint({
