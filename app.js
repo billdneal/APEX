@@ -29,7 +29,7 @@
       'Strength','Realization / Peaking','Resensitization','DUP','Deload','GPP'
     ];
     
-    const availableThemes = ['Midnight', 'Onyx', 'Slate', 'Forest', 'Crimson', 'Nordic', 'Amber', 'Cyberpunk'];
+    const availableThemes = ['Onyx', 'Graphite', 'Midnight', 'Abyss', 'Slate', 'Vapor', 'Espresso'];
     const availableFonts = ['JetBrains Mono', 'Inter', 'Roboto', 'Geist', 'Cinzel'];
 
    // Neutralized Scheme Definitions
@@ -6605,14 +6605,13 @@ window.appActions.removeRpeMatrixSet = function(idx) {
     document.body.className = `theme-${activeTheme} style-${activeStyle}`;
     
     const themeColors = {
-      midnight: { bg: '#090d16', card: '#0f172a', input: '#1e293b', border: '#334155' },
-      onyx: { bg: '#000000', card: '#121212', input: '#1e1e1e', border: '#2c2c2c' },
+      onyx: { bg: '#000000', card: '#0f0f10', input: '#19191b', border: '#2b2b2f' },
+      graphite: { bg: '#0d0e11', card: '#16181d', input: '#22252c', border: '#31353f' },
+      midnight: { bg: '#070b12', card: '#0e1524', input: '#162238', border: '#263756' },
+      abyss: { bg: '#04090e', card: '#0b141e', input: '#132130', border: '#1f354c' },
       slate: { bg: '#0f172a', card: '#1e293b', input: '#334155', border: '#475569' },
-      forest: { bg: '#061811', card: '#0b291d', input: '#133e2c', border: '#1c523b' },
-      crimson: { bg: '#18080a', card: '#290d11', input: '#3e161c', border: '#5c1f2a' },
-      nordic: { bg: '#0a131c', card: '#11202e', input: '#1b3044', border: '#27435e' },
-      amber: { bg: '#161006', card: '#261b0a', input: '#3b2a10', border: '#523b17' },
-      cyberpunk: { bg: '#0d0618', card: '#180d2c', input: '#261545', border: '#412375' }
+      vapor: { bg: '#0a0a0c', card: '#141418', input: '#1d1d24', border: '#2e2e38' },
+      espresso: { bg: '#0d0a09', card: '#191412', input: '#271f1d', border: '#3d322f' }
     };
 
     const curThemeObj = themeColors[activeTheme] || themeColors.midnight;
