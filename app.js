@@ -796,6 +796,7 @@ function getIcon(name, cls = 'w-4 h-4') {
         fontFamily: 'JetBrains Mono',
         customAccent: '#38bdf8',
         uiScale: 'm',
+        uiStyle: 'glass',
         rpeTable: 'High Capacity',
         rounding: 5.0,
         progressionType: 'percent',
@@ -6052,6 +6053,7 @@ if (!state.editingRpeProfile) {
     setTheme(themeName) { state.settings.theme = themeName; persist(); window.pushToCloud(false); safeRender(); },
     setFontFamily(fontName) { state.settings.fontFamily = fontName; persist(); window.pushToCloud(false); safeRender(); },
     setUiScale(scaleKey) { state.settings.uiScale = scaleKey; persist(); window.pushToCloud(false); safeRender(); },
+    setUiStyle(styleKey) { state.settings.uiStyle = styleKey; persist(); window.pushToCloud(false); safeRender(); },
     setCustomAccent(colorHex) { state.settings.customAccent = colorHex; persist(); window.pushToCloud(false); safeRender(); },
     updateProfile(field, val) { state.profile[field] = (field === 'age' || field === 'bodyweight') ? Number(val) : val; persist(); window.pushToCloud(false); safeRender(); },
 
@@ -6599,7 +6601,8 @@ window.appActions.removeRpeMatrixSet = function(idx) {
 
   function applyGlobalThemeAndFont() {
     const activeTheme = (state.settings?.theme || 'Midnight').toLowerCase();
-    document.body.className = `theme-${activeTheme}`;
+    const activeStyle = state.settings?.uiStyle || 'glass';
+    document.body.className = `theme-${activeTheme} style-${activeStyle}`;
     
     const themeColors = {
       midnight: { bg: '#090d16', card: '#0f172a', input: '#1e293b', border: '#334155' },
@@ -6648,6 +6651,81 @@ window.appActions.removeRpeMatrixSet = function(idx) {
                             }
     `;
     document.documentElement.style.fontFamily = `'${font}', monospace, sans-serif`;
+
+    let styleOverride = document.getElementById('apex-style-override');
+    if (!styleOverride) {
+      styleOverride = document.createElement('style');
+      styleOverride.id = 'apex-style-override';
+      document.head.appendChild(styleOverride);
+    }
+    styleOverride.textContent = `
+      /* Spring micro-physics */
+      .tactile {
+        transition: transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.12s ease !important;
+      }
+      .tactile:active {
+        transform: scale(0.96) !important;
+        filter: brightness(1.1) !important;
+      }
+
+      /* 1. Acrylic Glass: Layered blur, soft depth, specular edge light */
+      body.style-glass .bg-card,
+      body.style-glass .bg-card-sub {
+        background-color: var(--card-bg) !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.45), inset 0 1px 0 0 rgba(255, 255, 255, 0.08) !important;
+        backdrop-filter: blur(12px) !important;
+        -webkit-backdrop-filter: blur(12px) !important;
+      }
+      body.style-glass .bg-input,
+      body.style-glass input[type="number"],
+      body.style-glass input[type="text"] {
+        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.35) !important;
+      }
+
+      /* 2. Tactical Matte: Solid high contrast, sharp technical borders */
+      body.style-tactical .bg-card,
+      body.style-tactical .bg-card-sub {
+        background-color: var(--card-bg) !important;
+        border: 1px solid rgba(255, 255, 255, 0.18) !important;
+        box-shadow: none !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+      }
+      body.style-tactical .bg-input,
+      body.style-tactical input[type="number"],
+      body.style-tactical input[type="text"] {
+        border: 1px solid rgba(255, 255, 255, 0.14) !important;
+        box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5) !important;
+      }
+
+      /* 3. Neo-Onyx: Minimalist flush panels */
+      body.style-minimal .bg-card,
+      body.style-minimal .bg-card-sub {
+        background-color: var(--card-bg) !important;
+        border: 1px solid rgba(255, 255, 255, 0.04) !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6) !important;
+      }
+      body.style-minimal .bg-input,
+      body.style-minimal input[type="number"],
+      body.style-minimal input[type="text"] {
+        border: 1px solid transparent !important;
+        background-color: rgba(0, 0, 0, 0.35) !important;
+      }
+
+      /* Global Amber Neutralization: Converts amber highlights to clean slate & chosen accent */
+      [class*="text-amber-300"],
+      [class*="text-amber-400"] {
+        color: #cbd5e1 !important;
+      }
+      select [class*="text-amber"],
+      input[class*="text-amber"] {
+        color: var(--accent-primary) !important;
+      }
+      [class*="border-amber"] {
+        border-color: rgba(255, 255, 255, 0.08) !important;
+      }
+    `;
 
     const scaleMap = { xs: '13px', s: '14.5px', m: '16px', l: '18px' };
     const activeScale = scaleMap[state.settings?.uiScale] || '16px';
@@ -9009,6 +9087,15 @@ const SPECIALIZED_SCHEMES = [
                 </div>
 
                 <div class="p-3.5 bg-card-sub rounded-2xl border border-sub space-y-2 shadow-md">
+                <div class="text-[10px] text-accent font-bold uppercase">Visual Style</div>
+                <select onchange="appActions.setUiStyle(this.value)" class="w-full bg-input border border-sub rounded-xl p-2 text-xs font-mono text-white focus:outline-none">
+                  <option value="glass" ${state.settings?.uiStyle === 'glass' ? 'selected' : ''}>Acrylic Glass (Depth & Blur)</option>
+                  <option value="tactical" ${state.settings?.uiStyle === 'tactical' ? 'selected' : ''}>Tactical Matte (Crisp / Contrast)</option>
+                  <option value="minimal" ${state.settings?.uiStyle === 'minimal' ? 'selected' : ''}>Neo-Onyx (Flush / Minimal)</option>
+                </select>
+              </div>
+
+                <div class="p-3.5 bg-card-sub rounded-2xl border border-sub space-y-2 shadow-md">
                   <div class="flex justify-between items-center text-[10px] text-accent font-bold uppercase">
                     <span>Custom Accent Glow Color</span>
                     <span class="text-slate-400 font-mono">${state.settings?.customAccent || '#38bdf8'}</span>
@@ -10134,10 +10221,11 @@ const SPECIALIZED_SCHEMES = [
           </svg>
         </button>
 
-        <button type="button" onclick="appActions.closePlanner()" class="text-slate-400 hover:text-white p-1">☒</button>
-      </div>
-            <button type="button" onclick="appActions.closePlanner()" class="text-slate-400 hover:text-white p-1">✕</button>
-          </div>
+        <button type="button" onclick="appActions.closePlanner()" class="text-slate-400 hover:text-white text-base leading-none p-1 tactile">
+        ✕
+      </button>
+    </div>
+  </div>
               </div>
 
               ${plannerCalcHtml}
