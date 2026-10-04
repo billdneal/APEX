@@ -13,7 +13,7 @@
 
 (function() {
   try {
-    const APP_VERSION = 'v4.6.1-PWA';
+    const APP_VERSION = 'v4.6.2-PWA';
     const now = new Date();
     const TODAY_YEAR = now.getFullYear();
     const TODAY_MONTH = now.getMonth();
@@ -840,6 +840,9 @@ function getIcon(name, cls = 'w-4 h-4') {
 // ==========================================
 
 const DEFAULT_SCHEME_BLUEPRINTS = {
+  // ==========================================
+  // HYPERTROPHY SCHEMES
+  // ==========================================
   'Straight Sets': {
     id: 'straight_sets',
     name: 'Straight Sets',
@@ -852,7 +855,9 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     fatigueDropPct: 0.0,
     restSeconds: 120,
     intraSetRest: 0,
-    densityPenalty: 1.0
+    densityPenalty: 1.0,
+    instructions: 'Hold weight and target reps flat across all working sets. Increase bar weight (+5 lbs) when all sets reach the top rep target at or below target RPE.',
+    sfrRating: 'B+'
   },
   'Dynamic Double Progression (Rep Range)': {
     id: 'ddp_rep_range',
@@ -866,7 +871,9 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     fatigueDropPct: 0.0,
     restSeconds: 120,
     intraSetRest: 0,
-    densityPenalty: 1.0
+    densityPenalty: 1.0,
+    instructions: 'Work within the prescribed rep bracket across all sets. Keep load constant and add reps weekly until all sets hit the rep ceiling, then advance bar weight.',
+    sfrRating: 'A-'
   },
   'Step Loading (Double Progression)': {
     id: 'step_loading',
@@ -880,7 +887,9 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     fatigueDropPct: 0.0,
     restSeconds: 90,
     intraSetRest: 0,
-    densityPenalty: 1.0
+    densityPenalty: 1.0,
+    instructions: 'Fix load across sets. Increase reps each week at that static weight across the block; take a deload/reset before advancing bar load.',
+    sfrRating: 'B'
   },
   'Myo-reps': {
     id: 'myo_reps',
@@ -892,7 +901,9 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     targetRpe: 9.5,
     restSeconds: 120,
     intraSetRest: 15,
-    densityPenalty: 0.85
+    densityPenalty: 0.85,
+    instructions: 'Execute 1 activation set to near-failure (@9.0-9.5), rack for 15s, then perform 3-5 mini-sets of 3-5 reps on strict 15s rest intervals until velocity noticeably decays.',
+    sfrRating: 'A+'
   },
   'Rest-Pause (Dogcrapp)': {
     id: 'rest_pause_dc',
@@ -904,7 +915,9 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     targetRpe: 10.0,
     restSeconds: 180,
     intraSetRest: 25,
-    densityPenalty: 0.90
+    densityPenalty: 0.90,
+    instructions: 'Take the activation set to technical failure, take 10-15 deep breaths (approx. 20-25s), grind out cluster 1 to failure, rest another 10-15 deep breaths, and finish cluster 2 to failure.',
+    sfrRating: 'A'
   },
   'Density Block': {
     id: 'density_block',
@@ -916,7 +929,9 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     targetRpe: 8.0,
     restSeconds: 45,
     intraSetRest: 0,
-    densityPenalty: 0.85
+    densityPenalty: 0.85,
+    instructions: 'Set the countdown clock (7-10 min) with fixed target weight. Cycle quality submaximal mini-sets. Advance load when total volume reps within the block increase by >= 15%.',
+    sfrRating: 'A-'
   },
   'Rep Goal System (Metabolic 50)': {
     id: 'rep_goal_50',
@@ -928,7 +943,9 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     targetRpe: 9.0,
     restSeconds: 90,
     intraSetRest: 0,
-    densityPenalty: 1.0
+    densityPenalty: 1.0,
+    instructions: 'Accumulate 50 total reps across as few sets as possible. Terminate each set 1-2 reps shy of failure. Advance load (+5 lbs) once 50 reps are accumulated in 3 or fewer sets.',
+    sfrRating: 'A'
   },
   'Reverse Pyramid': {
     id: 'reverse_pyramid',
@@ -942,7 +959,9 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     fatigueDropPct: 0.10,
     restSeconds: 150,
     intraSetRest: 0,
-    densityPenalty: 1.0
+    densityPenalty: 1.0,
+    instructions: 'Warm up to the heavy top set first. Strip load by 10-20% for back-off sets while expanding rep targets by +2 to +4 reps to compound volume under fatigue.',
+    sfrRating: 'A'
   },
   'Tapered': {
     id: 'tapered',
@@ -956,7 +975,9 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     fatigueDropPct: 0.075,
     restSeconds: 120,
     intraSetRest: 0,
-    densityPenalty: 1.0
+    densityPenalty: 1.0,
+    instructions: 'Hit a high-intensity opener set, then drop load by 10-15% for uniform capacity back-offs to collect safe mechanical tension.',
+    sfrRating: 'B+'
   },
   'Ascending Pyramid': {
     id: 'ascending_pyramid',
@@ -969,7 +990,9 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     rpeStepDelta: 0.5,
     restSeconds: 120,
     intraSetRest: 0,
-    densityPenalty: 1.0
+    densityPenalty: 1.0,
+    instructions: 'Step up load and effort each set as reps decrease. Treat earlier sets as potentiation ramp sets; only the final peak set reaches maximum intensity.',
+    sfrRating: 'B'
   },
   'Volume Pyramid': {
     id: 'volume_pyramid',
@@ -982,7 +1005,9 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     rpeStepDelta: 0.5,
     restSeconds: 120,
     intraSetRest: 0,
-    densityPenalty: 1.0
+    densityPenalty: 1.0,
+    instructions: 'Ascend in load to an apex peak set, then descend down the ladder. Use the eccentric fatigue on descending sets to maximize metabolic stress.',
+    sfrRating: 'B-'
   },
   'Force/Metabolic Interleave': {
     id: 'force_metabolic_interleave',
@@ -996,7 +1021,9 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     fatigueDropPct: 0.20,
     restSeconds: 120,
     intraSetRest: 0,
-    densityPenalty: 1.0
+    densityPenalty: 1.0,
+    instructions: 'Alternate between heavy low-rep mechanical tension sets (3-5r) and light high-rep pump sets (15-20r) to simultaneously exhaust different motor unit pools.',
+    sfrRating: 'B+'
   },
   'Drop Set': {
     id: 'drop_set',
@@ -1010,7 +1037,9 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     fatigueDropPct: 0.15,
     restSeconds: 15,
     intraSetRest: 15,
-    densityPenalty: 0.85
+    densityPenalty: 0.85,
+    instructions: 'Take the primary set to near-failure, immediately strip 15-20% of the load without resting, repeat to failure, and strip a second time.',
+    sfrRating: 'A-'
   },
   'Hypertrophy Cluster': {
     id: 'hypertrophy_cluster',
@@ -1023,7 +1052,9 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     targetLoadPct: 72.5,
     restSeconds: 120,
     intraSetRest: 20,
-    densityPenalty: 0.90
+    densityPenalty: 0.90,
+    instructions: 'Use a moderately heavy load (approx. 72.5-75% e1RM) for repeatable sets of 6 on strict 20s intra-set pacing to maintain bar speed.',
+    sfrRating: 'A'
   },
   'Ascending Triplet + Load Drop': {
     id: 'ascending_triplet_drop',
@@ -1037,7 +1068,9 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     fatigueDropPct: 0.12,
     restSeconds: 150,
     intraSetRest: 0,
-    densityPenalty: 1.0
+    densityPenalty: 1.0,
+    instructions: 'Climb through 3 progressive effort benchmarks (x@7.0, x@8.0, x@9.0), then strip 7-12% load for a single volume down set.',
+    sfrRating: 'A-'
   },
   'Ascending RPE Ladder': {
     id: 'ascending_rpe_ladder',
@@ -1050,7 +1083,9 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     rpeStepDelta: 1.0,
     restSeconds: 120,
     intraSetRest: 0,
-    densityPenalty: 1.0
+    densityPenalty: 1.0,
+    instructions: 'Keep reps fixed while ascending effort tiers (@6.0 -> @7.0 -> @8.0). Gauge neuromuscular fatigue by how much load is needed to hit the final @8.0 threshold.',
+    sfrRating: 'B+'
   },
   'Intensity Matched': {
     id: 'intensity_matched',
@@ -1062,9 +1097,11 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     targetRpe: 8.0,
     restSeconds: 120,
     intraSetRest: 0,
-    densityPenalty: 1.0
+    densityPenalty: 1.0,
+    instructions: 'Reps and target RPE are locked across sets. Autoregulate by manually adjusting load up or down from set to set based on immediate bar speed.',
+    sfrRating: 'B'
   },
-'The 3/7 Tension Ladder': {
+  'The 3/7 Tension Ladder': {
     id: 'tension_ladder_37',
     name: 'The 3/7 Tension Ladder',
     category: 'Hypertrophy',
@@ -1076,7 +1113,7 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     restSeconds: 180,
     intraSetRest: 15,
     densityPenalty: 0.90,
-    directive: 'Advance load (+5 lbs) when all 7 reps of the 5th cluster are completed at or below RPE 9.5 on strict 15s intra-rest.',
+    instructions: 'Advance load (+5 lbs) when all 7 reps of the 5th cluster are completed at or below RPE 9.5 on strict 15s intra-rest.',
     sfrRating: 'A',
     tierScaling: {
       Main: { baseSets: 5, intraSetRest: 15, restSeconds: 180 },
@@ -1097,7 +1134,7 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     restSeconds: 150,
     intraSetRest: 0,
     densityPenalty: 1.0,
-    directive: 'Complete full ROM target reps, then immediately pulse 4-6 partials in the deep lengthened stretch to failure before re-racking.',
+    instructions: 'Complete full ROM target reps, then immediately pulse 4-6 partials in the deep lengthened stretch to failure before re-racking.',
     sfrRating: 'A+',
     tierScaling: {
       Main: { targetRpe: 8.5, restSeconds: 180 },
@@ -1117,7 +1154,7 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     restSeconds: 120,
     intraSetRest: 30,
     densityPenalty: 0.90,
-    directive: 'Continuous tension: 2s down, 2s up, zero lockouts, zero bottom pauses. 3 bursts of 30s continuous work with 30s intra-rest.',
+    instructions: 'Continuous tension: 2s down, 2s up, zero lockouts, zero bottom pauses. 3 bursts of 30s continuous work with 30s intra-rest.',
     sfrRating: 'A',
     tierScaling: {
       Main: { baseSets: 3, intraSetRest: 30 },
@@ -1141,7 +1178,9 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     fatigueDropPct: 0.10,
     restSeconds: 180,
     intraSetRest: 0,
-    densityPenalty: 1.0
+    densityPenalty: 1.0,
+    instructions: 'Calibrate neuromuscular readiness with 1 heavy top set (@8.5-9.0), then drop load 10-15% across working sets to accumulate clean strength volume.',
+    sfrRating: 'A'
   },
   'Primer Single + % Back-offs': {
     id: 'primer_single_backoffs',
@@ -1155,7 +1194,9 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     fatigueDropPct: 0.15,
     restSeconds: 180,
     intraSetRest: 0,
-    densityPenalty: 1.0
+    densityPenalty: 1.0,
+    instructions: 'Perform a single at RPE 8.0 to prime neural recruitment without inducing excessive fatigue, followed by repeat sets across at 85-88% of that single\'s load.',
+    sfrRating: 'S'
   },
   'Benchmark + Density Back-Off': {
     id: 'benchmark_density',
@@ -1169,7 +1210,9 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     fatigueDropPct: 0.20,
     restSeconds: 90,
     intraSetRest: 0,
-    densityPenalty: 0.90
+    densityPenalty: 0.90,
+    instructions: 'Establish daily e1RM with a calibrated benchmark set (1-4@8.0), followed by 6 tight speed-density back-off sets at 70-80% on strict 30-60s rest.',
+    sfrRating: 'A-'
   },
   'Submaximal AMRAP Calibration': {
     id: 'submax_amrap_cal',
@@ -1182,7 +1225,9 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     rpeStepDelta: 0.5,
     restSeconds: 180,
     intraSetRest: 0,
-    densityPenalty: 1.0
+    densityPenalty: 1.0,
+    instructions: 'Use a submaximal anchor set (10@9.0 or 5@8.0) to calibrate exact estimated 1RM, directly driving loads for subsequent back-off volume sets.',
+    sfrRating: 'A'
   },
   'Autoregulated Fatigue Stop': {
     id: 'autoreg_fatigue_stop',
@@ -1195,7 +1240,9 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     fatigueStopRpe: 9.5,
     restSeconds: 180,
     intraSetRest: 0,
-    densityPenalty: 1.0
+    densityPenalty: 1.0,
+    instructions: 'Repeat sets across at target load until fatigue causes perceived effort to cross the stop threshold (typically RPE 9.0 or a 0.5-1.0 RPE rise), then terminate the movement.',
+    sfrRating: 'A'
   },
   'Dynamic Effort (Speed Waves)': {
     id: 'dynamic_effort_waves',
@@ -1207,7 +1254,9 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     targetRpe: 7.0,
     restSeconds: 60,
     intraSetRest: 0,
-    densityPenalty: 0.80
+    densityPenalty: 0.80,
+    instructions: 'Move 60-70% e1RM bar weight with maximum intent and acceleration on short 45-60s rest intervals. Terminate early if velocity drops visibly.',
+    sfrRating: 'A'
   },
   'Intra-Set Cluster (4x[2+2+2])': {
     id: 'intra_set_cluster_222',
@@ -1220,7 +1269,9 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     targetLoadPct: 75.0,
     restSeconds: 180,
     intraSetRest: 20,
-    densityPenalty: 0.95
+    densityPenalty: 0.95,
+    instructions: 'Perform 2 reps, rack for 15-20s, perform 2 reps, rack for 15-20s, finish final 2 reps. Counts as 1 cluster working set; keeps power output high with heavy weights.',
+    sfrRating: 'A+'
   },
   'Autoregulated Fatigue Drop (-5%)': {
     id: 'autoreg_fatigue_drop_5',
@@ -1234,7 +1285,9 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     fatigueDropPct: 0.05,
     restSeconds: 180,
     intraSetRest: 0,
-    densityPenalty: 1.0
+    densityPenalty: 1.0,
+    instructions: 'Work at top load until perceived effort drifts +0.5 above target. Drop bar weight by exactly 5% and continue until hitting the fatigue ceiling again.',
+    sfrRating: 'B+'
   },
   'Prescription Table': {
     id: 'prescription_table',
@@ -1246,7 +1299,9 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     targetRpe: 8.0,
     restSeconds: 180,
     intraSetRest: 0,
-    densityPenalty: 1.0
+    densityPenalty: 1.0,
+    instructions: 'Execute strict percentage-based sets focusing on bar path consistency and crisp acceleration without grinding.',
+    sfrRating: 'B'
   },
   'Wave Loading': {
     id: 'wave_loading',
@@ -1259,7 +1314,9 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     rpeStepDelta: 0.5,
     restSeconds: 180,
     intraSetRest: 0,
-    densityPenalty: 1.0
+    densityPenalty: 1.0,
+    instructions: 'Perform Wave 1 (5, 3, 1 reps) ending submaximally; use the neural post-activation potentiation to load Wave 2 (5, 3, 1 reps) heavier than Wave 1.',
+    sfrRating: 'A'
   },
   'Double Pyramid': {
     id: 'double_pyramid',
@@ -1272,7 +1329,9 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     rpeStepDelta: 0.5,
     restSeconds: 180,
     intraSetRest: 0,
-    densityPenalty: 1.0
+    densityPenalty: 1.0,
+    instructions: 'Ramp up to a heavy double/triple apex peak, then descend the ladder while fatigue accumulates. Prioritize technical discipline on the descent.',
+    sfrRating: 'B'
   },
   'Sawtooth': {
     id: 'sawtooth',
@@ -1285,7 +1344,9 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     rpeStepDelta: 0.5,
     restSeconds: 150,
     intraSetRest: 0,
-    densityPenalty: 1.0
+    densityPenalty: 1.0,
+    instructions: 'Alternate between heavy low-rep anchor sets and lighter rep-capacity sets across consecutive rounds (e.g., 4r heavy -> 8r moderate -> 4r heavy -> 8r moderate).',
+    sfrRating: 'B+'
   },
   'Strength Cluster': {
     id: 'strength_cluster',
@@ -1297,7 +1358,9 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     targetRpe: 9.0,
     restSeconds: 180,
     intraSetRest: 20,
-    densityPenalty: 0.95
+    densityPenalty: 0.95,
+    instructions: 'Use an 85-88% e1RM load for doubles or triples on strict 30s intra-set rest. Emphasize maximal force production on every individual rep.',
+    sfrRating: 'A'
   },
   'e1RM Grounding AMRAP': {
     id: 'grounding_amrap',
@@ -1311,7 +1374,9 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     fatigueDropPct: 0.10,
     restSeconds: 180,
     intraSetRest: 0,
-    densityPenalty: 1.0
+    densityPenalty: 1.0,
+    instructions: 'Build through warm-up primers into 1 max-effort AMRAP set capped at RPE 9.5 to establish and re-anchor true current estimated 1RM.',
+    sfrRating: 'A'
   },
   'Rest-Redistribution Singles': {
     id: 'rest_redistribution_singles',
@@ -1325,7 +1390,7 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     restSeconds: 180,
     intraSetRest: 20,
     densityPenalty: 1.0,
-    directive: 'Execute every single with maximal bar acceleration. Terminate cluster series early if bar speed visibly drops (RPE > 8.5).',
+    instructions: 'Execute every single with maximal bar acceleration. Terminate cluster series early if bar speed visibly drops (RPE > 8.5).',
     sfrRating: 'S',
     tierScaling: {
       Main: { baseSets: 12, targetLoadPct: 82.5, intraSetRest: 20 },
@@ -1345,7 +1410,7 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     restSeconds: 150,
     intraSetRest: 0,
     densityPenalty: 1.0,
-    directive: 'Perform a heavy submaximal antagonist movement (e.g. Row @7.0) 60s before each pressing effort.',
+    instructions: 'Perform a heavy submaximal antagonist movement (e.g. Row @7.0) 60s before each pressing effort.',
     sfrRating: 'B+',
     tierScaling: {
       Main: { restSeconds: 180, targetRpe: 8.5 },
@@ -2332,18 +2397,20 @@ window.appActions.deleteCustomBlueprint = function(schemeKey) {
   else if (typeof window.render === 'function') window.render();
 };
 
-// 10. Update Progression Directive
-window.appActions.updateSchemeDirective = function(schemeName, directiveText) {
+// 10. Update Scheme Instructions
+window.appActions.updateSchemeInstructions = function(schemeName, instructionText) {
   if (!state.schemeBlueprints) state.schemeBlueprints = JSON.parse(JSON.stringify(DEFAULT_SCHEME_BLUEPRINTS));
   if (!state.schemeBlueprints[schemeName]) {
     const fallback = DEFAULT_SCHEME_BLUEPRINTS[schemeName] || DEFAULT_SCHEME_BLUEPRINTS['Straight Sets'];
     state.schemeBlueprints[schemeName] = JSON.parse(JSON.stringify(fallback));
   }
-  state.schemeBlueprints[schemeName].directive = directiveText;
+  state.schemeBlueprints[schemeName].instructions = instructionText;
+  state.schemeBlueprints[schemeName].directive = instructionText;
   if (typeof persist === 'function') persist();
   if (typeof safeRender === 'function') safeRender();
   else if (typeof window.render === 'function') window.render();
 };
+window.appActions.updateSchemeDirective = window.appActions.updateSchemeInstructions;
 
 // 11. Update Tier-Aware Scaling Parameter
 window.appActions.updateTierScalingParam = function(schemeName, tier, field, val) {
@@ -3295,19 +3362,27 @@ function renderRpeMatrixTable(profile) {
       (state.exerciseRepOverrides[exName] && state.exerciseRepOverrides[exName]['All'] !== undefined)
     );
 
-    // Only adjust reps for DUP or Week 1/3 if NOT locked by a scheme recipe definition
+    // Only adjust reps for DUP if NOT locked by a scheme recipe definition
     if (!hasRecipeRepLock) {
       if (phase === 'DUP' && !hasSpecificOverride && tier !== 'Assistance') {
         if (dow === 1 || dow === 5) { minRep = 3; maxRep = 5; }
         else if (dow === 3) { minRep = 8; maxRep = 12; }
         else { minRep = 5; maxRep = 7; }
       }
-
-      if (w === 1 && tier !== 'Assistance') { minRep += 1; maxRep += 1; }
-      if (w === 3 && minRep > 2 && tier !== 'Assistance') { minRep -= 1; maxRep -= 1; }
     }
 
-    const baseReps = Math.round((minRep + maxRep) / 2);
+    // Dynamic Microcycle Periodization: Linear decay from matrix ceiling to floor
+    const totalBlockWeeks = Number(curBlock?.weeks) || 3;
+    let periodizedRep = maxRep;
+
+    if (!hasRecipeRepLock && totalBlockWeeks > 1 && maxRep > minRep && tier !== 'Assistance' && phase !== 'Deload') {
+      const progressFraction = Math.min(1, Math.max(0, (w - 1) / (totalBlockWeeks - 1)));
+      periodizedRep = Math.round(maxRep - (progressFraction * (maxRep - minRep)));
+    } else if (phase === 'Deload') {
+      periodizedRep = Math.round((minRep + maxRep) / 2);
+    }
+
+    const baseReps = periodizedRep;
     const isFixedRep = (minRep === maxRep);
     const rangeStr = isFixedRep ? `${minRep}` : `${minRep}-${maxRep}`;
 
@@ -3931,7 +4006,7 @@ function renderRpeMatrixTable(profile) {
       // 19. BENCHMARK + DENSITY BACK-OFF (30-60s Rest Waves)
       // ----------------------------------------------------------------------
       if (cleanScheme === 'Benchmark + Density Back-Off') {
-        const benchReps = isFixedRep ? minRep : Math.max(1, Math.min(4, baseReps - 3));
+        const benchReps = isFixedRep ? minRep : baseReps;
         const benchRpe = isGrounding ? 9.0 : roundRpe(Number(recipe.benchRpe) || 8.0);
         const benchLoad = calcLoad(adj, getPct(benchReps, benchRpe));
 
@@ -5269,7 +5344,7 @@ if (!state.editingRpeProfile) {
   
     exportProgrammingBuilderJson() {
       const chassisData = {
-        version: core.APP_VERSION || 'v4.6.1-PWA',
+        version: window.apexCore?.APP_VERSION || 'v4.6.2-PWA',
         timestamp: new Date().toISOString(),
         phaseRepMatrix: state.phaseRepMatrix,
         schemeRecipes: state.schemeRecipes,
@@ -6191,7 +6266,7 @@ if (!state.editingRpeProfile) {
     // Data Backup, Migration & CSV Export
     exportBackup() {
       const backupData = {
-        version: core.APP_VERSION || 'v4.6.1-PWA',
+        version: window.apexCore?.APP_VERSION || 'v4.6.2-PWA',
         timestamp: new Date().toISOString(),
         settings: state.settings,
         profile: state.profile,
@@ -7210,7 +7285,7 @@ function renderBottomNav() {
                   <span>📲</span><span>Install Standalone App</span>
                 </button>
                 <div class="text-[10px] text-slate-500 text-center">
-                  <div>APEX Engine ${core.APP_VERSION || 'v4.6.1'}</div>
+                  <div>APEX Engine ${window.apexCore?.APP_VERSION || ''}</div>
                   <div class="text-slate-400 mt-0.5 truncate">${state.user ? 'User: ' + state.user.email : 'Offline Local Mode'}</div>
                 </div>
               </div>
@@ -7790,15 +7865,15 @@ const SPECIALIZED_SCHEMES = [
       </div>
     </div>
 
-    <!-- Progression Directive Input (Slate Text / No Amber) -->
+    <!-- Scheme Instructions (Slate Text / Clean) -->
     <div class="bg-input/70 p-2.5 rounded-2xl border border-sub space-y-1">
       <div class="flex justify-between items-center text-[9px] font-mono uppercase font-bold text-slate-400">
-        <span>📌 Progression Directive (If-Then Overload Rule)</span>
+        <span>Instructions</span>
       </div>
       <input type="text" 
-        value="${bp.directive || ''}" 
+        value="${bp.instructions || bp.directive || ''}" 
         placeholder="e.g. Add 5 lbs when all sets hit top rep ceiling at target RPE"
-        onchange="appActions.updateSchemeDirective('${curScheme}', this.value)" 
+        onchange="appActions.updateSchemeInstructions('${curScheme}', this.value)" 
         class="w-full bg-card border border-sub rounded-xl px-2.5 py-1 text-xs font-mono text-slate-200 focus:outline-none focus:border-accent">
     </div>
 
@@ -8169,10 +8244,7 @@ const SPECIALIZED_SCHEMES = [
                     </div>
                     <div class="flex items-center space-x-2 mt-0.5">
                       <h3 class="text-xs md:text-sm font-bold text-white">${ex.exercise}</h3>
-                      <button type="button" onclick="event.stopPropagation(); appActions.openConfig(${exIdx}, true)" class="text-[9px] font-mono px-1.5 py-0.2 rounded bg-input border border-sub text-accent hover:text-white tactile" title="Edit Modifiers / Movement">
-                        🏷️ Edit
-                      </button>
-                    </div>
+                      </div>
                     ${(() => {
                       const curBp = (state.schemeBlueprints && state.schemeBlueprints[ex.scheme]) || (DEFAULT_SCHEME_BLUEPRINTS && DEFAULT_SCHEME_BLUEPRINTS[ex.scheme]);
                       return curBp?.directive ? `
@@ -8200,14 +8272,14 @@ const SPECIALIZED_SCHEMES = [
 
                         <button type="button" onclick="appActions.toggleCardMenu(${exIdx}, event)" class="p-1 rounded-xl bg-input border border-sub text-slate-300 hover:text-white text-xs w-7 h-7 flex items-center justify-center font-bold tactile">⋮</button>
                   ${state.cardMenuOpen === exIdx ? `
-                    <div class="absolute right-0 top-8 w-48 bg-card border border-sub rounded-2xl shadow-2xl z-40 p-1.5 font-mono text-[11px] space-y-0.5">
-                      <button type="button" onclick="appActions.openConfig(${exIdx}, true)" class="w-full text-left p-1.5 rounded-lg hover:bg-slate-800 flex items-center space-x-1.5 text-accent"><span>🏷️</span><span>Edit Modifiers / Lift</span></button>
-                      <button type="button" onclick="appActions.moveActiveEx(${exIdx}, -1)" class="w-full text-left p-1.5 rounded-lg hover:bg-slate-800 flex items-center space-x-1.5 text-slate-200"><span>↑</span><span>Move Up</span></button>
-                      <button type="button" onclick="appActions.moveActiveEx(${exIdx}, 1)" class="w-full text-left p-1.5 rounded-lg hover:bg-slate-800 flex items-center space-x-1.5 text-slate-200"><span>↓</span><span>Move Down</span></button>
-                      <button type="button" onclick="appActions.openPlanner(${exIdx})" class="w-full text-left p-1.5 rounded-lg hover:bg-blue-600 hover:text-white flex items-center space-x-1.5 text-blue-300"><span>🧮</span><span>Planner & History</span></button>
-                      <button type="button" onclick="appActions.deleteActiveEx(${exIdx})" class="w-full text-left p-1.5 rounded-lg hover:bg-red-950 text-red-400 flex items-center space-x-1.5 border-t border-sub mt-0.5"><span>✕</span><span>Remove Movement</span></button>
-                    </div>
-                  ` : ''}
+        <div class="absolute right-0 top-8 w-48 bg-card border border-sub rounded-2xl shadow-2xl z-40 p-1.5 font-mono text-[11px] space-y-0.5">
+          <button type="button" onclick="appActions.openConfig(${exIdx}, true)" class="w-full text-left p-1.5 rounded-lg hover:bg-slate-800 text-slate-200">Edit Modifiers / Lift</button>
+          <button type="button" onclick="appActions.moveActiveEx(${exIdx}, -1)" class="w-full text-left p-1.5 rounded-lg hover:bg-slate-800 flex items-center space-x-1.5 text-slate-200"><span>↑</span><span>Move Up</span></button>
+          <button type="button" onclick="appActions.moveActiveEx(${exIdx}, 1)" class="w-full text-left p-1.5 rounded-lg hover:bg-slate-800 flex items-center space-x-1.5 text-slate-200"><span>↓</span><span>Move Down</span></button>
+          <button type="button" onclick="appActions.openPlanner(${exIdx})" class="w-full text-left p-1.5 rounded-lg hover:bg-blue-600 hover:text-white text-slate-200">Planner & History</button>
+          <button type="button" onclick="appActions.deleteActiveEx(${exIdx})" class="w-full text-left p-1.5 rounded-lg hover:bg-red-950 text-red-400 flex items-center space-x-1.5 border-t border-sub mt-0.5"><span>✕</span><span>Remove Movement</span></button>
+        </div>
+      ` : ''}
                 </div>
               </div>
 
