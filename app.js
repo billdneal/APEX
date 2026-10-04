@@ -8246,13 +8246,14 @@ const SPECIALIZED_SCHEMES = [
                       <h3 class="text-xs md:text-sm font-bold text-white">${ex.exercise}</h3>
                       </div>
                     ${(() => {
-                      const curBp = (state.schemeBlueprints && state.schemeBlueprints[ex.scheme]) || (DEFAULT_SCHEME_BLUEPRINTS && DEFAULT_SCHEME_BLUEPRINTS[ex.scheme]);
-                      return curBp?.directive ? `
-                        <div class="text-[9px] font-mono text-slate-300 bg-input/80 border border-sub/80 px-2.5 py-1.5 rounded-xl mt-1 leading-relaxed">
-                          📌 <b class="text-accent">Rule:</b> ${curBp.directive}
-                        </div>
-                      ` : '';
-                    })()}
+  const curBp = (state.schemeBlueprints && state.schemeBlueprints[ex.scheme]) || (DEFAULT_SCHEME_BLUEPRINTS && DEFAULT_SCHEME_BLUEPRINTS[ex.scheme]);
+  const text = curBp?.instructions || curBp?.directive;
+  return text ? `
+    <div class="text-[9.5px] font-mono text-slate-300 bg-input/80 border border-sub/80 px-2.5 py-1.5 rounded-xl mt-1 leading-relaxed">
+      ${text}
+    </div>
+  ` : '';
+})()}
                     <div class="flex flex-wrap gap-1 mt-1 cursor-pointer" onclick="event.stopPropagation(); appActions.openConfig(${exIdx}, true)" title="Tap to adjust modifiers">
                       ${cleanMods.length ? cleanMods.map(m => `<span class="text-[8px] font-mono bg-input text-slate-300 hover:text-white px-1.5 py-0.2 rounded border border-sub">${m}</span>`).join('') : `<span class="text-[8px] font-mono text-slate-500 hover:text-accent">+ Add Modifiers</span>`}
                     </div>
