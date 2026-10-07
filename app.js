@@ -5670,6 +5670,11 @@ if (!state.editingRpeProfile) {
     },
 
     toggleCardCollapse(exIdx) { state.collapsedCards[exIdx] = !state.collapsedCards[exIdx]; safeRender(); },
+    toggleInstructionCollapse(exIdx) {
+      if (!state.collapsedInstructions) state.collapsedInstructions = {};
+      state.collapsedInstructions[exIdx] = !state.collapsedInstructions[exIdx];
+      safeRender();
+    },
     toggleCardMenu(exIdx, e) { if (e?.stopPropagation) e.stopPropagation(); state.cardMenuOpen = (state.cardMenuOpen === exIdx) ? null : exIdx; safeRender(); },
     closeCardMenu() { if (state.cardMenuOpen !== null) { state.cardMenuOpen = null; safeRender(); } },
 
@@ -6097,7 +6102,27 @@ if (!state.editingRpeProfile) {
         safeRender();
       }
     },
+updateSplitSlotTier(splitName, slotIdx, newTier) {
+      if (state.customSplitBlueprints?.[splitName]?.[slotIdx]) {
+        state.customSplitBlueprints[splitName][slotIdx].tier = newTier;
+        persist();
+        safeRender();
+      }
+    },
 
+    toggleSplitGppMode(splitName) {
+      if (!state.customSplitBlueprints?.[splitName]) return;
+      const slots = state.customSplitBlueprints[splitName];
+      const isCurrentlyAllAssistance = slots.every(s => s.tier === 'Assistance');
+
+      slots.forEach((s, idx) => {
+        s.tier = isCurrentlyAllAssistance ? (idx === 0 ? 'Main' : 'Secondary') : 'Assistance';
+      });
+
+      persist();
+      showToast(isCurrentlyAllAssistance ? `Restored standard tiers for ${splitName}` : `Set ${splitName} to GPP (All Assistance)`);
+      safeRender();
+    },
     selectProgramPreset(progId) { state.selectedProgramId = progId; safeRender(); },
     setProgramPresetDays(days) { state.selectedProgramDays = Number(days); safeRender(); },
 
@@ -8246,14 +8271,29 @@ const SPECIALIZED_SCHEMES = [
                       <h3 class="text-xs md:text-sm font-bold text-white">${ex.exercise}</h3>
                       </div>
                     ${(() => {
-  const curBp = (state.schemeBlueprints && state.schemeBlueprints[ex.scheme]) || (DEFAULT_SCHEME_BLUEPRINTS && DEFAULT_SCHEME_BLUEPRINTS[ex.scheme]);
-  const text = curBp?.instructions || curBp?.directive;
-  return text ? `
-    <div class="text-[9.5px] font-mono text-slate-300 bg-input/80 border border-sub/80 px-2.5 py-1.5 rounded-xl mt-1 leading-relaxed">
-      ${text}
-    </div>
-  ` : '';
-})()}
+                      if (isCollapsed) return '';
+                      const curBp = (state.schemeBlueprints && state.schemeBlueprints[ex.scheme]) || (DEFAULT_SCHEME_BLUEPRINTS && DEFAULT_SCHEME_BLUEPRINTS[ex.scheme]);
+                      const text = curBp?.instructions || curBp?.directive;
+                      if (!text) return '';
+
+                      if (!state.collapsedInstructions) state.collapsedInstructions = {};
+                      const isInstCollapsed = Boolean(state.collapsedInstructions[exIdx]);
+
+                      return `
+                        <div class="mt-1" onclick="event.stopPropagation()">
+                          <div class="flex items-center space-x-1 cursor-pointer select-none text-[9px] font-mono text-slate-400 hover:text-slate-200" 
+                               onclick="appActions.toggleInstructionCollapse(${exIdx})">
+                            <span>${isInstCollapsed ? '▶' : '▼'}</span>
+                            <span class="uppercase tracking-wider font-bold">Instructions</span>
+                          </div>
+                          ${!isInstCollapsed ? `
+                            <div class="text-[9.5px] font-mono text-slate-300 bg-input/80 border border-sub/80 px-2.5 py-1.5 rounded-xl mt-1 leading-relaxed">
+                              ${text}
+                            </div>
+                          ` : ''}
+                        </div>
+                      `;
+                    })()}
                     <div class="flex flex-wrap gap-1 mt-1 cursor-pointer" onclick="event.stopPropagation(); appActions.openConfig(${exIdx}, true)" title="Tap to adjust modifiers">
                       ${cleanMods.length ? cleanMods.map(m => `<span class="text-[8px] font-mono bg-input text-slate-300 hover:text-white px-1.5 py-0.2 rounded border border-sub">${m}</span>`).join('') : `<span class="text-[8px] font-mono text-slate-500 hover:text-accent">+ Add Modifiers</span>`}
                     </div>
@@ -8442,7 +8482,15 @@ const SPECIALIZED_SCHEMES = [
           <div class="bg-card-sub p-3.5 rounded-2xl border border-sub space-y-2 shadow-md">
             <div class="flex justify-between items-start">
               <div>
-                <span class="text-[9px] font-mono uppercase bg-input px-2 py-0.5 rounded-md text-slate-400 border border-sub">${slot.tier} • ${slot.category}</span>
+                <div class="flex items-center space-x-1.5 mb-1 font-mono">
+  <span class="text-[9px] text-slate-400 uppercase mr-1">${slot.category}</span>${['Main', 'Secondary', 'Assistance'].map(t => `
+    <button type="button" 
+      onclick="appActions.updateSplitSlotTier('${state.editingBlueprintName}', ${slotIdx}, '${t}')" 
+      class="px-1.5 py-0.2 rounded text-[8.5px] border font-bold transition tactile ${slot.tier === t ? 'bg-accent/20 text-accent border-accent' : 'bg-input text-slate-400 border-sub hover:text-white'}">
+      ${t}
+    </button>
+  `).join('')}
+</div>
                 <div class="text-xs md:text-sm font-bold text-white mt-1">${slot.exercise}</div>
               </div>
               <div class="flex items-center space-x-1">
@@ -9507,8 +9555,13 @@ const SPECIALIZED_SCHEMES = [
                     <h3 class="text-sm font-bold text-white">${activeBlueprintName}</h3>
                   </div>
                   <div class="flex items-center space-x-1.5">
-                    <button type="button" onclick="appActions.addSlotToBlueprint('${activeBlueprintName}')" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl tactile shadow">+ Slot</button>
-                    <button type="button" onclick="appActions.deleteBlueprint('${activeBlueprintName}')" class="px-2.5 py-1.5 bg-input text-slate-400 hover:text-red-400 border border-sub rounded-xl tactile">Delete</button>
+                  <button type="button" onclick="appActions.toggleSplitGppMode('${state.editingBlueprintName}')" class="px-2.5 py-1.5 bg-input border border-sub text-teal-300 hover:text-white rounded-xl text-xs font-bold font-mono tactile">
+  🏃 GPP Mode
+</button>
+<button type="button" onclick="appActions.addSlotToBlueprint('${state.editingBlueprintName}')" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded-xl text-white font-bold text-xs tactile">
+  + Add Slot
+</button>
+                  <button type="button" onclick="appActions.deleteBlueprint('${activeBlueprintName}')" class="px-2.5 py-1.5 bg-input text-slate-400 hover:text-red-400 border border-sub rounded-xl tactile">Delete</button>
                   </div>
                 </div>
 
