@@ -8482,15 +8482,7 @@ const SPECIALIZED_SCHEMES = [
           <div class="bg-card-sub p-3.5 rounded-2xl border border-sub space-y-2 shadow-md">
             <div class="flex justify-between items-start">
               <div>
-                <div class="flex items-center space-x-1.5 mb-1 font-mono">
-  <span class="text-[9px] text-slate-400 uppercase mr-1">${slot.category}</span>${['Main', 'Secondary', 'Assistance'].map(t => `
-    <button type="button" 
-      onclick="appActions.updateSplitSlotTier('${state.editingBlueprintName}', ${slotIdx}, '${t}')" 
-      class="px-1.5 py-0.2 rounded text-[8.5px] border font-bold transition tactile ${slot.tier === t ? 'bg-accent/20 text-accent border-accent' : 'bg-input text-slate-400 border-sub hover:text-white'}">
-      ${t}
-    </button>
-  `).join('')}
-</div>
+                <span class="text-[9px] font-mono text-accent uppercase font-bold">${slot.tier} • ${slot.category}</span>
                 <div class="text-xs md:text-sm font-bold text-white mt-1">${slot.exercise}</div>
               </div>
               <div class="flex items-center space-x-1">
@@ -9505,7 +9497,15 @@ const SPECIALIZED_SCHEMES = [
             <div class="bg-input p-3 rounded-2xl border border-sub space-y-1.5 shadow-sm">
               <div class="flex justify-between items-start">
                 <div>
-                  <span class="text-[9px] uppercase font-bold text-accent">${slot.tier} • ${slot.category}</span>
+                  <div class="flex items-center space-x-1.5 font-mono mb-0.5">
+  <span class="text-[9px] text-accent uppercase font-bold mr-1">${slot.category}</span>${['Main', 'Secondary', 'Assistance'].map(t => `
+    <button type="button" 
+      onclick="appActions.updateSplitSlotTier('${activeBlueprintName}', ${idx}, '${t}')" 
+      class="px-1.5 py-0.5 rounded text-[8.5px] border font-bold transition tactile ${slot.tier === t ? 'bg-accent/20 text-accent border-accent' : 'bg-input text-slate-400 border-sub hover:text-white'}">
+      ${t}
+    </button>
+  `).join('')}
+</div>
                   <h4 class="text-xs font-bold text-white mt-0.5">${slot.exercise}</h4>
                 </div>
                 <button type="button" onclick="appActions.deleteBlueprintSlot('${activeBlueprintName}', ${idx})" class="text-slate-400 hover:text-red-400 text-xs font-bold px-2 py-1 bg-card-sub rounded-lg border border-sub tactile">✕</button>
@@ -9555,7 +9555,9 @@ const SPECIALIZED_SCHEMES = [
                     <h3 class="text-sm font-bold text-white">${activeBlueprintName}</h3>
                   </div>
                   <div class="flex items-center space-x-1.5">
-                  <button type="button" onclick="appActions.toggleSplitGppMode('${state.editingBlueprintName}')" class="px-2.5 py-1.5 bg-input border border-sub text-teal-300 hover:text-white rounded-xl text-xs font-bold font-mono tactile">
+                  <button type="button" 
+  onclick="appActions.toggleSplitGppMode('${activeBlueprintName}')" 
+  class="px-2.5 py-1.5 rounded-xl border font-mono text-xs font-bold transition tactile ${activeSlots.every(s => s.tier === 'Assistance') && activeSlots.length > 0 ? 'bg-accent/20 text-accent border-accent' : 'bg-input text-slate-400 border-sub hover:text-white'}">
   🏃 GPP Mode
 </button>
 <button type="button" onclick="appActions.addSlotToBlueprint('${state.editingBlueprintName}')" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded-xl text-white font-bold text-xs tactile">
