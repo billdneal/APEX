@@ -7196,7 +7196,7 @@ function renderBottomNav() {
       const validScreens = [
         'calendar', 'logger', 'staging', 'checkin', 'blocks', 'resources', 
         'profile', 'history_review', 'settings', 'about', 'library', 'splits', 
-        'analytics', 'programming_builder', 'prs'
+        'analytics', 'programming_builder', 'prs', 'guide'
       ];
       if (!validScreens.includes(state.screen)) {
         state.screen = 'calendar';
@@ -7298,6 +7298,9 @@ function renderBottomNav() {
                   </button>
                   <button type="button" onclick="appActions.navigate('settings', event)" class="w-full text-left p-2.5 rounded-xl border border-sub flex items-center space-x-2.5 tactile ${state.screen === 'settings' ? 'bg-blue-600 text-white font-bold' : 'bg-card-sub text-slate-300 hover:bg-slate-800'}">
                     <span><svg class="w-4 h-4 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></span><span>Settings</span>
+                  </button>
+                  <button type="button" onclick="appActions.navigate('guide', event)" class="w-full text-left p-2.5 rounded-xl border border-sub flex items-center space-x-2.5 tactile ${state.screen === 'guide' ? 'bg-blue-600 text-white font-bold' : 'bg-card-sub text-slate-300 hover:text-white hover:bg-slate-800 font-semibold'}">
+                    <span><svg class="w-4 h-4 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span><span>User Guide</span>
                   </button>
                   <button type="button" onclick="appActions.navigate('about', event)" class="w-full text-left p-2.5 rounded-xl border border-sub flex items-center space-x-2.5 tactile ${state.screen === 'about' ? 'bg-blue-600 text-white font-bold' : 'bg-card-sub text-slate-300 hover:bg-slate-800'}">
                     <span><svg class="w-4 h-4 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="16" y2="12"/><line x1="12" x2="12.01" y1="8" y2="8"/></svg></span><span>System</span>
@@ -10023,7 +10026,98 @@ const SPECIALIZED_SCHEMES = [
             </main>
         `;
       }
+// 15. USER GUIDE SCREEN
+      else if (state.screen === 'guide') {
+        html += `
+          <main class="flex-1 min-h-0 overflow-y-auto space-y-3.5 max-w-4xl mx-auto w-full pr-0.5" onclick="appActions.closeCardMenu()">
+            <div class="flex justify-between items-center border-b border-sub pb-2 text-xs font-bold text-white font-mono w-full">
+              <span class="flex items-center gap-1.5">
+                <svg class="w-4 h-4 text-accent shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                APEX User Guide
+              </span>
+              <button type="button" onclick="appActions.navigate('calendar', event)" class="text-slate-400 hover:text-white underline">Calendar</button>
+            </div>
 
+            <!-- Overview Banner -->
+            <div class="p-3.5 bg-card-sub rounded-2xl border border-sub space-y-1.5 font-mono text-xs shadow-sm">
+              <span class="text-[10px] text-accent font-bold uppercase tracking-wider">System Overview</span>
+              <p class="text-[10px] text-slate-300 leading-relaxed">
+                APEX is an autoregulated periodization engine designed to prescribe loads, manage systemic fatigue, and decay rep targets across training mesocycles. Tap any topic below for quick operational guidelines.
+              </p>
+            </div>
+
+            <div class="space-y-2.5 font-mono text-xs">
+              
+              <!-- Topic 1: Mesocycles & Block Periodization -->
+              <details class="bg-card-sub rounded-2xl border border-sub p-3 cursor-pointer group shadow-sm">
+                <summary class="font-bold text-white text-xs flex justify-between items-center select-none">
+                  <span class="flex items-center gap-2">
+                    <span class="text-accent">01.</span>
+                    <span>Mesocycles & Block Periodization</span>
+                  </span>
+                  <span class="text-accent group-open:rotate-90 transition-transform">▸</span>
+                </summary>
+                <div class="pt-2 text-slate-300 text-[11px] leading-relaxed space-y-2 border-t border-sub/50 mt-2.5">
+                  <p>• <b>Timeline Anchor:</b> Set your start date in the Mesocycle Builder. APEX calculates the active week (W1 intro through W3 overload) automatically based on calendar dates.</p>
+                  <p>• <b>Linear Rep Decay:</b> The Phase Rep Matrix governs rep targets week to week. Across a 3-week block, targets naturally decay from high-rep ceilings down to low-rep floors for Main and Secondary compound movements.</p>
+                  <p>• <b>Transition Wizard:</b> At the end of a mesocycle, launch the Wizard from the Mesocycle screen. It audits completed set volumes against landmark thresholds (MEV/MAV/MRV), calculates muscle fatigue, and blends tested grounding e1RMs into your new baseline anchor.</p>
+                </div>
+              </details>
+
+              <!-- Topic 2: Daily Staging & Readiness -->
+              <details class="bg-card-sub rounded-2xl border border-sub p-3 cursor-pointer group shadow-sm">
+                <summary class="font-bold text-white text-xs flex justify-between items-center select-none">
+                  <span class="flex items-center gap-2">
+                    <span class="text-accent">02.</span>
+                    <span>Daily Staging & Readiness</span>
+                  </span>
+                  <span class="text-accent group-open:rotate-90 transition-transform">▸</span>
+                </summary>
+                <div class="pt-2 text-slate-300 text-[11px] leading-relaxed space-y-2 border-t border-sub/50 mt-2.5">
+                  <p>• <b>Readiness Check-In:</b> Logging morning bodyweight and rating the 7 physiological markers generates a rolling 3-day readiness score (Primed, Optimal, Guarded, Fatigued).</p>
+                  <p>• <b>Staging Screen:</b> Selecting a date lets you preview planned movements, customize rep schemes, and inspect planned session strain against your recovery ceiling before heading onto the floor.</p>
+                  <p>• <b>Top Single (1@8):</b> Enabling the top single toggle injects an un-fatigued neural primer set prior to working volume to gauge true daily neuromuscular readiness.</p>
+                </div>
+              </details>
+
+              <!-- Topic 3: Active Workout Logger -->
+              <details class="bg-card-sub rounded-2xl border border-sub p-3 cursor-pointer group shadow-sm">
+                <summary class="font-bold text-white text-xs flex justify-between items-center select-none">
+                  <span class="flex items-center gap-2">
+                    <span class="text-accent">03.</span>
+                    <span>Active Workout Logger & Set Controls</span>
+                  </span>
+                  <span class="text-accent group-open:rotate-90 transition-transform">▸</span>
+                </summary>
+                <div class="pt-2 text-slate-300 text-[11px] leading-relaxed space-y-2 border-t border-sub/50 mt-2.5">
+                  <p>• <b>Prescriptions:</b> Set targets read as <code>[Load]x[Reps]r @[Target RPE]</code>. Enter actual weight, reps completed, and actual RPE in discrete 0.5 increments, then tap ✓ to log.</p>
+                  <p>• <b>Inline Load Calculator (⚡ Bolt Icon):</b> Tapping the bolt on any exercise card opens the load drawer to reverse-calculate e1RMs, inspect past lift performances, or project target weights directly onto open sets.</p>
+                  <p>• <b>Grounding Set (🔥):</b> Flags a top working set to push to @9.0. If you outperform your current anchor, it writes a new e1RM baseline into the system.</p>
+                  <p>• <b>Skip Back-Offs (⚡):</b> Truncates remaining down-sets if systemic fatigue spikes or time runs short.</p>
+                  <p>• <b>Fatigue Safeguard:</b> If an actual set overshoots target RPE by ≥1.0, APEX trips an overshoot warning with a one-tap <code>-5%</code> load reduction button.</p>
+                </div>
+              </details>
+
+              <!-- Topic 4: Tiers, Schemes & Microcycles -->
+              <details class="bg-card-sub rounded-2xl border border-sub p-3 cursor-pointer group shadow-sm">
+                <summary class="font-bold text-white text-xs flex justify-between items-center select-none">
+                  <span class="flex items-center gap-2">
+                    <span class="text-accent">04.</span>
+                    <span>Tiers, Schemes & Microcycle Blueprints</span>
+                  </span>
+                  <span class="text-accent group-open:rotate-90 transition-transform">▸</span>
+                </summary>
+                <div class="pt-2 text-slate-300 text-[11px] leading-relaxed space-y-2 border-t border-sub/50 mt-2.5">
+                  <p>• <b>Movement Tiers:</b> <code>Main</code> receives primary compound loading with full periodization and grounding controls; <code>Secondary</code> receives supplemental compound volume; <code>Assistance</code> receives accessory hypertrophy rep windows.</p>
+                  <p>• <b>GPP Session Mode:</b> Tapping the GPP button in the Microcycle Builder instantly switches all movement slots in a blueprint to Assistance tier.</p>
+                  <p>• <b>Rep Scheme Builder:</b> Configure working set counts, down-set drops, cluster intra-set rests, and RPE ramps globally or scoped strictly to specific phases.</p>
+                </div>
+              </details>
+
+            </div>
+          </main>
+        `;
+      }
       // ======================================================================
       // MODAL PORTALS (Always Mounted Outside Main Scroller)
       // ======================================================================
