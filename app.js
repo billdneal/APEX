@@ -6742,12 +6742,17 @@ window.appActions.removeRpeMatrixSet = function(idx) {
         font-family: '${font}', monospace, sans-serif !important;
       }
       #app main::after {
-          content: '';
-              display: block;
-                  height: 6.5rem;
-                      width: 100%;
-                          flex-shrink: 0;
-                            }
+        content: '';
+        display: block;
+        height: 6.5rem;
+        width: 100%;
+        flex-shrink: 0;
+      }
+      @media (min-width: 768px) {
+        #app main::after {
+          height: 1.5rem !important;
+        }
+      }
     `;
     document.documentElement.style.fontFamily = `'${font}', monospace, sans-serif`;
 
@@ -7174,7 +7179,7 @@ function renderBottomNav() {
   ];
 
   return `
-    <nav class="fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-md border-t border-sub px-3 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] flex justify-around items-center max-w-lg mx-auto shadow-2xl">
+    <nav class="fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-md border-t border-sub px-3 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] flex justify-around items-center max-w-lg mx-auto shadow-2xl md:hidden">
       ${navItems.map(item => `
         <button type="button" onclick="${item.action}" class="flex-1 flex flex-col items-center justify-center space-y-1 relative tactile transition ${item.active ? 'text-accent font-bold' : 'text-slate-400 hover:text-slate-200'}">
           <div class="relative">
@@ -7218,22 +7223,50 @@ function renderBottomNav() {
         : '☁️ <span class="text-blue-400 font-bold">Cloud Sync</span>';
 
       let html = `
-        <header class="flex justify-between items-center pb-2.5 border-b border-sub relative shrink-0">
-          <div class="flex items-center space-x-2.5">
-            <button type="button" onclick="appActions.toggleDrawer(event)" class="p-1.5 rounded-xl bg-card-sub border border-sub text-slate-300 hover:text-white flex flex-col justify-center items-center space-y-1 w-8 h-8 tactile shadow-sm">
+        <header class="flex justify-between items-center pb-2.5 border-b border-sub relative shrink-0 gap-2">
+          <!-- Left: Logo & Mobile Hamburger -->
+          <div class="flex items-center space-x-2.5 shrink-0">
+            <button type="button" onclick="appActions.toggleDrawer(event)" class="p-1.5 rounded-xl bg-card-sub border border-sub text-slate-300 hover:text-white flex flex-col justify-center items-center space-y-1 w-8 h-8 tactile shadow-sm md:hidden">
               <span class="w-4 h-0.5 bg-slate-300 rounded"></span>
               <span class="w-4 h-0.5 bg-slate-300 rounded"></span>
               <span class="w-4 h-0.5 bg-slate-300 rounded"></span>
             </button>
             <div class="flex items-center space-x-1.5 cursor-pointer" onclick="appActions.navigate('calendar', event)">
               <span class="font-black tracking-wider text-base text-white font-mono">APEX</span>
-              <span class="text-[9px] font-mono uppercase px-1.5 py-0.2 rounded bg-input border border-sub text-slate-300 hover:text-white font-bold">PRO</span>
+              <span class="text-[9px] font-mono uppercase px-1.5 py-0.2 rounded bg-input border border-sub text-accent font-bold">PRO</span>
             </div>
             <button type="button" onclick="appActions.navigate('blocks', event)" class="text-[10px] font-mono bg-card-sub px-2.5 py-1 rounded-lg border border-sub text-slate-300 truncate max-w-[160px] tactile">
               ${currentRealTimePos.phase} (W${currentRealTimePos.week}/${currentRealTimePos.block.weeks})
             </button>
           </div>
-          <div class="flex items-center space-x-2 font-mono text-xs">
+
+          <!-- Center: Desktop Navigation Bar (Visible on Laptop >= 768px) -->
+          <nav class="hidden md:flex items-center space-x-1 font-mono text-xs flex-wrap justify-center">
+            ${[
+              { id: 'calendar', label: 'Home' },
+              { id: isWorkoutActive ? 'logger' : 'staging', label: isWorkoutActive ? 'Active Workout 🔥' : 'Stage' },
+              { id: 'programming_builder', label: 'Schemes' },
+              { id: 'splits', label: 'Microcycles' },
+              { id: 'blocks', label: 'Mesocycles' },
+              { id: 'analytics', label: 'Analytics' },
+              { id: 'guide', label: 'User Guide' },
+              { id: 'settings', label: 'Settings' }
+            ].map(tab => {
+              const isActive = (tab.id === 'logger' || tab.id === 'staging') 
+                ? (state.screen === 'logger' || state.screen === 'staging') 
+                : (state.screen === tab.id);
+              return `
+                <button type="button" 
+                  onclick="appActions.navigate('${tab.id}', event)" 
+                  class="px-2.5 py-1 rounded-xl font-bold transition tactile ${isActive ? 'bg-accent/20 text-accent border border-accent/40 shadow-sm' : 'text-slate-400 hover:text-white hover:bg-input border border-transparent'}">
+                  ${tab.label}
+                </button>
+              `;
+            }).join('')}
+          </nav>
+
+          <!-- Right: Sync Status -->
+          <div class="flex items-center space-x-2 font-mono text-xs shrink-0">
             <button type="button" id="cloud-sync-btn" onclick="appActions.openAuthModal()" class="px-2.5 py-1 bg-card-sub border border-sub hover:border-blue-600 rounded-xl text-[11px] font-semibold text-slate-300 flex items-center space-x-1 tactile shadow-sm">
               ${syncBtnContent}
             </button>
@@ -8427,7 +8460,7 @@ const SPECIALIZED_SCHEMES = [
         }).join('');
 
         html += `
-          <main class="flex-1 min-h-0 overflow-y-auto space-y-3 w-full pr-0.5" onclick="appActions.closeCardMenu()">
+          <main class="flex-1 min-h-0 overflow-y-auto space-y-3 max-w-6xl mx-auto w-full pr-0.5" onclick="appActions.closeCardMenu()">
             <div class="sticky top-0 z-30 bg-card/95 backdrop-blur-md border border-sub p-2.5 rounded-2xl flex justify-between items-center text-[10px] md:text-xs font-mono shadow-xl w-full">
               <div class="flex items-center space-x-2">
                 <span class="text-slate-400 font-semibold">⏱ Session:</span>
@@ -8439,7 +8472,7 @@ const SPECIALIZED_SCHEMES = [
               </div>
             </div>
 
-            <div class="space-y-2.5 w-full">${exercisesHtml}</div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 w-full items-start">${exercisesHtml}</div>
             <button type="button" onclick="appActions.openAdd(true)" class="w-full py-2.5 bg-card-sub rounded-2xl text-xs font-bold text-slate-300 border border-sub hover:text-white tactile font-mono">+ Add Movement</button>
             
             <div class="space-y-2 pt-1.5 border-t border-sub/50 font-mono w-full">
