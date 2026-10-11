@@ -7226,7 +7226,7 @@ function renderBottomNav() {
         <header class="flex justify-between items-center pb-2.5 border-b border-sub relative shrink-0 gap-2">
           <!-- Left: Logo & Mobile Hamburger -->
           <div class="flex items-center space-x-2.5 shrink-0">
-            <button type="button" onclick="appActions.toggleDrawer(event)" class="p-1.5 rounded-xl bg-card-sub border border-sub text-slate-300 hover:text-white flex flex-col justify-center items-center space-y-1 w-8 h-8 tactile shadow-sm md:hidden">
+            <button type="button" onclick="appActions.toggleDrawer(event)" class="p-1.5 rounded-xl bg-card-sub border border-sub text-slate-300 hover:text-white flex flex-col justify-center items-center space-y-1 w-8 h-8 tactile shadow-sm">
               <span class="w-4 h-0.5 bg-slate-300 rounded"></span>
               <span class="w-4 h-0.5 bg-slate-300 rounded"></span>
               <span class="w-4 h-0.5 bg-slate-300 rounded"></span>
@@ -7363,7 +7363,7 @@ function renderBottomNav() {
 
         let cellsHtml = '';
         for (let i = firstDay - 1; i >= 0; i--) {
-          cellsHtml += `<div class="min-h-[58px] sm:min-h-[64px] rounded-xl p-1 flex flex-col justify-between bg-card-sub/20 opacity-20 border border-sub"><span class="text-[10px] font-mono text-slate-500">${prevDays - i}</span></div>`;
+          cellsHtml += `<div class="min-h-[58px] sm:min-h-[64px] md:min-h-[85px] rounded-xl p-1 flex flex-col justify-between bg-card-sub/20 opacity-20 border border-sub"><span class="text-[10px] font-mono text-slate-500">${prevDays - i}</span></div>`;
         }
         for (let d = 1; d <= daysInMonth; d++) {
           const k = formatIsoDate(state.year, state.month, d);
@@ -7404,7 +7404,7 @@ function renderBottomNav() {
           }
 
           cellsHtml += `
-            <div onclick="appActions.selectDate(${d})" class="min-h-[58px] sm:min-h-[64px] rounded-xl p-1 sm:p-1.5 flex flex-col justify-between cursor-pointer transition bg-card-sub hover:border-blue-400 tactile ${isSelected ? 'ring-2 ring-blue-500 shadow-accent' : (isToday ? 'border-2 border-accent shadow-sm' : 'border border-sub')}">
+            <div onclick="appActions.selectDate(${d})" class="min-h-[58px] sm:min-h-[64px] md:min-h-[85px] rounded-xl p-1 sm:p-1.5 flex flex-col justify-between cursor-pointer transition bg-card-sub hover:border-blue-400 tactile ${isSelected ? 'ring-2 ring-blue-500 shadow-accent' : (isToday ? 'border-2 border-accent shadow-sm' : 'border border-sub')}">
               <div class="flex justify-between items-center w-full">
                 <span class="text-xs md:text-sm font-mono font-bold ${isToday ? 'text-accent font-black' : 'text-slate-300'}">${d}</span>
                 ${isToday ? `<span class="w-1.5 h-1.5 rounded-full bg-accent animate-ping"></span>` : ''}
@@ -7416,11 +7416,11 @@ function renderBottomNav() {
         const totalCells = firstDay + daysInMonth;
         const rem = (7 - (totalCells % 7)) % 7;
         for (let n = 1; n <= rem; n++) {
-          cellsHtml += `<div class="min-h-[58px] sm:min-h-[64px] rounded-xl p-1 flex flex-col justify-between bg-card-sub/20 opacity-20 border border-sub"><span class="text-[10px] font-mono text-slate-500">${n}</span></div>`;
+          cellsHtml += `<div class="min-h-[58px] sm:min-h-[64px] md:min-h-[85px] rounded-xl p-1 flex flex-col justify-between bg-card-sub/20 opacity-20 border border-sub"><span class="text-[10px] font-mono text-slate-500">${n}</span></div>`;
         }
 
         html += `
-          <main class="flex-1 min-h-0 overflow-y-auto space-y-3 w-full px-0 sm:px-1" onclick="appActions.closeCardMenu()">
+          <main class="flex-1 min-h-0 overflow-y-auto space-y-3 max-w-5xl mx-auto w-full px-0 sm:px-1" onclick="appActions.closeCardMenu()">
             <div class="w-full bg-card-sub/40 p-2 sm:p-3.5 rounded-2xl sm:rounded-3xl border border-sub space-y-2.5 backdrop-blur-md">
               <div class="flex justify-between items-center px-1 sm:px-2 py-0.5">
                 <button type="button" onclick="appActions.changeMonth(-1)" class="w-8 h-8 rounded-xl bg-card-sub border border-sub flex items-center justify-center text-xs text-slate-300 hover:text-white tactile">&lsaquo;</button>
