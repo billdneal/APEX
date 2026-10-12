@@ -7420,7 +7420,7 @@ function renderBottomNav() {
         }
 
         html += `
-          <main class="flex-1 min-h-0 overflow-y-auto space-y-3 max-w-5xl mx-auto w-full px-0 sm:px-1" onclick="appActions.closeCardMenu()">
+          <main class="flex-1 min-h-0 overflow-y-auto space-y-3 w-full px-0 sm:px-1" onclick="appActions.closeCardMenu()">
             <div class="w-full bg-card-sub/40 p-2 sm:p-3.5 rounded-2xl sm:rounded-3xl border border-sub space-y-2.5 backdrop-blur-md">
               <div class="flex justify-between items-center px-1 sm:px-2 py-0.5">
                 <button type="button" onclick="appActions.changeMonth(-1)" class="w-8 h-8 rounded-xl bg-card-sub border border-sub flex items-center justify-center text-xs text-slate-300 hover:text-white tactile">&lsaquo;</button>
@@ -7776,7 +7776,7 @@ const SPECIALIZED_SCHEMES = [
       `;
     }
         html += `
-          <main class="flex-1 min-h-0 overflow-y-auto space-y-3 max-w-4xl mx-auto w-full pr-0.5" onclick="appActions.closeCardMenu()">
+          <main class="flex-1 min-h-0 overflow-y-auto space-y-3 w-full pr-0.5" onclick="appActions.closeCardMenu()">
             <div class="flex justify-between items-center border-b border-sub pb-2 text-xs font-bold text-white font-mono w-full">
               <span class="flex items-center gap-1.5">
   <svg class="w-4 h-4 text-accent shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
@@ -8658,7 +8658,7 @@ const SPECIALIZED_SCHEMES = [
         }).join('');
 
         html += `
-          <main class="flex-1 min-h-0 overflow-y-auto space-y-3 max-w-2xl mx-auto w-full pr-0.5" onclick="appActions.closeCardMenu()">
+          <main class="flex-1 min-h-0 overflow-y-auto space-y-3 w-full pr-0.5" onclick="appActions.closeCardMenu()">
             <div class="flex justify-between items-center font-mono w-full">
               <div>
                 <h2 class="text-base font-bold text-white">${monthNames[state.month]} ${state.selectedDay} Readiness Intake</h2>
@@ -8693,7 +8693,7 @@ const SPECIALIZED_SCHEMES = [
         const displaySrpe = srpeNum <= 5.5 ? '&lt;6.0' : srpeNum.toFixed(1);
 
         html += `
-          <main class="flex-1 min-h-0 overflow-y-auto space-y-3 max-w-3xl mx-auto w-full pr-0.5" onclick="appActions.closeCardMenu()">
+          <main class="flex-1 min-h-0 overflow-y-auto space-y-3 w-full pr-0.5" onclick="appActions.closeCardMenu()">
             <div class="flex justify-between items-center border-b border-sub pb-2 font-mono w-full">
               <div>
                 <span class="text-[9px] text-emerald-400 uppercase font-bold">✓ Historical Record</span>
@@ -9028,7 +9028,7 @@ const SPECIALIZED_SCHEMES = [
         const curLifter = state.profile?.lifterType || 'Natural';
 
         html += `
-          <main class="flex-1 min-h-0 overflow-y-auto space-y-3 max-w-2xl mx-auto w-full pr-0.5" onclick="appActions.closeCardMenu()">
+          <main class="flex-1 min-h-0 overflow-y-auto space-y-3 w-full pr-0.5" onclick="appActions.closeCardMenu()">
             <div class="flex justify-between items-center border-b border-sub pb-2 text-xs font-bold text-white font-mono w-full">
               <span class="flex items-center gap-1.5">
   <svg class="w-4 h-4 text-accent shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>
@@ -9135,7 +9135,7 @@ const SPECIALIZED_SCHEMES = [
         `).join('');
 
         html += `
-          <main class="flex-1 min-h-0 overflow-y-auto space-y-3.5 max-w-4xl mx-auto w-full pr-0.5" onclick="appActions.closeCardMenu()">
+          <main class="flex-1 min-h-0 overflow-y-auto space-y-3.5 w-full pr-0.5" onclick="appActions.closeCardMenu()">
             <div class="flex justify-between items-center text-xs font-bold border-b border-sub pb-2 text-slate-200 font-mono w-full">
               <span class="flex items-center gap-1.5">
   <svg class="w-4 h-4 text-accent shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
@@ -9338,7 +9338,7 @@ const SPECIALIZED_SCHEMES = [
         `).join('');
 
         html += `
-          <main class="flex-1 min-h-0 overflow-y-auto space-y-3.5 max-w-4xl mx-auto w-full pr-0.5" onclick="appActions.closeCardMenu()">
+          <main class="flex-1 min-h-0 overflow-y-auto space-y-3.5 w-full pr-0.5" onclick="appActions.closeCardMenu()">
             <div class="flex justify-between items-center border-b border-sub pb-2 text-xs font-bold text-white font-mono w-full">
               <span class="flex items-center gap-1.5">
   <svg class="w-4 h-4 text-accent shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="16" y2="12"/><line x1="12" x2="12.01" y1="8" y2="8"/></svg>
@@ -10062,7 +10062,7 @@ const SPECIALIZED_SCHEMES = [
 // 15. USER GUIDE SCREEN
       else if (state.screen === 'guide') {
         html += `
-          <main class="flex-1 min-h-0 overflow-y-auto space-y-3.5 max-w-4xl mx-auto w-full pr-0.5" onclick="appActions.closeCardMenu()">
+          <main class="flex-1 min-h-0 overflow-y-auto space-y-3.5 w-full pr-0.5" onclick="appActions.closeCardMenu()">
             <div class="flex justify-between items-center border-b border-sub pb-2 text-xs font-bold text-white font-mono w-full">
               <span class="flex items-center gap-1.5">
                 <svg class="w-4 h-4 text-accent shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
@@ -10753,7 +10753,7 @@ const SPECIALIZED_SCHEMES = [
         const filteredPRs = (state.prLedger || []).filter(p => filterLift === 'All' || p.lift === filterLift);
 
         html += `
-        <main class="flex-1 min-h-0 overflow-y-auto space-y-3 max-w-4xl mx-auto w-full pr-0.5" onclick="appActions.closeCardMenu()">
+        <main class="flex-1 min-h-0 overflow-y-auto space-y-3 w-full pr-0.5" onclick="appActions.closeCardMenu()">
       <div class="flex justify-between items-center border-b border-sub pb-2 text-xs font-bold text-white font-mono w-full">
         <span class="flex items-center gap-1.5">
           <svg class="w-4 h-4 text-accent shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
