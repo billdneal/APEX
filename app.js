@@ -4607,6 +4607,61 @@ if (!state.editingRpeProfile) {
   core.blendE1rmValues = blendE1rmValues;
   window.apexCore.blendE1rmValues = blendE1rmValues;
 
+// ============================================================================
+// Unified Multi-Engine e1RM Calculator
+// Evaluates performance across APEX (RPE/RIR), Epley, Brzycki, Wathan, & Lombardi
+// Incorporates biomechanical bodyweight factoring via getExerciseLoad
+// ============================================================================
+function getUnifiedE1RM(weight, reps, rpe = 10, exName = '') {
+  const w = Number(weight) || 0;
+  const r = Number(reps) || 0;
+  if (w <= 0 || r <= 0) return 0;
+
+  // 1. Resolve true biomechanical system load (e.g. +90% BW for Dips, +100% BW for Pull-Ups)
+  const loadResolver = core.getExerciseLoad || window.apexCore?.getExerciseLoad;
+  const effectiveLoad = typeof loadResolver === 'function' ? loadResolver(exName, w) : w;
+
+  // 2. Read user's chosen formula from Settings
+  const formula = (state.settings?.oneRmFormula || 'apex').toLowerCase();
+
+  // Mode A: APEX RPE / RIR Decay Engine
+  if (formula === 'apex') {
+    const pctResolver = core.getPct || window.apexCore?.getPct;
+    const pct = typeof pctResolver === 'function' ? pctResolver(r, Number(rpe) || 10) : (100 - (r - 1 + (10 - (Number(rpe) || 10))) * 2.15);
+    return Math.round(effectiveLoad / (Math.max(30, pct) / 100));
+  }
+
+  // Mode B: Classical formulas adjusted for Reps in Reserve (RIR)
+  const rir = Math.max(0, 10 - (Number(rpe) || 10));
+  const effectiveReps = r + rir;
+
+  if (formula === 'brzycki') {
+    return Math.round(effectiveLoad * (36 / Math.max(1, 37 - effectiveReps)));
+  }
+  if (formula === 'wathan') {
+    return Math.round((100 * effectiveLoad) / (48.8 + 53.8 * Math.exp(-0.075 * effectiveReps)));
+  }
+  if (formula === 'lombardi') {
+    return Math.round(effectiveLoad * Math.pow(effectiveReps, 0.10));
+  }
+
+  // Fallback: Epley
+  return Math.round(effectiveLoad * (1 + (effectiveReps / 30)));
+}
+
+// Export to both internal core and global window scopes
+core.getUnifiedE1RM = getUnifiedE1RM;
+window.getUnifiedE1RM = getUnifiedE1RM;
+if (window.apexCore) window.apexCore.getUnifiedE1RM = getUnifiedE1RM;
+
+  // Alias legacy calls so all existing calculators automatically use the unified engine
+function calculate1RmEquivalent(w, r, rpe = 10, ex = '') {
+  return getUnifiedE1RM(w, r, rpe, ex);
+}
+core.calculate1RmEquivalent = calculate1RmEquivalent;
+window.calculate1RmEquivalent = calculate1RmEquivalent;
+if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquivalent;
+
   // Dedicated execution router referencing Part 2's Mathematical Derivation Engine
   function dispatchBuildSets(scheme, e1rmVal, readyFactor = 1.0, tier = 'Main', exercise = 'Squat', mods = [], opts = {}) {
     const builder = core.buildSets || window.apexCore?.buildSets || window.buildSets;
@@ -6874,6 +6929,8 @@ window.appActions.setBlockProgressionMode = function(idx, mode) {
     if (tf === '3M') return now - (90 * 86400000);
     if (tf === '6M') return now - (180 * 86400000);
     if (tf === '1Y') return now - (365 * 86400000);
+    if (tf === '3Y') return now - (1095 * dayMs);
+    if (tf === '5Y') return now - (1825 * dayMs);    
     return 0;
   }
 
@@ -7054,12 +7111,6 @@ window.appActions.setBlockProgressionMode = function(idx, mode) {
 
         <polyline fill="none" stroke="${strokeColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" points="${ptsStr}" />
         ${xTicks}
-
-        ${coords.map((c, i) => `
-          <circle cx="${c.x}" cy="${c.y}" r="${i === n - 1 ? 4 : 2.5}" fill="${i === n - 1 ? '#ffffff' : strokeColor}" stroke="${strokeColor}" stroke-width="1.5">
-            <title>${c.p.date}: ${c.p.val} ${unit}</title>
-          </circle>
-        `).join('')}
       </svg>
     `;
   }
@@ -9805,7 +9856,7 @@ const SPECIALIZED_SCHEMES = [
             <div class="bg-card-sub p-2 rounded-2xl border border-sub flex items-center justify-between font-mono text-xs shadow-sm">
               <span class="text-[10px] text-slate-400 font-bold uppercase pl-1">Horizon:</span>
               <div class="flex gap-1">
-                ${['1M', '3M', '6M', '1Y', 'ALL'].map(tf => `
+                ${['1M', '3M', '6M', '1Y', '3Y', '5Y', 'ALL'].map(tf => `
                   <button type="button" onclick="appActions.setAnalyticsTimeframe('${tf}')" class="px-2.5 py-1 rounded-xl text-[10px] font-bold transition tactile ${activeTf === tf ? 'bg-blue-600 text-white shadow' : 'bg-input text-slate-400 border border-sub'}">
                     ${tf}
                   </button>
