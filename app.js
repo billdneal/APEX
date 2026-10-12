@@ -6924,15 +6924,20 @@ window.appActions.setBlockProgressionMode = function(idx, mode) {
   }
 
   function getTimeframeCutoff(tf) {
-    const now = Date.now();
-    if (tf === '1M') return now - (30 * 86400000);
-    if (tf === '3M') return now - (90 * 86400000);
-    if (tf === '6M') return now - (180 * 86400000);
-    if (tf === '1Y') return now - (365 * 86400000);
-    if (tf === '3Y') return now - (1095 * dayMs);
-    if (tf === '5Y') return now - (1825 * dayMs);    
-    return 0;
-  }
+  const now = Date.now();
+  const dayMs = 86400000; // 24 hours in milliseconds
+
+  if (tf === '1M') return now - (30 * dayMs);
+  if (tf === '3M') return now - (90 * dayMs);
+  if (tf === '6M') return now - (180 * dayMs);
+  if (tf === '1Y') return now - (365 * dayMs);
+  if (tf === '3Y') return now - (1095 * dayMs);
+  if (tf === '5Y') return now - (1825 * dayMs);
+  if (tf === 'All') return 0;
+
+  // Default fallback (3 months)
+  return now - (90 * dayMs);
+}
 
   function getEverUsedLiftVariants() {
     const variants = new Set();
@@ -7040,7 +7045,8 @@ window.appActions.setBlockProgressionMode = function(idx, mode) {
     return totals;
   }
 
-  function renderRichChartSvg(dataPoints, unit = 'lbs', strokeColor = '#38bdf8') {
+  function renderRichChartSvg(dataPoints, unit = 'lbs', strokeColor = null) {
+  strokeColor = 'var(--accent-primary, var(--accent, ' + (state.settings?.customAccent || '#ff4d00') + '))';
     const cleanPoints = (dataPoints || []).filter(p => p && typeof p.val === 'number' && !isNaN(p.val) && isFinite(p.val));
     if (cleanPoints.length < 2) {
       return `<div class="text-slate-500 text-xs text-center py-10 font-mono">Need at least 2 recorded sessions in this timeframe to plot trend curve.</div>`;
