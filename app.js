@@ -3292,7 +3292,7 @@ function renderRpeMatrixTable(profile) {
 
     // Microcycle RPE Progression Toggle: strict 0.5 RPE increments
     const enableRpeProgression = recipe.enableRpeProgression !== undefined ? Boolean(recipe.enableRpeProgression) : true;
-    const weekRpeBump = enableRpeProgression ? Math.max(0, (w - 1) * 0.5) : 0; // Exactly 0.0, 0.5, 1.0...
+    const weekRpeBump = (enableRpeProgression && curBlock?.progressionMode !== 'load') ? Math.max(0, (w - 1) * 0.5) : 0; // Exactly 0.0, 0.5, 1.0...
 
     // Working Set Volume Sizing Matrix
     let baseWorkingSets = Number(recipe.baseSets || recipe.setsCount) || 3;
@@ -3373,9 +3373,11 @@ function renderRpeMatrixTable(profile) {
 
     // Dynamic Microcycle Periodization: Linear decay from matrix ceiling to floor
     const totalBlockWeeks = Number(curBlock?.weeks) || 3;
-    let periodizedRep = maxRep;
+const blockProgMode = curBlock?.progressionMode || (['Accumulation', 'Hypertrophy', 'Deload', 'Resensitization'].includes(phase) ? 'load' : 'intensity');
+let periodizedRep = maxRep;
 
-    if (!hasRecipeRepLock && totalBlockWeeks > 1 && maxRep > minRep && tier !== 'Assistance' && phase !== 'Deload') {
+// Only decay reps if the block is set to 'intensity' (wave) mode
+if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 && maxRep > minRep && tier !== 'Assistance' && phase !== 'Deload') {
       const progressFraction = Math.min(1, Math.max(0, (w - 1) / (totalBlockWeeks - 1)));
       periodizedRep = Math.round(maxRep - (progressFraction * (maxRep - minRep)));
     } else if (phase === 'Deload') {
@@ -6022,7 +6024,7 @@ if (!state.editingRpeProfile) {
     // Mesocycle & Blueprint Architecture
     setActiveBlock(idx) { state.activeBlockIdx = idx; state.activeWeek = 1; persist(); window.pushToCloud(false); safeRender(); },
     setActiveWeek(w) { state.activeWeek = w; persist(); window.pushToCloud(false); safeRender(); },
-    addMacroBlock() { state.mesocycle.push({ id: Date.now(), phase: state.newBlockPhase, weeks: Number(state.newBlockWeeks) }); syncMesocycleProgression(); persist(); window.pushToCloud(false); safeRender(); },
+    addMacroBlock() { state.mesocycle.push({ id: Date.now(), phase: state.newBlockPhase, weeks: Number(state.newBlockWeeks), progressionMode: (['Accumulation', 'Hypertrophy', 'Deload', 'Resensitization'].includes(state.newBlockPhase) ? 'load' : 'intensity') }); syncMesocycleProgression(); persist(); window.pushToCloud(false); safeRender(); },
     
     deleteMacroBlock(idx) {
       if (state.mesocycle.length <= 1) return;
@@ -6033,6 +6035,15 @@ if (!state.editingRpeProfile) {
       safeRender();
     },
 
+    setBlockProgressionMode(idx, mode) {
+      if (state.mesocycle && state.mesocycle[idx]) {
+        state.mesocycle[idx].progressionMode = mode;
+        persist();
+        if (window.pushToCloud) window.pushToCloud(false);
+        safeRender();
+      }
+    },
+    
     moveMacroBlock(idx, dir) {
       const target = idx + dir;
       if (target < 0 || target >= state.mesocycle.length) return;
@@ -6697,6 +6708,13 @@ window.appActions.removeRpeMatrixSet = function(idx) {
     state.activeRepOverrideEx = (state.activeRepOverrideEx === exName) ? null : exName;
     state.overrideDraft = { phase: 'All', minReps: 8, maxReps: 12 };
     window.render();
+  };
+window.appActions.setBlockProgressionMode = function(idx, mode) {
+    if (state.mesocycle && state.mesocycle[idx]) {
+      state.mesocycle[idx].progressionMode = mode;
+      if (typeof window.saveState === 'function') window.saveState();
+      window.render();
+    }
   };
 
   function applyGlobalThemeAndFont() {
@@ -8787,6 +8805,22 @@ const SPECIALIZED_SCHEMES = [
               <div class="flex justify-between items-center text-[11px]">
                 <span class="text-slate-400">Duration: <b class="text-slate-200">${b.weeks} Weeks</b></span>
                 ${isActive ? `<span class="text-[9px] px-2 py-0.5 rounded-md bg-blue-600 text-white font-bold">ACTIVE</span>` : `<button type="button" onclick="appActions.setActiveBlock(${idx})" class="text-[9px] px-2 py-0.5 rounded-md bg-input text-blue-400 border border-blue-800 hover:bg-blue-900 tactile">Set Active</button>`}
+              </div>
+              <!-- Per-Block Progression Mode Toggle -->
+              <div class="flex items-center justify-between pt-2 border-t border-sub/50 text-[10px] font-mono">
+                <span class="text-slate-400">Progression:</span>
+                <div class="flex items-center space-x-1 bg-input p-0.5 rounded-lg border border-sub">
+                  <button type="button" 
+                    onclick="appActions.setBlockProgressionMode(${idx}, 'intensity')" 
+                    class="px-2 py-0.5 rounded text-[9px] font-bold transition tactile ${(!b.progressionMode || b.progressionMode === 'intensity') ? 'bg-accent text-white shadow-sm' : 'text-slate-400 hover:text-white'}">
+                    ⚡ Intensity (Wave)
+                  </button>
+                  <button type="button" 
+                    onclick="appActions.setBlockProgressionMode(${idx}, 'load')" 
+                    class="px-2 py-0.5 rounded text-[9px] font-bold transition tactile ${(b.progressionMode === 'load') ? 'bg-accent text-white shadow-sm' : 'text-slate-400 hover:text-white'}">
+                    📈 Load (Static)
+                  </button>
+                </div>
               </div>
             </div>
           `;
