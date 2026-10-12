@@ -9477,7 +9477,7 @@ const SPECIALIZED_SCHEMES = [
                   </p>
                 </div>
                 <div class="bg-input p-3 rounded-2xl border border-sub space-y-1 md:col-span-2">
-                  <div class="text-xs font-bold text-pink-400">Lombardi Power Law (1989)</div>
+                  <div class="text-xs font-bold style="color: var(--accent-primary)"">Lombardi Power Law (1989)</div>
                   <div class="text-[9px] text-slate-300 font-mono">Formula: 1RM = Weight &times; Reps^0.10</div>
                   <p class="text-[10px] text-slate-400 leading-relaxed">
                     Non-linear geometric power function. Provides a gentle decay curve that models fatigue resistance on high mechanical tension efforts.
@@ -10013,7 +10013,7 @@ const SPECIALIZED_SCHEMES = [
               <div class="bg-card-sub p-4 rounded-3xl border border-sub space-y-3 font-mono text-xs shadow-xl">
                 <div class="flex justify-between items-center border-b border-sub pb-2">
                   <div>
-                    <span class="text-[10px] text-teal-400 font-bold uppercase">Bodyweight Telemetry</span>
+                    <span class="text-[10px] style="color: var(--accent-primary) font-bold uppercase">Bodyweight Telemetry</span>
                     <div class="text-[9px] text-slate-400">${bwRecords.length} check-ins recorded in ${activeTf}</div>
                   </div>
                   <button type="button" onclick="appActions.toggleBwView()" class="px-3 py-1.5 bg-input border border-sub text-slate-200 rounded-xl font-bold tactile hover:text-white text-xs">
@@ -10025,7 +10025,7 @@ const SPECIALIZED_SCHEMES = [
                   <div class="grid grid-cols-4 gap-1.5 text-center text-xs">
                     <div class="bg-input p-2 rounded-xl border border-sub">
                       <div class="text-[8px] text-slate-400 uppercase">Current</div>
-                      <div class="text-xs md:text-sm font-black text-teal-300 mt-0.5">${bwRecords[bwRecords.length - 1].val}lbs</div>
+                      <div class="text-xs md:text-sm font-black style="color: var(--accent-primary) mt-0.5">${bwRecords[bwRecords.length - 1].val}lbs</div>
                     </div>
                     <div class="bg-input p-2 rounded-xl border border-sub">
                       <div class="text-[8px] text-slate-400 uppercase">Low / High</div>
@@ -10033,7 +10033,7 @@ const SPECIALIZED_SCHEMES = [
                     </div>
                     <div class="bg-input p-2 rounded-xl border border-sub">
                       <div class="text-[8px] text-slate-400 uppercase">Net &Delta;</div>
-                      <div class="text-xs font-bold ${bwRecords[bwRecords.length - 1].val - bwRecords[0].val >= 0 ? 'text-teal-400' : 'text-amber-400'} mt-0.5">
+                      <div class="text-xs font-bold ${bwRecords[bwRecords.length - 1].val - bwRecords[0].val >= 0 ? 'style="color: var(--accent-primary)' : 'text-amber-400'} mt-0.5">
                         ${bwRecords[bwRecords.length - 1].val - bwRecords[0].val >= 0 ? '+' : ''}${Math.round((bwRecords[bwRecords.length - 1].val - bwRecords[0].val) * 10) / 10}lbs
                       </div>
                     </div>
@@ -10077,7 +10077,7 @@ const SPECIALIZED_SCHEMES = [
               <div class="bg-card-sub p-4 rounded-3xl border border-sub space-y-3 font-mono text-xs shadow-xl">
                 <div class="flex justify-between items-center border-b border-sub pb-2">
                   <div>
-                    <span class="text-[10px] text-pink-400 font-bold uppercase">Foster Session Load (AU) & Readiness</span>
+                    <span class="text-[10px] font-bold uppercase" style="color: var(--accent-primary)">Foster Session Load</span>
                     <div class="text-[9px] text-slate-400">Training impulse = Session Duration (min) &times; Foster sRPE</div>
                   </div>
                   <span class="text-xs font-bold text-white">${fatigueRecords.length} Sessions</span>
@@ -10105,7 +10105,7 @@ const SPECIALIZED_SCHEMES = [
                 </div>
 
                 <div class="space-y-1 max-h-48 overflow-y-auto pr-1 pt-1 border-t border-sub/50">
-                  <span class="text-[10px] text-pink-400 font-bold uppercase">Completed Stress Logs</span>
+                  <span class="text-[10px] font-bold uppercase" style="color: var(--accent-primary)">Completed Stress Load</span>
                   ${fatigueRecords.slice().reverse().map(f => `
                     <div class="bg-input p-2 rounded-xl border border-sub flex justify-between items-center text-[10px]">
                       <div>
