@@ -108,9 +108,87 @@
       background: var(--accent-primary);
     }
   </style>
+  <style id="apex-master-accent-override">
+    /* 1. Text Colors: Route all blues, greens, teals, purples, and pinks to Accent */
+    [class*="text-sky-"],
+    [class*="text-cyan-"],
+    [class*="text-teal-"],
+    [class*="text-emerald-"],
+    [class*="text-green-"],
+    [class*="text-pink-"],
+    [class*="text-rose-"],
+    [class*="text-indigo-"],
+    [class*="text-purple-"],
+    [class*="text-violet-"],
+    [class*="text-blue-"] {
+      color: var(--accent-primary) !important;
+    }
+
+    /* 2. Solid Buttons, Active Toggles & Progress Bars */
+    .bg-sky-400, .bg-sky-500, .bg-sky-600,
+    .bg-cyan-400, .bg-cyan-500, .bg-cyan-600,
+    .bg-teal-400, .bg-teal-500, .bg-teal-600,
+    .bg-emerald-400, .bg-emerald-500, .bg-emerald-600,
+    .bg-green-400, .bg-green-500, .bg-green-600,
+    .bg-pink-400, .bg-pink-500, .bg-pink-600,
+    .bg-rose-400, .bg-rose-500, .bg-rose-600,
+    .bg-indigo-400, .bg-indigo-500, .bg-indigo-600,
+    .bg-purple-400, .bg-purple-500, .bg-purple-600,
+    .bg-blue-400, .bg-blue-500, .bg-blue-600, .bg-blue-700 {
+      background-color: var(--accent-primary) !important;
+      color: #000000 !important;
+    }
+
+    /* 3. Translucent Badges & Dark Tinted Callout Boxes (/10, /20, -900, -950) */
+    [class*="bg-sky-"][class*="/"], [class*="bg-sky-9"],
+    [class*="bg-cyan-"][class*="/"], [class*="bg-cyan-9"],
+    [class*="bg-teal-"][class*="/"], [class*="bg-teal-9"],
+    [class*="bg-emerald-"][class*="/"], [class*="bg-emerald-9"],
+    [class*="bg-green-"][class*="/"], [class*="bg-green-9"],
+    [class*="bg-pink-"][class*="/"], [class*="bg-pink-9"],
+    [class*="bg-rose-"][class*="/"], [class*="bg-rose-9"],
+    [class*="bg-indigo-"][class*="/"], [class*="bg-indigo-9"],
+    [class*="bg-purple-"][class*="/"], [class*="bg-purple-9"],
+    [class*="bg-blue-"][class*="/"], [class*="bg-blue-9"] {
+      background-color: color-mix(in srgb, var(--accent-primary) 12%, transparent) !important;
+    }
+
+    /* 4. Borders & Focus Rings */
+    [class*="border-sky-"], [class*="border-cyan-"], [class*="border-teal-"],
+    [class*="border-emerald-"], [class*="border-green-"], [class*="border-pink-"],
+    [class*="border-rose-"], [class*="border-indigo-"], [class*="border-purple-"],
+    [class*="border-blue-"] {
+      border-color: color-mix(in srgb, var(--accent-primary) 35%, transparent) !important;
+    }
+
+    [class*="ring-sky-"], [class*="ring-cyan-"], [class*="ring-teal-"],
+    [class*="ring-emerald-"], [class*="ring-green-"], [class*="ring-indigo-"],
+    [class*="ring-purple-"], [class*="ring-blue-"] {
+      --tw-ring-color: color-mix(in srgb, var(--accent-primary) 50%, transparent) !important;
+    }
+
+    /* 5. Tailwind Gradients (Progress bars, banners) */
+    [class*="from-sky-"], [class*="from-cyan-"], [class*="from-teal-"],
+    [class*="from-emerald-"], [class*="from-green-"], [class*="from-indigo-"],
+    [class*="from-purple-"], [class*="from-blue-"] {
+      --tw-gradient-from: var(--accent-primary) !important;
+    }
+    [class*="to-sky-"], [class*="to-cyan-"], [class*="to-teal-"],
+    [class*="to-emerald-"], [class*="to-green-"], [class*="to-indigo-"],
+    [class*="to-purple-"], [class*="to-blue-"] {
+      --tw-gradient-to: color-mix(in srgb, var(--accent-primary) 65%, transparent) !important;
+    }
+
+    /* 6. Native Browser Sliders, Checkboxes & Radio Buttons */
+    input[type="range"],
+    input[type="checkbox"],
+    input[type="radio"] {
+      accent-color: var(--accent-primary) !important;
+    }
+  </style>
 </head>
 <body>
   <div id="app"></div>
-  <script src="./app.js?v=3"></script>
+  <script src="./app.js?v=4"></script>
 </body>
 </html>
