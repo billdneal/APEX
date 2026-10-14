@@ -7449,36 +7449,48 @@ function renderBottomNav() {
           const hasWorkoutEntry = Boolean(log?.workout?.done || hasSavedStaged || (isWorkoutActive && state.activeWorkoutDateKey === k));
 
           let badges = '';
-          if (log?.weight !== undefined && log?.weight !== null && log?.weight !== '') {
-            badges += `
-              <span class="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded bg-teal-500/20 border border-teal-500/40 flex items-center justify-center text-teal-300 shrink-0" title="BW: ${log.weight} lbs">
-                <svg class="w-2 h-2 sm:w-2.5 sm:h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="3" y="3" width="18" height="18" rx="4" />
-                  <rect x="8" y="6" width="8" height="3" rx="1" fill="currentColor" />
-                </svg>
-              </span>
-            `;
-          }
-          if (log?.recovery?.score) {
-            badges += `
-              <span class="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded bg-pink-500/20 border border-pink-500/40 flex items-center justify-center text-pink-300 shrink-0" title="Readiness: ${log.recovery.score}%">
-                <svg class="w-2 h-2 sm:w-2.5 sm:h-2.5" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-                </svg>
-              </span>
-            `;
-          }
-          if (hasWorkoutEntry) {
-            badges += `
-              <span class="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-300 shrink-0" title="Workout Session">
-                <svg class="w-2 h-2 sm:w-2.5 sm:h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M2 12h20M6 8v8M18 8v8M4 10v4M20 10v4"/>
-                </svg>
-              </span>
-            `;
-          }
+            let backBadges = '';
+            if (log?.weight !== undefined && log?.weight !== null && log?.weight !== '') {
+              backBadges += `
+                <span class="w-4 h-4 sm:w-[18px] sm:h-[18px] rounded-md bg-slate-800/95 border border-slate-700/80 flex items-center justify-center text-slate-400 shrink-0" title="Bodyweight: ${log.weight}">
+                  <svg class="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                    <rect x="3" y="3" width="18" height="18" rx="4" />
+                    <rect x="8" y="6" width="8" height="3" rx="1" fill="currentColor" />
+                  </svg>
+                </span>
+              `;
+            }
+            if (log?.recovery?.score) {
+              backBadges += `
+                <span class="w-4 h-4 sm:w-[18px] sm:h-[18px] rounded-md bg-slate-800/95 border border-slate-700/80 flex items-center justify-center text-slate-400 shrink-0" title="Readiness: ${log.recovery.score}%">
+                  <svg class="w-2.5 h-2.5" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                  </svg>
+                </span>
+              `;
+            }
 
-          cellsHtml += `
+            let frontBadge = '';
+            if (hasWorkoutEntry) {
+              frontBadge = `
+                <span class="relative z-10 ${backBadges ? '-mt-1.5' : ''} w-4 h-4 sm:w-[18px] sm:h-[18px] rounded-md flex items-center justify-center shrink-0 ring-2 ring-[#0b0d12] shadow-sm" style="background-color: var(--accent-primary); color: #000000;" title="Workout Session">
+                  <svg class="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M2 12h20M6 8v8M18 8v8M4 10v4M20 10v4"/>
+                  </svg>
+                </span>
+              `;
+            }
+
+            if (backBadges || frontBadge) {
+              badges = `
+                <div class="flex flex-col items-center justify-center w-full my-auto pt-0.5">
+                  ${backBadges ? `<div class="relative z-0 flex items-center justify-center gap-1">${backBadges}</div>` : ''}
+                  ${frontBadge}
+                </div>
+              `;
+            }
+
+            cellsHtml += `
             <div onclick="appActions.selectDate(${d})" class="min-h-[58px] sm:min-h-[64px] md:min-h-[85px] rounded-xl p-1 sm:p-1.5 flex flex-col justify-between cursor-pointer transition bg-card-sub hover:border-blue-400 tactile ${isSelected ? 'ring-2 ring-blue-500 shadow-accent' : (isToday ? 'border-2 border-accent shadow-sm' : 'border border-sub')}">
               <div class="flex justify-between items-center w-full">
                 <span class="text-xs md:text-sm font-mono font-bold ${isToday ? 'text-accent font-black' : 'text-slate-300'}">${d}</span>
