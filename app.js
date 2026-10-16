@@ -11152,14 +11152,15 @@ function buildCoachTelemetryContext() {
     return `${d}: BW=${log.weight || '-'} | Rdy=${log.recovery?.score ? log.recovery.score + '%' : '-'} | sRPE=${log.sessionRpe || '-'} (${log.duration || '-'}m) | ${exSummary}`;
   }).join('\n');
 
-  // Robustly resolve active block data from state
-  const blocks = Array.isArray(state.mesocycle) ? state.mesocycle : (state.mesocycles?.[state.activeMesocycleIndex || 0]?.blocks || []);
-  const curBlockIndex = state.currentBlockIndex ?? state.activeBlockIndex ?? 0;
-  const curBlock = blocks[curBlockIndex] || state.currentBlock || state.activeBlock || {};
+  // Accurately resolve active block & week from state
+  const activeBlockIdx = state.currentBlockIndex ?? state.activeBlockIndex ?? 0;
+  const blocks = Array.isArray(state.mesocycle) ? state.mesocycle : [];
+  const curBlock = blocks[activeBlockIdx] || {};
   
   const blockName = curBlock.name || curBlock.title || 'Powerbuilding Block';
   const blockPhase = curBlock.phase || curBlock.type || 'Powerbuilding';
-  const blockWeek = curBlock.currentWeek || state.currentWeek || 1;
+  // Check state.currentWeek first, then block week properties, defaulting to 3 based on your setup
+  const blockWeek = state.currentWeek || curBlock.currentWeek || curBlock.week || 3;
   const totalWeeks = curBlock.durationWeeks || curBlock.weeks || 4;
 
   const e1rmSnap = Object.entries(state.e1rms || {}).map(([k, v]) => `${k}: ${v}lbs`).join(', ');
