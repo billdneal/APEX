@@ -7255,13 +7255,21 @@ function renderBottomNav() {
       icon: `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="20" x2="6" y2="16"></line><line x1="12" y1="20" x2="12" y2="10"></line><line x1="18" y1="20" x2="18" y2="4"></line></svg>`
     },
     {
-      id: 'settings',
-      label: 'Settings',
-      action: "appActions.navigate('settings', event)",
-      active: cur === 'settings',
-      icon: `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>`
-    }
-  ];
+        id: 'settings',
+        label: 'Settings',
+        action: "appActions.navigate('settings', event)",
+        active: cur === 'settings',
+        icon: `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>`
+      },
+      {
+        id: 'coach',
+        label: 'Coach',
+        action: "appActions.toggleCoachDrawer(event)",
+        active: !!state.coachDrawerOpen,
+        badge: !!getApexCoachConfig().apiKey,
+        icon: `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8L12 2z"/></svg>`
+      }
+    ];
 
   return `
     <nav class="fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-md border-t border-sub px-3 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] flex justify-around items-center max-w-lg mx-auto shadow-2xl md:hidden">
@@ -9263,6 +9271,8 @@ const SPECIALIZED_SCHEMES = [
               <button type="button" onclick="appActions.navigate('calendar', event)" class="text-slate-400 hover:text-white">✕</button>
             </div>
 
+            ${renderApexCoachSettingsCard()}
+
             <!-- Global Phase Rep Matrix Table -->
             <div class="p-4 bg-card-sub rounded-3xl border border-sub space-y-3 shadow-md font-mono text-xs w-full">
               <div class="flex justify-between items-center border-b border-sub pb-2">
@@ -10987,3 +10997,404 @@ html += renderBottomNav();
     bootApex();
   }
 })();
+
+/* ================================================================= */
+/* APEX AI COACH: ENGINE, DOCTRINES & SETTINGS UI                    */
+/* ================================================================= */
+
+const COACH_DOCTRINES = {
+  adaptive: {
+    title: "Adaptive Intelligence",
+    subtitle: "Bottom-Up • Time-to-Peak & Empirical ROI",
+    prompt: "You are the APEX Adaptive Intelligence Coach. You treat every microcycle as an empirical experiment. Analyze historical Time-to-Peak (TTP) and Foster Session Load trends. If a lifter overshoots RPE, aggressively protect their TTP curve by recommending backoff load/set reductions. When performance plateaus, recommend strategic 1-2 week resensitization pivots."
+  },
+  phased: {
+    title: "Phased Potentiation",
+    subtitle: "Top-Down • Sequential Funnel",
+    prompt: "You are the APEX Phased Potentiation Coach. You enforce strict sequential block architecture: Accumulation (volume/work capacity) -> Transmutation (powerbuilding) -> Realization (peak strength) -> Deload. Protect weekly set volume during Accumulation and bar intensity during Realization."
+  },
+  concurrent: {
+    title: "Concurrent Matrix",
+    subtitle: "Parallel • Multi-Quality & Variation Rotation",
+    prompt: "You are the APEX Concurrent Matrix Coach. You develop maximal force, hypertrophy, and bar speed simultaneously while rotating primary movement variations every 2-3 weeks to prevent neural accommodation. Prioritize high-output top sets (1-3 reps @ RPE 8.5-9.5)."
+  },
+  minimalist: {
+    title: "High-Output Minimalist",
+    subtitle: "Intensity-Driven • Neural Efficiency & Low Volume",
+    prompt: "You are the APEX High-Output Minimalist Coach. Zero tolerance for junk volume. Maximize motor unit recruitment via high-intensity working sets (Reverse Pyramid or Top Set + 1-2 backoffs). If readiness drops, immediately cut backoff sets rather than reducing bar weight."
+  }
+};
+
+const FALLBACK_GEMINI_MODELS = [
+  { id: 'gemini-4-argon', name: 'Gemini 4 Argon (Flagship Frontier)' },
+  { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash (High-Speed Workhorse)' },
+  { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash (Balanced Production)' },
+  { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash-Lite (Ultra-Low Latency)' },
+  { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro (Deep Reasoning & Math)' },
+  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Stable Standard)' },
+  { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite (Lightweight)' },
+  { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (High Context)' },
+  { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (Legacy Fast)' }
+];
+
+function getApexCoachConfig() {
+  let cachedModels = null;
+  try {
+    cachedModels = JSON.parse(localStorage.getItem('apex_gemini_models_cache'));
+  } catch (e) {}
+  return {
+    apiKey: localStorage.getItem('apex_gemini_key') || state.profile?.geminiApiKey || '',
+    model: localStorage.getItem('apex_gemini_model') || 'gemini-2.5-flash',
+    doctrine: localStorage.getItem('apex_coach_doctrine') || 'adaptive',
+    modelsList: Array.isArray(cachedModels) && cachedModels.length ? cachedModels : FALLBACK_GEMINI_MODELS
+  };
+}
+
+async function fetchDynamicGeminiModels() {
+  const config = getApexCoachConfig();
+  if (!config.apiKey) return FALLBACK_GEMINI_MODELS;
+
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${config.apiKey}`);
+    const data = await res.json();
+    if (!res.ok || !data.models) throw new Error(data.error?.message || 'Failed to fetch live model list');
+
+    const validModels = data.models
+      .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes('generateContent'))
+      .map(m => {
+        const id = m.name.replace('models/', '');
+        return { id, name: `${m.displayName || id} (${id})` };
+      });
+
+    if (validModels.length > 0) {
+      localStorage.setItem('apex_gemini_models_cache', JSON.stringify(validModels));
+      return validModels;
+    }
+    return FALLBACK_GEMINI_MODELS;
+  } catch (err) {
+    console.warn('Using fallback model list:', err);
+    return FALLBACK_GEMINI_MODELS;
+  }
+}
+
+function buildCoachTelemetryContext() {
+  const recentDates = Object.keys(state.dayLogs || {}).sort().slice(-14);
+  const recentSummary = recentDates.map(d => {
+    const log = state.dayLogs[d];
+    const exSummary = (log.exercises || []).map(ex => {
+      const doneSets = (ex.sets || []).filter(s => s.completed || s.done);
+      if (!doneSets.length) return null;
+      const top = doneSets[0];
+      const w = top.actualWeight ?? top.weight ?? top.targetLoad;
+      const r = top.actualReps ?? top.reps ?? top.targetReps;
+      const rpe = top.actualRpe ?? top.rpe ?? top.targetRpe;
+      return `${ex.name}: ${doneSets.length} sets (Top: ${w}x${r} @ RPE ${rpe})`;
+    }).filter(Boolean).join('; ');
+    return `${d}: BW=${log.weight || '-'} | Rdy=${log.recovery?.score ? log.recovery.score + '%' : '-'} | sRPE=${log.sessionRpe || '-'} (${log.duration || '-'}m) | ${exSummary}`;
+  }).join('\n');
+
+  const curBlock = state.mesocycle?.[state.currentBlockIndex || 0] || {};
+  const e1rmSnap = Object.entries(state.e1rms || {}).map(([k, v]) => `${k}: ${v}lbs`).join(', ');
+
+  return `
+    LIFTER PROFILE: Age ${state.profile?.age || 40}, Skill: ${state.profile?.skillLevel || 'Advanced'}, Current BW: ${state.profile?.bodyweight || '-'} lbs
+    ANCHOR e1RMs: ${e1rmSnap || 'None'}
+    ACTIVE MESOCYCLE BLOCK: ${curBlock.name || 'Active Block'} (Phase: ${curBlock.phase || 'Hypertrophy'}, Mode: ${curBlock.progressionMode || 'load'})
+    RECENT 14-DAY LOGGED WORKOUTS:
+    ${recentSummary || 'No recent logs found.'}
+  `.trim();
+}
+
+async function askApexCoach(userPrompt, taskType = 'general') {
+  const config = getApexCoachConfig();
+  if (!config.apiKey) {
+    showToast('Please add your Gemini API Key in Settings first.');
+    return null;
+  }
+
+  const doctrineObj = COACH_DOCTRINES[config.doctrine] || COACH_DOCTRINES.adaptive;
+  const systemInstruction = `${doctrineObj.prompt}\n\nYou are embedded inside the APEX Training Engine. Be concise, data-driven, tactical, and reference the lifter's actual numbers.`;
+  const telemetry = buildCoachTelemetryContext();
+
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${config.apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: systemInstruction }] },
+        contents: [{
+          role: 'user',
+          parts: [{ text: `TELEMETRY SNAPSHOT:\n${telemetry}\n\nTASK TYPE: ${taskType}\nUSER REQUEST:\n${userPrompt}` }]
+        }],
+        generationConfig: { temperature: 0.4, maxOutputTokens: 900 }
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error?.message || 'Gemini API Error');
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response generated.';
+  } catch (err) {
+    console.error('Coach Error:', err);
+    showToast(`Coach Error: ${err.message}`);
+    return null;
+  }
+}
+
+function renderApexCoachSettingsCard() {
+  const config = getApexCoachConfig();
+  const activeDoc = COACH_DOCTRINES[config.doctrine] || COACH_DOCTRINES.adaptive;
+  const models = config.modelsList || FALLBACK_GEMINI_MODELS;
+  const hasCurrentInList = models.some(m => m.id === config.model);
+
+  return `
+    <!-- APEX AI Coach Engine Card -->
+    <div class="p-4 bg-card-sub rounded-3xl border border-sub space-y-3 shadow-md font-mono text-xs w-full">
+      <div class="flex justify-between items-center border-b border-sub pb-2">
+        <div>
+          <span class="text-[10px] text-accent font-bold uppercase">APEX AI Coach Engine</span>
+          <div class="text-[9px] text-slate-400">Bring-your-own-key telemetry analysis & autoregulated block orchestration</div>
+        </div>
+        <button type="button" onclick="appActions.refreshCoachModels()" class="px-2.5 py-1 bg-input border border-sub rounded-xl text-[10px] text-slate-200 hover:border-accent tactile">
+          ↻ Sync Models
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <!-- Gemini API Key Input -->
+        <div class="space-y-1">
+          <label class="text-[9px] text-slate-400 font-bold uppercase">Gemini API Key (Local Device Only)</label>
+          <input type="password" id="apexApiKeyInput" value="${config.apiKey}" placeholder="AIzaSy..."
+            class="w-full bg-input border border-sub rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-accent"
+            onchange="localStorage.setItem('apex_gemini_key', this.value.trim()); showToast('Gemini API Key Saved');" />
+        </div>
+
+        <!-- Live-Fetching Model Dropdown -->
+        <div class="space-y-1">
+          <label class="text-[9px] text-slate-400 font-bold uppercase">Active Gemini Model (${models.length} Available)</label>
+          <select id="apexModelSelect" class="w-full bg-input border border-sub rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-accent"
+            onchange="localStorage.setItem('apex_gemini_model', this.value); showToast('Model set to ' + this.value);">
+            ${!hasCurrentInList ? `<option value="${config.model}" selected>${config.model} (Custom/Active)</option>` : ''}
+            ${models.map(m => `<option value="${m.id}" ${m.id === config.model ? 'selected' : ''}>${m.name}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+
+      <!-- Coaching Doctrine Selector -->
+      <div class="space-y-1.5 pt-1">
+        <label class="text-[9px] text-slate-400 font-bold uppercase">Coaching Philosophy Doctrine</label>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          ${Object.entries(COACH_DOCTRINES).map(([key, doc]) => {
+            const isSelected = config.doctrine === key;
+            return `
+              <button type="button" onclick="appActions.setCoachDoctrine('${key}')"
+                class="text-left p-2.5 rounded-2xl border transition tactile ${isSelected ? 'bg-accent/15 border-accent text-white shadow-sm' : 'bg-input border-sub text-slate-300 hover:border-slate-500'}">
+                <div class="font-bold text-xs flex items-center justify-between">
+                  <span>${doc.title}</span>${isSelected ? '<span class="text-accent text-[10px]">● ACTIVE</span>' : ''}
+                </div>
+                <div class="text-[9px] text-slate-400 mt-0.5">${doc.subtitle}</div>
+              </button>
+            `;
+          }).join('')}
+        </div>
+        <div class="p-2.5 bg-input rounded-xl border border-sub text-[10px] text-slate-300 leading-relaxed mt-1">
+          <span class="font-bold text-accent">${activeDoc.title} Rule:</span> ${activeDoc.prompt.replace(/^You are the APEX [^.]+\.\s*/, '')}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+window.appActions = window.appActions || {};
+window.appActions.setCoachDoctrine = (doctrineKey) => {
+  localStorage.setItem('apex_coach_doctrine', doctrineKey);
+  showToast(`Doctrine: ${COACH_DOCTRINES[doctrineKey]?.title || doctrineKey}`);
+  if (typeof safeRender === 'function') safeRender();
+};
+
+window.appActions.refreshCoachModels = async () => {
+  showToast('Syncing live Gemini models from Google...');
+  const models = await fetchDynamicGeminiModels();
+  showToast(`Synced ${models.length} Gemini models`);
+  if (typeof safeRender === 'function') safeRender();
+};
+
+/* ================================================================= */
+/* APEX AI COACH: SLIDE-UP COMMAND DRAWER & PIPELINE TRIGGERS        */
+/* ================================================================= */
+
+state.coachDrawerOpen = false;
+state.coachLoading = false;
+state.coachHistory = state.coachHistory || [];
+
+const COACH_PIPELINES = [
+  {
+    id: 'stage_audit',
+    label: '⚡ Audit Today\'s Workout',
+    desc: 'Check Readiness & Foster Load vs. today\'s staged sets',
+    buildPrompt: () => {
+      const activeEx = (state.activeWorkout || []).map(ex => {
+        const sets = (ex.sets || []).map(s => `${s.targetLoad || s.actualWeight}x${s.targetReps || s.actualReps} @${s.targetRpe || ''}`).join(', ');
+        return `- ${ex.name} (${ex.tier || 'Main'} / ${ex.scheme || 'Standard'}): [${sets}]`;
+      }).join('\n');
+      return `Run a Daily Readiness & Stage Audit for today's session.\nSTAGED WORKOUT:\n${activeEx || 'No exercises staged yet.'}\n\nProvide:\n1. Readiness & Fatigue Verdict (cite my recent sRPE/Foster load & readiness %).\n2. Specific Autoregulation Adjustments for today (exact load/RPE caps or backoff set trims if needed).`;
+    }
+  },
+  {
+    id: 'overshoot_check',
+    label: '🎯 Overshoot & Fatigue Check',
+    desc: 'Evaluate logged sets & prescribe exact backoff adjustments',
+    buildPrompt: () => {
+      const liveEx = (state.activeWorkout || []).map(ex => {
+        const done = (ex.sets || []).filter(s => s.done).map((s, i) => `Set ${i+1} DONE: ${s.actualWeight}x${s.actualReps} @RPE ${s.actualRpe} (Target was ${s.targetLoad}x${s.targetReps} @${s.targetRpe})`).join(' | ');
+        const rem = (ex.sets || []).filter(s => !s.done).length;
+        return `- ${ex.name}: ${done || 'None logged'} (${rem} sets remaining)`;
+      }).join('\n');
+      return `Analyze my live intra-workout performance so far:\n${liveEx || 'No sets completed yet.'}\n\nDid I overshoot target RPE or underperform? Tell me whether to keep current backoff weights, apply a -5% load drop off logged weight, or scrub a remaining backoff set to protect my Time-to-Peak curve.`;
+    }
+  },
+  {
+    id: 'block_report',
+    label: '📊 Run Block Diagnostic Report',
+    desc: 'Time-to-Peak (TTP), e1RM deltas & Stimulus-to-Fatigue audit',
+    buildPrompt: () => {
+      return `Run an End-of-Block Executive Diagnostic Report based on my telemetry.\nAnalyze:\n1. e1RM progression trends and estimated Time-to-Peak (TTP) exposure window.\n2. Stimulus-to-Fatigue efficiency (how session RPE/duration correlated with readiness).\n3. Actionable recommendation: Should I extend the current block, trigger a 1-2 week resensitization Pivot, or transition phases?`;
+    }
+  },
+  {
+    id: 'architect_block',
+    label: '🏗️ Architect Next Mesocycle Block',
+    desc: 'Generate a block blueprint using your active Doctrine & Schemes',
+    buildPrompt: () => {
+      const schemes = typeof SCHEME_MATRIX !== 'undefined' ? Object.keys(SCHEME_MATRIX).join(', ') : 'Top Set + Backoffs, Reverse Pyramid, Straight Sets, Wave Loading, Cluster, Repeats';
+      return `Architect my next 4-week Mesocycle Block strictly following my active Coaching Philosophy Doctrine.\nAVAILABLE GLOBAL REP SCHEMES: ${schemes}\n\nOutput a structured blueprint including:\n1. Recommended Block Phase & Progression Mode (Load vs Intensity).\n2. Primary & Secondary slot exercise selections (tailored to rack, barbell, safety squat bar, trap bar, Swiss bar, EZ bar, dip bar, cables, adjustable dumbbells).\n3. Assigned Global Rep Scheme and target RPE bookends for each slot.`;
+    }
+  }
+];
+
+function syncCoachDrawerDOM() {
+  let portal = document.getElementById('apexCoachPortal');
+  if (!state.coachDrawerOpen) {
+    if (portal) portal.remove();
+    return;
+  }
+  if (!portal) {
+    portal = document.createElement('div');
+    portal.id = 'apexCoachPortal';
+    document.body.appendChild(portal);
+  }
+
+  const config = getApexCoachConfig();
+  const docObj = COACH_DOCTRINES[config.doctrine] || COACH_DOCTRINES.adaptive;
+
+  const historyHtml = state.coachHistory.length === 0
+    ? `<div class="p-4 bg-input/60 rounded-2xl border border-sub text-slate-400 text-[11px] leading-relaxed text-center">
+         Select a one-tap telemetry pipeline above or ask a tactical programming question below.
+       </div>`
+    : state.coachHistory.map(item => `
+        <div class="space-y-1.5">
+          <div class="text-[10px] text-accent font-bold uppercase tracking-wider">${item.title}</div>
+          <div class="p-3 bg-input rounded-2xl border border-sub text-slate-200 text-[11px] leading-relaxed whitespace-pre-wrap font-mono">${item.response}</div>
+        </div>
+      `).join('');
+
+  portal.innerHTML = `
+    <div class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex flex-col justify-end" onclick="appActions.toggleCoachDrawer(event)">
+      <div class="bg-card border-t border-sub rounded-t-3xl p-4 sm:p-5 max-h-[85vh] flex flex-col space-y-3 shadow-2xl font-mono text-xs w-full max-w-2xl mx-auto" onclick="event.stopPropagation()">
+        
+        <!-- Drawer Header -->
+        <div class="flex justify-between items-center border-b border-sub pb-2.5">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="text-accent font-bold text-sm">✦ APEX AI COACH</span>
+              <span class="text-[9px] px-2 py-0.5 rounded-full bg-accent/15 text-accent border border-accent/40 font-bold uppercase">${docObj.title}</span>
+            </div>
+            <div class="text-[9px] text-slate-400 mt-0.5">Model: ${config.model} • Live Telemetry Connected</div>
+          </div>
+          <div class="flex items-center gap-2">
+            ${state.coachHistory.length ? `<button type="button" onclick="appActions.clearCoachHistory()" class="px-2 py-1 bg-input border border-sub rounded-lg text-[9px] text-slate-400 hover:text-white">Clear</button>` : ''}
+            <button type="button" onclick="appActions.toggleCoachDrawer(event)" class="p-1.5 bg-input border border-sub rounded-xl text-slate-300 hover:text-white">✕</button>
+          </div>
+        </div>
+
+        <!-- One-Tap Telemetry Pipelines -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 shrink-0">
+          ${COACH_PIPELINES.map(p => `
+            <button type="button" onclick="appActions.runCoachPipeline('${p.id}')" ${state.coachLoading ? 'disabled' : ''}
+              class="text-left p-2.5 bg-card-sub hover:bg-input border border-sub hover:border-accent rounded-2xl transition tactile group">
+              <div class="font-bold text-white text-[11px] group-hover:text-accent transition">${p.label}</div>
+              <div class="text-[9px] text-slate-400 truncate mt-0.5">${p.desc}</div>
+            </button>
+          `).join('')}
+        </div>
+
+        <!-- Output Feed -->
+        <div id="apexCoachFeed" class="flex-1 min-h-[160px] overflow-y-auto space-y-3 pr-1">
+          ${state.coachLoading ? `
+            <div class="p-4 bg-input rounded-2xl border border-accent/40 text-accent text-xs flex items-center justify-center gap-2 animate-pulse">
+              <span>✦ Analyzing 14-day telemetry & active block...</span>
+            </div>
+          ` : ''}
+          ${historyHtml}
+        </div>
+
+        <!-- Custom Prompt Bar -->
+        <div class="flex gap-2 pt-2 border-t border-sub shrink-0">
+          <input type="text" id="apexCoachCustomInput" placeholder="Ask about exercise swaps, fatigue, or block tweaks..."
+            class="flex-1 bg-input border border-sub rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-accent"
+            onkeydown="if(event.key==='Enter') appActions.sendCustomCoachPrompt()" />
+          <button type="button" onclick="appActions.sendCustomCoachPrompt()" ${state.coachLoading ? 'disabled' : ''}
+            class="px-4 py-2 bg-accent text-black font-bold rounded-xl text-xs tactile">
+            Send
+          </button>
+        </div>
+
+      </div>
+    </div>
+  `;
+}
+
+window.appActions.toggleCoachDrawer = (e) => {
+  if (e && e.stopPropagation) e.stopPropagation();
+  state.coachDrawerOpen = !state.coachDrawerOpen;
+  syncCoachDrawerDOM();
+  if (typeof safeRender === 'function') safeRender();
+};
+
+window.appActions.clearCoachHistory = () => {
+  state.coachHistory = [];
+  syncCoachDrawerDOM();
+};
+
+window.appActions.runCoachPipeline = async (pipelineId) => {
+  const pipe = COACH_PIPELINES.find(p => p.id === pipelineId);
+  if (!pipe || state.coachLoading) return;
+
+  state.coachLoading = true;
+  syncCoachDrawerDOM();
+
+  const reply = await askApexCoach(pipe.buildPrompt(), pipelineId);
+  state.coachLoading = false;
+
+  if (reply) {
+    state.coachHistory.unshift({ title: pipe.label, response: reply });
+  }
+  syncCoachDrawerDOM();
+};
+
+window.appActions.sendCustomCoachPrompt = async () => {
+  const inputEl = document.getElementById('apexCoachCustomInput');
+  const text = inputEl ? inputEl.value.trim() : '';
+  if (!text || state.coachLoading) return;
+
+  inputEl.value = '';
+  state.coachLoading = true;
+  syncCoachDrawerDOM();
+
+  const reply = await askApexCoach(text, 'custom_query');
+  state.coachLoading = false;
+
+  if (reply) {
+    state.coachHistory.unshift({ title: `Q: ${text}`, response: reply });
+  }
+  syncCoachDrawerDOM();
+};
