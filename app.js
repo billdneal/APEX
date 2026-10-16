@@ -8900,9 +8900,15 @@ const SPECIALIZED_SCHEMES = [
                 </div>
               </div>
               <div class="flex justify-between items-center text-[11px]">
-                <span class="text-slate-400">Duration: <b class="text-slate-200">${b.weeks} Weeks</b></span>
-                ${isActive ? `<span class="text-[9px] px-2 py-0.5 rounded-md bg-blue-600 text-white font-bold">ACTIVE</span>` : `<button type="button" onclick="appActions.setActiveBlock(${idx})" class="text-[9px] px-2 py-0.5 rounded-md bg-input text-blue-400 border border-blue-800 hover:bg-blue-900 tactile">Set Active</button>`}
-              </div>
+                  <div class="flex items-center space-x-2">
+                    <span class="text-slate-400">Duration: <b class="text-slate-200">${b.weeks} Weeks</b></span>
+                    <div class="flex items-center space-x-1">
+                      <button type="button" onclick="appActions.adjustBlockWeeks(${idx}, -1)" class="px-1.5 py-0.5 bg-input hover:bg-slate-800 border border-sub rounded text-[9px] text-slate-300 hover:text-white font-bold tactile" title="Shorten block by 1 week">-1W</button>
+                      <button type="button" onclick="appActions.adjustBlockWeeks(${idx}, 1)" class="px-1.5 py-0.5 bg-input hover:bg-slate-800 border border-sub rounded text-[9px] text-accent hover:text-white font-bold tactile" title="Extend block by 1 week">+1W</button>
+                    </div>
+                  </div>
+                  ${isActive ? `<span class="text-[9px] px-2 py-0.5 rounded-md bg-blue-600 text-white font-bold uppercase tracking-wider">Active</span>` : `<button type="button" onclick="appActions.setActiveMacroBlock(${idx})" class="text-[9px] px-2 py-0.5 rounded-md bg-blue-950/60 text-blue-300 border border-blue-800 hover:bg-blue-900 tactile">Set Active</button>`}
+                </div>
               <!-- Per-Block Progression Mode Toggle -->
               <div class="flex items-center justify-between pt-2 border-t border-sub/50 text-[10px] font-mono">
                 <span class="text-slate-400">Progression:</span>
@@ -11543,4 +11549,20 @@ window.appActions.toggleCoachDrawer = (e) => {
 window.appActions.clearCoachHistory = () => {
   state.coachHistory = [];
   syncCoachDrawerDOM();
+};
+
+window.appActions.adjustBlockWeeks = (blockIndex, delta) => {
+  const blocks = Array.isArray(state.mesocycle) ? state.mesocycle : [];
+  const targetBlock = blocks[blockIndex];
+  if (!targetBlock) return;
+
+  const curWeeks = Number(targetBlock.weeks || targetBlock.durationWeeks || 3);
+  const nextWeeks = Math.max(1, Math.min(12, curWeeks + delta));
+
+  targetBlock.weeks = nextWeeks;
+  targetBlock.durationWeeks = nextWeeks;
+
+  if (typeof saveState === 'function') saveState();
+  if (typeof saveStateToStorage === 'function') saveStateToStorage();
+  if (typeof safeRender === 'function') safeRender();
 };
