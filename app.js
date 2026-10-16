@@ -5612,19 +5612,29 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
     },
 
     applyDrop(exIdx) {
-      const ex = state.activeWorkout[exIdx];
-      ex.sets.forEach(s => {
-        if (!s.done) {
-          s.targetLoad = roundLoad(s.targetLoad * 0.95);
-          s.actualWeight = s.targetLoad;
-        }
-      });
-      ex.fatigueWarning = false;
-      persist();
-      triggerCloudSync(1500);
-      showToast("Applied -5% load drop to remaining sets");
-      safeRender();
-    },
+    const ex = state.activeWorkout[exIdx];
+    const doneSets = (ex.sets || []).filter(s => s.done);
+    const lastDone = doneSets.length ? doneSets[doneSets.length - 1] : null;
+    const anchorActual = lastDone ? (Number(lastDone.actualWeight) || Number(lastDone.weight) || Number(lastDone.targetLoad)) : 0;
+    const anchorTarget = lastDone ? (Number(lastDone.targetLoad) || anchorActual) : 0;
+
+    ex.sets.forEach(s => {
+      if (!s.done) {
+        // Anchor to actual logged weight: if remaining set had the same targetLoad as the overshot set,
+        // drop 5% directly off anchorActual; if it's a scaled backoff set, scale proportionally from anchorActual * 0.95
+        const baseLoad = (anchorActual > 0 && anchorTarget > 0)
+          ? (s.targetLoad === anchorTarget ? anchorActual : (s.targetLoad * (anchorActual / anchorTarget)))
+          : s.targetLoad;
+        s.targetLoad = roundLoad(baseLoad * 0.95);
+        s.actualWeight = s.targetLoad;
+      }
+    });
+    ex.fatigueWarning = false;
+    persist();
+    triggerCloudSync(1500);
+    showToast("Applied -5% load drop off logged weight");
+    safeRender();
+  },
 
     dismissFatigueWarning(exIdx) {
       if (state.activeWorkout[exIdx]) {
