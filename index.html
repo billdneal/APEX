@@ -108,8 +108,8 @@
       background: var(--accent-primary);
     }
   </style>
-  <style id="apex-master-accent-override">
-    /* 1. Text Colors: Route all blues, greens, teals, purples, and pinks to Accent */
+ <style id="apex-master-accent-override">
+    /* 1. Text Colors: Route blues, greens, teals, purples, pinks, oranges, and ambers to Accent */
     [class*="text-sky-"],
     [class*="text-cyan-"],
     [class*="text-teal-"],
@@ -120,9 +120,9 @@
     [class*="text-indigo-"],
     [class*="text-purple-"],
     [class*="text-violet-"],
+    [class*="text-blue-"],
     [class*="text-orange-"],
-    [class*="text-amber-"],
-    [class*="text-blue-"] {
+    [class*="text-amber-"] {
       color: var(--accent-primary) !important;
     }
 
@@ -136,14 +136,14 @@
     .bg-rose-400, .bg-rose-500, .bg-rose-600,
     .bg-indigo-400, .bg-indigo-500, .bg-indigo-600,
     .bg-purple-400, .bg-purple-500, .bg-purple-600,
+    .bg-blue-400, .bg-blue-500, .bg-blue-600, .bg-blue-700,
     .bg-orange-400, .bg-orange-500, .bg-orange-600, .bg-orange-700,
-    .bg-amber-400, .bg-amber-500, .bg-amber-600, .bg-amber-700,
-    .bg-blue-400, .bg-blue-500, .bg-blue-600, .bg-blue-700 {
+    .bg-amber-400, .bg-amber-500, .bg-amber-600, .bg-amber-700 {
       background-color: var(--accent-primary) !important;
       color: #000000 !important;
     }
 
-    /* 3. Translucent Badges & Dark Tinted Callout Boxes (/10, /20, -900, -950) */
+    /* 3. Translucent Badges & Dark Tinted Callout Boxes */
     [class*="bg-sky-"][class*="/"], [class*="bg-sky-9"],
     [class*="bg-cyan-"][class*="/"], [class*="bg-cyan-9"],
     [class*="bg-teal-"][class*="/"], [class*="bg-teal-9"],
@@ -153,9 +153,9 @@
     [class*="bg-rose-"][class*="/"], [class*="bg-rose-9"],
     [class*="bg-indigo-"][class*="/"], [class*="bg-indigo-9"],
     [class*="bg-purple-"][class*="/"], [class*="bg-purple-9"],
+    [class*="bg-blue-"][class*="/"], [class*="bg-blue-9"],
     [class*="bg-orange-"][class*="/"], [class*="bg-orange-9"],
-    [class*="bg-amber-"][class*="/"], [class*="bg-amber-9"],
-    [class*="bg-blue-"][class*="/"], [class*="bg-blue-9"] {
+    [class*="bg-amber-"][class*="/"], [class*="bg-amber-9"] {
       background-color: color-mix(in srgb, var(--accent-primary) 12%, transparent) !important;
     }
 
@@ -163,35 +163,28 @@
     [class*="border-sky-"], [class*="border-cyan-"], [class*="border-teal-"],
     [class*="border-emerald-"], [class*="border-green-"], [class*="border-pink-"],
     [class*="border-rose-"], [class*="border-indigo-"], [class*="border-purple-"],
-    [class*="border-blue-"] {
+    [class*="border-blue-"], [class*="border-orange-"], [class*="border-amber-"] {
       border-color: color-mix(in srgb, var(--accent-primary) 35%, transparent) !important;
     }
 
     [class*="ring-sky-"], [class*="ring-cyan-"], [class*="ring-teal-"],
-    [class*="border-orange-"], [class*="border-amber-"],
-    [class*="ring-orange-"], [class*="ring-amber-"],
     [class*="ring-emerald-"], [class*="ring-green-"], [class*="ring-indigo-"],
-    [class*="ring-purple-"], [class*="ring-blue-"] {
+    [class*="ring-purple-"], [class*="ring-blue-"], [class*="ring-orange-"], [class*="ring-amber-"] {
       --tw-ring-color: color-mix(in srgb, var(--accent-primary) 50%, transparent) !important;
     }
 
-    /* 5. Tailwind Gradients (Progress bars, banners) */
-    [class*="from-sky-"], [class*="from-cyan-"], [class*="from-teal-"],
-    [class*="from-emerald-"], [class*="from-green-"], [class*="from-indigo-"],
-    [class*="from-purple-"], [class*="from-blue-"] {
+    /* 5. Tailwind Gradients & Universal Orange/Amber Text Force */
+    [class*="from-orange-"], [class*="from-amber-"],
+    [class*="bg-gradient-to-r"][class*="orange"],
+    [class*="bg-gradient-to-r"][class*="amber"] {
       --tw-gradient-from: var(--accent-primary) !important;
+      --tw-gradient-to: color-mix(in srgb, var(--accent-primary) 70%, transparent) !important;
     }
-    [class*="to-sky-"], [class*="to-cyan-"], [class*="to-teal-"],
-    [class*="from-orange-"], [class*="from-amber-"], {
-      --tw-gradient-from: var(--accent-primary) !important;
-      color: #000000 !important; /* Forces text inside orange gradients to pure black */
-    }
-    [class*="to-orange-"], [class*="to-amber-"] {
-      --tw-gradient-to: color-mix(in srgb, var(--accent-primary) 65%, transparent) !important;
-    }
-    [class*="to-emerald-"], [class*="to-green-"], [class*="to-indigo-"],
-    [class*="to-purple-"], [class*="to-blue-"] {
-      --tw-gradient-to: color-mix(in srgb, var(--accent-primary) 65%, transparent) !important;
+
+    /* FORCE ALL TEXT INSIDE ORANGE/AMBER CONTAINERS TO BE PURE HIGH-CONTRAST BLACK */
+    [class*="orange"] *, [class*="amber"] * {
+      color: #000000 !important;
+      font-weight: 700 !important;
     }
 
     /* 6. Native Browser Sliders, Checkboxes & Radio Buttons */
