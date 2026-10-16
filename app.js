@@ -11349,7 +11349,7 @@ async function askApexCoach(userPrompt, taskType = 'general') {
   }
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 25000);
+  const timeoutId = setTimeout(() => controller.abort(), 45000); // Bumped to 45 seconds
 
   try {
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${config.apiKey}`, {
@@ -11362,7 +11362,7 @@ async function askApexCoach(userPrompt, taskType = 'general') {
           role: 'user',
           parts: [{ text: `LIFTER TELEMETRY:\n${telemetry}\n\nTASK: ${taskType}\nDIRECTIVE:\n${userPrompt}` }]
         }],
-        generationConfig: { temperature: 0.3, maxOutputTokens: 1200 } // Increased token cap to prevent cutoff
+        generationConfig: { temperature: 0.3, maxOutputTokens: 1200 }
       })
     });
 
@@ -11375,6 +11375,9 @@ async function askApexCoach(userPrompt, taskType = 'general') {
   } catch (err) {
     clearTimeout(timeoutId);
     console.error('Coach Error:', err);
+    if (err.name === 'AbortError') {
+      return `⚠️ Request timed out after 45s. Google's API took too long to respond. Try clicking the pipeline button again.`;
+    }
     return `⚠️ Coach Error (${config.model}): ${err.message}`;
   }
 }
