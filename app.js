@@ -8899,13 +8899,13 @@ const SPECIALIZED_SCHEMES = [
                   <button type="button" onclick="appActions.deleteMacroBlock(${idx})" class="w-6 h-6 rounded-lg bg-input border border-sub text-xs text-slate-400 hover:text-red-400 flex items-center justify-center tactile">✕</button>
                 </div>
               </div>
-              <div class="flex justify-between items-center text-[11px]">
-                  <div class="flex items-center space-x-2">
-                    <span class="text-slate-400">Duration: <b class="text-slate-200">${b.weeks} Weeks</b></span>
-                    <div class="flex items-center space-x-1">
-                      <button type="button" onclick="appActions.adjustBlockWeeks(${idx}, -1)" class="px-1.5 py-0.5 bg-input hover:bg-slate-800 border border-sub rounded text-[9px] text-slate-300 hover:text-white font-bold tactile" title="Shorten block by 1 week">-1W</button>
-                      <button type="button" onclick="appActions.adjustBlockWeeks(${idx}, 1)" class="px-1.5 py-0.5 bg-input hover:bg-slate-800 border border-sub rounded text-[9px] text-accent hover:text-white font-bold tactile" title="Extend block by 1 week">+1W</button>
-                    </div>
+             <div class="flex justify-between items-center text-[11px] flex-wrap gap-2">
+                  <div class="flex items-center space-x-1.5">
+                    <span class="text-slate-400">Weeks:</span>
+                    <button type="button" onclick="appActions.adjustBlockWeeks(${idx}, -1)" class="w-6 h-6 bg-input hover:bg-slate-800 border border-sub rounded flex items-center justify-center text-slate-300 hover:text-white font-bold tactile" title="Shorten by 1 week">−</button>
+                    <input type="number" id="blockWeeksInput_${idx}" min="1" max="16" value="${b.weeks}" onchange="appActions.setBlockWeeksExact(${idx}, this.value)" class="w-10 h-6 bg-input border border-sub rounded text-center text-white font-bold text-[11px] focus:outline-none focus:border-accent" />
+                    <button type="button" onclick="appActions.adjustBlockWeeks(${idx}, 1)" class="w-6 h-6 bg-input hover:bg-slate-800 border border-sub rounded flex items-center justify-center text-accent hover:text-white font-bold tactile" title="Extend by 1 week">+</button>
+                    <button type="button" id="saveBlockBtn_${idx}" onclick="appActions.saveBlockDuration(${idx})" class="px-2 py-1 bg-accent text-black font-bold rounded text-[9px] uppercase tracking-wider tactile">Save</button>
                   </div>
                   ${isActive ? `<span class="text-[9px] px-2 py-0.5 rounded-md bg-blue-600 text-white font-bold uppercase tracking-wider">Active</span>` : `<button type="button" onclick="appActions.setActiveMacroBlock(${idx})" class="text-[9px] px-2 py-0.5 rounded-md bg-blue-950/60 text-blue-300 border border-blue-800 hover:bg-blue-900 tactile">Set Active</button>`}
                 </div>
@@ -11565,4 +11565,73 @@ window.appActions.adjustBlockWeeks = (blockIndex, delta) => {
   if (typeof saveState === 'function') saveState();
   if (typeof saveStateToStorage === 'function') saveStateToStorage();
   if (typeof safeRender === 'function') safeRender();
+};
+
+window.appActions.adjustBlockWeeks = (blockIndex, delta) => {
+  const blocks = Array.isArray(state.mesocycle) ? state.mesocycle : [];
+  const targetBlock = blocks[blockIndex];
+  if (!targetBlock) return;
+
+  const curWeeks = Number(targetBlock.weeks || targetBlock.durationWeeks || 3);
+  const nextWeeks = Math.max(1, Math.min(16, curWeeks + delta));
+  targetBlock.weeks = nextWeeks;
+  targetBlock.durationWeeks = nextWeeks;
+
+  const inputEl = document.getElementById(`blockWeeksInput_${blockIndex}`);
+  if (inputEl) inputEl.value = nextWeeks;
+
+  const saveBtn = document.getElementById(`saveBlockBtn_${blockIndex}`);
+  if (saveBtn) {
+    saveBtn.textContent = 'Save*';
+    saveBtn.classList.add('ring-2', 'ring-white');
+  }
+};
+
+window.appActions.setBlockWeeksExact = (blockIndex, val) => {
+  const blocks = Array.isArray(state.mesocycle) ? state.mesocycle : [];
+  const targetBlock = blocks[blockIndex];
+  if (!targetBlock) return;
+
+  const nextWeeks = Math.max(1, Math.min(16, parseInt(val, 10) || 1));
+  targetBlock.weeks = nextWeeks;
+  targetBlock.durationWeeks = nextWeeks;
+
+  const saveBtn = document.getElementById(`saveBlockBtn_${blockIndex}`);
+  if (saveBtn) {
+    saveBtn.textContent = 'Save*';
+    saveBtn.classList.add('ring-2', 'ring-white');
+  }
+};
+
+window.appActions.saveBlockDuration = (blockIndex) => {
+  const blocks = Array.isArray(state.mesocycle) ? state.mesocycle : [];
+  const targetBlock = blocks[blockIndex];
+  if (!targetBlock) return;
+
+  const inputEl = document.getElementById(`blockWeeksInput_${blockIndex}`);
+  if (inputEl) {
+    const nextWeeks = Math.max(1, Math.min(16, parseInt(inputEl.value, 10) || targetBlock.weeks || 3));
+    targetBlock.weeks = nextWeeks;
+    targetBlock.durationWeeks = nextWeeks;
+  }
+
+  // Persist to localStorage & Supabase sync if available, and recalculate timeline
+  if (typeof syncMesocycleTimeline === 'function') syncMesocycleTimeline();
+  if (typeof saveState === 'function') saveState();
+  if (typeof saveStateToStorage === 'function') saveStateToStorage();
+  localStorage.setItem('apex_state', JSON.stringify(state));
+
+  const saveBtn = document.getElementById(`saveBlockBtn_${blockIndex}`);
+  if (saveBtn) {
+    saveBtn.textContent = '✓ Saved';
+    saveBtn.classList.remove('ring-2', 'ring-white');
+  }
+
+  if (typeof safeCoachToast === 'function') {
+    safeCoachToast(`${targetBlock.phase || 'Block'} saved (${targetBlock.weeks} weeks).`);
+  }
+
+  setTimeout(() => {
+    if (typeof safeRender === 'function') safeRender();
+  }, 600);
 };
