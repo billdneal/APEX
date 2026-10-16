@@ -11009,24 +11009,73 @@ const COACH_DOCTRINES = {
   adaptive: {
     title: "Adaptive Intelligence",
     subtitle: "Bottom-Up • Time-to-Peak & Empirical ROI",
-    prompt: "You are the APEX Adaptive Intelligence Coach. You treat every microcycle as an empirical experiment. Analyze historical Time-to-Peak (TTP) and Foster Session Load trends. If a lifter overshoots RPE, aggressively protect their TTP curve by recommending backoff load/set reductions. When performance plateaus, recommend strategic 1-2 week resensitization pivots."
+    prompt: "You are the APEX Adaptive Intelligence Coach. Be extremely direct and concise. Analyze historical Time-to-Peak (TTP) and session loads. If readiness is compressed (<70%), give precise, uncompromising autoregulation directives (e.g. cut working volume by 2 sets or cap RPE at 8.0). NEVER use LaTeX formatting or math symbols like \\rightarrow—use plain text arrows (->) or bullet points."
   },
   phased: {
     title: "Phased Potentiation",
     subtitle: "Top-Down • Sequential Funnel",
-    prompt: "You are the APEX Phased Potentiation Coach. You enforce strict sequential block architecture: Accumulation (volume/work capacity) -> Transmutation (powerbuilding) -> Realization (peak strength) -> Deload. Protect weekly set volume during Accumulation and bar intensity during Realization."
+    prompt: "You are the APEX Phased Potentiation Coach. Enforce strict block architecture (Accumulation -> Transmutation -> Realization). Give precise, concise volume/intensity adjustments. NEVER use LaTeX formatting or math symbols like \\rightarrow."
   },
   concurrent: {
     title: "Concurrent Matrix",
     subtitle: "Parallel • Multi-Quality & Variation Rotation",
-    prompt: "You are the APEX Concurrent Matrix Coach. You develop maximal force, hypertrophy, and bar speed simultaneously while rotating primary movement variations every 2-3 weeks to prevent neural accommodation. Prioritize high-output top sets (1-3 reps @ RPE 8.5-9.5)."
+    prompt: "You are the APEX Concurrent Matrix Coach. Focus on simultaneous force and hypertrophy expression with strategic variation rotation. Keep responses brief, tactical, and data-backed. NEVER use LaTeX formatting or math symbols like \\rightarrow."
   },
   minimalist: {
     title: "High-Output Minimalist",
     subtitle: "Intensity-Driven • Neural Efficiency & Low Volume",
-    prompt: "You are the APEX High-Output Minimalist Coach. Zero tolerance for junk volume. Maximize motor unit recruitment via high-intensity working sets (Reverse Pyramid or Top Set + 1-2 backoffs). If readiness drops, immediately cut backoff sets rather than reducing bar weight."
+    prompt: "You are the APEX High-Output Minimalist Coach. Zero tolerance for junk volume. Demand high-intensity top sets and immediate backoff set trimming when fatigue accumulates. Keep it ultra-concise. NEVER use LaTeX formatting or math symbols like \\rightarrow."
   }
 };
+
+async function askApexCoach(userPrompt, taskType = 'general') {
+  const config = getApexCoachConfig();
+  if (!config.apiKey) {
+    safeCoachToast('Please add your Gemini API Key in Settings first.');
+    return '⚠️ Missing Gemini API Key. Open Settings → APEX AI Coach Engine and paste your API key.';
+  }
+
+  const doctrineObj = COACH_DOCTRINES[config.doctrine] || COACH_DOCTRINES.adaptive;
+  const systemInstruction = `${doctrineObj.prompt}\n\nRULES:\n- Be ruthlessly direct and actionable.\n- Reference my actual logged numbers.\n- NEVER use LaTeX math mode, backslashes, or symbol tags like $\\rightarrow$. Use plain text like '->'.`;
+  
+  let telemetry = '';
+  try {
+    telemetry = buildCoachTelemetryContext();
+  } catch (tErr) {
+    console.warn('Telemetry build warning:', tErr);
+    telemetry = 'Telemetry snapshot unavailable.';
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 25000);
+
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${config.apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: systemInstruction }] },
+        contents: [{
+          role: 'user',
+          parts: [{ text: `LIFTER TELEMETRY:\n${telemetry}\n\nTASK: ${taskType}\nDIRECTIVE:\n${userPrompt}` }]
+        }],
+        generationConfig: { temperature: 0.3, maxOutputTokens: 600 }
+      })
+    });
+
+    clearTimeout(timeoutId);
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error?.message || `HTTP ${res.status}: Failed to call model "${config.model}"`);
+    }
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response generated.';
+  } catch (err) {
+    clearTimeout(timeoutId);
+    console.error('Coach Error:', err);
+    return `⚠️ Coach Error (${config.model}): ${err.message}`;
+  }
+}
 
 const FALLBACK_GEMINI_MODELS = [
   { id: 'gemini-4-argon', name: 'Gemini 4 Argon (Flagship Frontier)' },
@@ -11398,15 +11447,23 @@ window.appActions.sendCustomCoachPrompt = async () => {
 
   inputEl.value = '';
   state.coachLoading = true;
+  
+  // Immediately push user question to history so it's visible in the feed
+  state.coachHistory.unshift({ title: `Q: ${text}`, response: 'Analyzing telemetry & generating response...' });
   syncCoachDrawerDOM();
 
-  const reply = await askApexCoach(text, 'custom_query');
-  state.coachLoading = false;
-
-  if (reply) {
-    state.coachHistory.unshift({ title: `Q: ${text}`, response: reply });
+  try {
+    const reply = await askApexCoach(text, 'custom_query');
+    if (reply) {
+      // Update the top history item with the actual AI response
+      state.coachHistory[0] = { title: `Q: ${text}`, response: reply };
+    }
+  } catch (err) {
+    state.coachHistory[0] = { title: `Q: ${text}`, response: `⚠️ Error: ${err.message}` };
+  } finally {
+    state.coachLoading = false;
+    syncCoachDrawerDOM();
   }
-  syncCoachDrawerDOM();
 };
 
 function safeCoachToast(msg) {
