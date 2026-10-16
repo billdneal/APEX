@@ -11152,13 +11152,22 @@ function buildCoachTelemetryContext() {
     return `${d}: BW=${log.weight || '-'} | Rdy=${log.recovery?.score ? log.recovery.score + '%' : '-'} | sRPE=${log.sessionRpe || '-'} (${log.duration || '-'}m) | ${exSummary}`;
   }).join('\n');
 
-  const curBlock = state.mesocycle?.[state.currentBlockIndex || 0] || {};
+  // Robustly resolve active block data from state
+  const blocks = Array.isArray(state.mesocycle) ? state.mesocycle : (state.mesocycles?.[state.activeMesocycleIndex || 0]?.blocks || []);
+  const curBlockIndex = state.currentBlockIndex ?? state.activeBlockIndex ?? 0;
+  const curBlock = blocks[curBlockIndex] || state.currentBlock || state.activeBlock || {};
+  
+  const blockName = curBlock.name || curBlock.title || 'Powerbuilding Block';
+  const blockPhase = curBlock.phase || curBlock.type || 'Powerbuilding';
+  const blockWeek = curBlock.currentWeek || state.currentWeek || 1;
+  const totalWeeks = curBlock.durationWeeks || curBlock.weeks || 4;
+
   const e1rmSnap = Object.entries(state.e1rms || {}).map(([k, v]) => `${k}: ${v}lbs`).join(', ');
 
   return `
-    LIFTER PROFILE: Age ${state.profile?.age || 40}, Skill: ${state.profile?.skillLevel || 'Advanced'}, Current BW: ${state.profile?.bodyweight || '-'} lbs
+    LIFTER PROFILE: Age ${state.profile?.age || 41}, Skill: ${state.profile?.skillLevel || 'Advanced'}, Current BW: ${state.profile?.bodyweight || '-'} lbs
     ANCHOR e1RMs: ${e1rmSnap || 'None'}
-    ACTIVE MESOCYCLE BLOCK: ${curBlock.name || 'Active Block'} (Phase: ${curBlock.phase || 'Hypertrophy'}, Mode: ${curBlock.progressionMode || 'load'})
+    ACTIVE MESOCYCLE BLOCK: ${blockName} | Phase: ${blockPhase} | Week ${blockWeek} of ${totalWeeks} (Progression Mode: ${curBlock.progressionMode || 'load'})
     RECENT 14-DAY LOGGED WORKOUTS:
     ${recentSummary || 'No recent logs found.'}
   `.trim();
