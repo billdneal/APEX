@@ -11517,3 +11517,17 @@ window.appActions.refreshCoachModels = async () => {
   safeCoachToast(`Synced ${models.length} Gemini models`);
   if (typeof safeRender === 'function') safeRender();
 };
+
+window.appActions = window.appActions || {};
+
+window.appActions.toggleCoachDrawer = (e) => {
+  if (e && e.stopPropagation) e.stopPropagation();
+  state.coachDrawerOpen = !state.coachDrawerOpen;
+  syncCoachDrawerDOM();
+  if (typeof safeRender === 'function') safeRender();
+};
+
+window.appActions.clearCoachHistory = () => {
+  state.coachHistory = [];
+  syncCoachDrawerDOM();
+};
