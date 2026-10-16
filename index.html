@@ -120,6 +120,8 @@
     [class*="text-indigo-"],
     [class*="text-purple-"],
     [class*="text-violet-"],
+    [class*="text-orange-"],
+    [class*="text-amber-"],
     [class*="text-blue-"] {
       color: var(--accent-primary) !important;
     }
@@ -134,6 +136,8 @@
     .bg-rose-400, .bg-rose-500, .bg-rose-600,
     .bg-indigo-400, .bg-indigo-500, .bg-indigo-600,
     .bg-purple-400, .bg-purple-500, .bg-purple-600,
+    .bg-orange-400, .bg-orange-500, .bg-orange-600, .bg-orange-700,
+    .bg-amber-400, .bg-amber-500, .bg-amber-600, .bg-amber-700,
     .bg-blue-400, .bg-blue-500, .bg-blue-600, .bg-blue-700 {
       background-color: var(--accent-primary) !important;
       color: #000000 !important;
@@ -149,6 +153,8 @@
     [class*="bg-rose-"][class*="/"], [class*="bg-rose-9"],
     [class*="bg-indigo-"][class*="/"], [class*="bg-indigo-9"],
     [class*="bg-purple-"][class*="/"], [class*="bg-purple-9"],
+    [class*="bg-orange-"][class*="/"], [class*="bg-orange-9"],
+    [class*="bg-amber-"][class*="/"], [class*="bg-amber-9"],
     [class*="bg-blue-"][class*="/"], [class*="bg-blue-9"] {
       background-color: color-mix(in srgb, var(--accent-primary) 12%, transparent) !important;
     }
@@ -162,6 +168,8 @@
     }
 
     [class*="ring-sky-"], [class*="ring-cyan-"], [class*="ring-teal-"],
+    [class*="border-orange-"], [class*="border-amber-"],
+    [class*="ring-orange-"], [class*="ring-amber-"],
     [class*="ring-emerald-"], [class*="ring-green-"], [class*="ring-indigo-"],
     [class*="ring-purple-"], [class*="ring-blue-"] {
       --tw-ring-color: color-mix(in srgb, var(--accent-primary) 50%, transparent) !important;
@@ -174,6 +182,13 @@
       --tw-gradient-from: var(--accent-primary) !important;
     }
     [class*="to-sky-"], [class*="to-cyan-"], [class*="to-teal-"],
+    [class*="from-orange-"], [class*="from-amber-"], {
+      --tw-gradient-from: var(--accent-primary) !important;
+      color: #000000 !important; /* Forces text inside orange gradients to pure black */
+    }
+    [class*="to-orange-"], [class*="to-amber-"] {
+      --tw-gradient-to: color-mix(in srgb, var(--accent-primary) 65%, transparent) !important;
+    }
     [class*="to-emerald-"], [class*="to-green-"], [class*="to-indigo-"],
     [class*="to-purple-"], [class*="to-blue-"] {
       --tw-gradient-to: color-mix(in srgb, var(--accent-primary) 65%, transparent) !important;
