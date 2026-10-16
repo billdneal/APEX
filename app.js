@@ -11045,9 +11045,16 @@ function getApexCoachConfig() {
   try {
     cachedModels = JSON.parse(localStorage.getItem('apex_gemini_models_cache'));
   } catch (e) {}
+
+  let savedModel = localStorage.getItem('apex_gemini_model');
+  if (!savedModel || savedModel === 'gemini-2.5-flash') {
+    savedModel = 'gemini-3.8-flash';
+    localStorage.setItem('apex_gemini_model', savedModel);
+  }
+
   return {
     apiKey: localStorage.getItem('apex_gemini_key') || state.profile?.geminiApiKey || '',
-    model: localStorage.getItem('apex_gemini_model') || 'gemini-2.5-flash',
+    model: savedModel,
     doctrine: localStorage.getItem('apex_coach_doctrine') || 'adaptive',
     modelsList: Array.isArray(cachedModels) && cachedModels.length ? cachedModels : FALLBACK_GEMINI_MODELS
   };
