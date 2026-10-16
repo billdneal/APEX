@@ -11330,6 +11330,55 @@ const COACH_PIPELINES = [
   }
 ];
 
+async function askApexCoach(userPrompt, taskType = 'general') {
+  const config = getApexCoachConfig();
+  if (!config.apiKey) {
+    safeCoachToast('Please add your Gemini API Key in Settings first.');
+    return '⚠️ Missing Gemini API Key. Open Settings → APEX AI Coach Engine and paste your API key.';
+  }
+
+  const doctrineObj = COACH_DOCTRINES[config.doctrine] || COACH_DOCTRINES.adaptive;
+  const systemInstruction = `${doctrineObj.prompt}\n\nRULES:\n- Be ruthlessly direct and actionable.\n- Reference my actual logged numbers.\n- NEVER use LaTeX math mode, backslashes, or symbol tags like $\\rightarrow$. Use plain text like '->'.`;
+  
+  let telemetry = '';
+  try {
+    telemetry = buildCoachTelemetryContext();
+  } catch (tErr) {
+    console.warn('Telemetry build warning:', tErr);
+    telemetry = 'Telemetry snapshot unavailable.';
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 25000);
+
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${config.apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: systemInstruction }] },
+        contents: [{
+          role: 'user',
+          parts: [{ text: `LIFTER TELEMETRY:\n${telemetry}\n\nTASK: ${taskType}\nDIRECTIVE:\n${userPrompt}` }]
+        }],
+        generationConfig: { temperature: 0.3, maxOutputTokens: 1200 } // Increased token cap to prevent cutoff
+      })
+    });
+
+    clearTimeout(timeoutId);
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error?.message || `HTTP ${res.status}: Failed to call model "${config.model}"`);
+    }
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response generated.';
+  } catch (err) {
+    clearTimeout(timeoutId);
+    console.error('Coach Error:', err);
+    return `⚠️ Coach Error (${config.model}): ${err.message}`;
+  }
+}
+
 function syncCoachDrawerDOM() {
   let portal = document.getElementById('apexCoachPortal');
   if (!state.coachDrawerOpen) {
@@ -11350,18 +11399,18 @@ function syncCoachDrawerDOM() {
          Select a one-tap telemetry pipeline above or ask a tactical programming question below.
        </div>`
     : state.coachHistory.map(item => `
-        <div class="space-y-1.5">
+        <div class="space-y-1.5 pb-2 border-b border-sub/50">
           <div class="text-[10px] text-accent font-bold uppercase tracking-wider">${item.title}</div>
           <div class="p-3 bg-input rounded-2xl border border-sub text-slate-200 text-[11px] leading-relaxed whitespace-pre-wrap font-mono">${item.response}</div>
         </div>
       `).join('');
 
   portal.innerHTML = `
-    <div class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex flex-col justify-end" onclick="appActions.toggleCoachDrawer(event)">
-      <div class="bg-card border-t border-sub rounded-t-3xl p-4 sm:p-5 max-h-[85vh] flex flex-col space-y-3 shadow-2xl font-mono text-xs w-full max-w-2xl mx-auto" onclick="event.stopPropagation()">
+    <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col justify-end" onclick="appActions.toggleCoachDrawer(event)">
+      <div class="bg-card border-t border-sub rounded-t-3xl p-3.5 sm:p-5 max-h-[92vh] sm:max-h-[86vh] flex flex-col space-y-2.5 shadow-2xl font-mono text-xs w-full max-w-2xl mx-auto" onclick="event.stopPropagation()">
         
         <!-- Drawer Header -->
-        <div class="flex justify-between items-center border-b border-sub pb-2.5">
+        <div class="flex justify-between items-center border-b border-sub pb-2 shrink-0">
           <div>
             <div class="flex items-center gap-2">
               <span class="text-accent font-bold text-sm">✦ APEX AI COACH</span>
@@ -11376,7 +11425,7 @@ function syncCoachDrawerDOM() {
         </div>
 
         <!-- One-Tap Telemetry Pipelines -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 shrink-0">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 shrink-0 max-h-[28vh] overflow-y-auto">
           ${COACH_PIPELINES.map(p => `
             <button type="button" onclick="appActions.runCoachPipeline('${p.id}')" ${state.coachLoading ? 'disabled' : ''}
               class="text-left p-2.5 bg-card-sub hover:bg-input border border-sub hover:border-accent rounded-2xl transition tactile group">
@@ -11386,9 +11435,9 @@ function syncCoachDrawerDOM() {
           `).join('')}
         </div>
 
-        <!-- Output Feed -->
-        <div id="apexCoachFeed" class="flex-1 min-h-[160px] overflow-y-auto space-y-3 pr-1">
-          ${state.coachLoading ? `
+        <!-- Scrollable Output Feed -->
+        <div id="apexCoachFeed" class="flex-1 min-h-[180px] overflow-y-auto space-y-3 pr-1">
+          ${state.coachLoading && !state.coachHistory.length ? `
             <div class="p-4 bg-input rounded-2xl border border-accent/40 text-accent text-xs flex items-center justify-center gap-2 animate-pulse">
               <span>✦ Analyzing 14-day telemetry & active block...</span>
             </div>
@@ -11411,18 +11460,6 @@ function syncCoachDrawerDOM() {
     </div>
   `;
 }
-
-window.appActions.toggleCoachDrawer = (e) => {
-  if (e && e.stopPropagation) e.stopPropagation();
-  state.coachDrawerOpen = !state.coachDrawerOpen;
-  syncCoachDrawerDOM();
-  if (typeof safeRender === 'function') safeRender();
-};
-
-window.appActions.clearCoachHistory = () => {
-  state.coachHistory = [];
-  syncCoachDrawerDOM();
-};
 
 window.appActions.runCoachPipeline = async (pipelineId) => {
   const pipe = COACH_PIPELINES.find(p => p.id === pipelineId);
