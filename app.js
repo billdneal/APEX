@@ -5837,40 +5837,43 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
     },
 
     editCompletedSession(dateKey) {
-      const normKey = normalizeDateKey(dateKey);
-      const dLog = state.dayLogs[normKey];
-      if (dLog && dLog.workout && dLog.workout.exercises) {
-        state.activeWorkout = dLog.workout.exercises.map(ex => ({
-          tier: ex.tier || 'Main',
-          category: ex.category || 'Logged',
-          exercise: ex.exercise,
-          modifiers: sanitizeModifiers(ex.modifiers || []),
-          scheme: normalizeSchemeName(ex.scheme || 'Straight Sets'),
-          isGrounding: Boolean(ex.isGrounding),
-          skipBackoffs: Boolean(ex.skipBackoffs),
-          fatigueWarning: false,
-          densityLoad: ex.densityLoad || 0,
-          densitySec: ex.densitySec || 480,
-          densityTotalSec: ex.densityTotalSec || 480,
-          densityRunning: false,
-          densityTimerObj: null,
-          densityReps: ex.densityReps || 0,
-          sets: (ex.sets || []).map(s => ({ ...s, targetRpe: roundRpe(s.targetRpe), actualRpe: roundRpe(s.actualRpe), lapRunning: false, lapTimerObj: null }))
-        }));
-        state.activeWorkoutDay = Number(normKey.split('-')[2]);
-        state.activeWorkoutDateKey = normKey;
-        state.isEditingHistorical = true;
-        state.historicalDateKey = normKey;
-        state.sessionSecs = (dLog.workout.dur || 45) * 60;
-        state.sStart = Date.now() - (state.sessionSecs * 1000);
-        state.restStart = Date.now();
-        resumeStopwatch();
-        state.screen = 'logger';
-        state.dateActionModal.open = false;
-        persist();
-        safeRender();
-      }
-    },
+    const normKey = normalizeDateKey(dateKey);
+    const dLog = state.dayLogs?.[normKey] || {};
+    const histFallback = (Array.isArray(state.history) ? state.history.find(h => normalizeDateKey(h.date || h.dateKey) === normKey) : null) || {};
+    const rawExs = dLog.workout?.exercises || dLog.exercises || histFallback.workout?.exercises || histFallback.exercises || [];
+
+    state.activeWorkout = rawExs.map(ex => ({
+      ...ex,
+      sets: (ex.sets || []).map(s => {
+        const w = s.actualWeight ?? s.weight ?? s.targetWeight ?? 0;
+        const r = s.actualReps ?? s.reps ?? s.targetReps ?? 0;
+        const rpe = s.actualRpe ?? s.rpe ?? s.targetRpe ?? 8;
+        return {
+          ...s,
+          actualWeight: w,
+          actualReps: r,
+          actualRpe: roundRpe(rpe),
+          targetRpe: roundRpe(s.targetRpe || rpe),
+          done: s.done !== undefined ? s.done : true
+        };
+      })
+    }));
+
+    state.activeWorkoutDay = Number(normKey.split('-')[2]) || 1;
+    state.activeWorkoutDateKey = normKey;
+    state.isEditingHistorical = true;
+    state.historicalDateKey = normKey;
+
+    const durSecs = (dLog.workout?.dur || dLog.dur || histFallback.dur || 45) * 60;
+    state.sessionSecs = durSecs;
+    state.sStart = Date.now() - (state.sessionSecs * 1000);
+    state.restStart = Date.now();
+    resumestopwatch();
+    state.screen = 'logger';
+    state.dateActionModal.open = false;
+    persist();
+    safeRender();
+  },
 
     deleteHistoricalSession(dateKey) {
       const normKey = normalizeDateKey(dateKey);
@@ -6070,12 +6073,23 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
             });
           }
         }
+    }
+    // Auto-sync modifier/exercise edits directly to historical dayLogs if editing history
+    if (state.isEditingHistorical && state.historicalDateKey && state.dayLogs?.[state.historicalDateKey]?.workout?.exercises) {
+      const histEx = state.dayLogs[state.historicalDateKey].workout.exercises[state.modal.idx];
+      const activeEx = state.activeWorkout?.[state.modal.idx];
+      if (histEx && activeEx) {
+        histEx.category = activeEx.category;
+        histEx.exercise = activeEx.exercise;
+        histEx.modifiers = [...(activeEx.modifiers || [])];
+        histEx.scheme = activeEx.scheme;
       }
-      state.modal.open = false;
-      persist();
-      triggerCloudSync(1500);
-      safeRender();
-    },
+    }
+    state.modal.open = false;
+    persist();
+    triggerCloudSync(1500);
+    safeRender();
+  },
 
     // Mesocycle & Blueprint Architecture
     setActiveBlock(idx) { state.activeBlockIdx = idx; state.activeWeek = 1; persist(); window.pushToCloud(false); safeRender(); },
@@ -8792,11 +8806,23 @@ const SPECIALIZED_SCHEMES = [
 
       // 6. HISTORICAL REVIEW SCREEN
       else if (state.screen === 'history_review') {
-        const dKey = state.reviewDateKey || getCurKey();
-        const curLog = state.dayLogs?.[dKey] || {};
-        const workout = curLog.workout || { dur: 45, srpe: 7.5, exercises: [] };
-        const srpeNum = roundRpe(workout.srpe);
-        const displaySrpe = srpeNum <= 5.5 ? '&lt;6.0' : srpeNum.toFixed(1);
+       const dKey = normalizeDateKey(state.reviewDateKey || getCurKey());
+      const curLog = state.dayLogs?.[dKey] || state.dayLogs?.[state.reviewDateKey] || {};
+      const histFallback = (Array.isArray(state.history) ? state.history.find(h => normalizeDateKey(h.date || h.dateKey) === dKey) : null) || {};
+      const baseWorkout = curLog.workout || histFallback.workout || histFallback || {};
+      const resolvedExercises = (
+        (Array.isArray(baseWorkout.exercises) && baseWorkout.exercises.length ? baseWorkout.exercises : null) ||
+        (Array.isArray(curLog.exercises) && curLog.exercises.length ? curLog.exercises : null) ||
+        (Array.isArray(histFallback.exercises) && histFallback.exercises.length ? histFallback.exercises : null) ||
+        []
+      );
+      const workout = {
+        dur: baseWorkout.dur || curLog.dur || histFallback.dur || 45,
+        srpe: baseWorkout.srpe || curLog.srpe || histFallback.srpe || 7.5,
+        exercises: resolvedExercises
+      };
+      const srpeNum = roundRpe(workout.srpe);
+      const displaySrpe = srpeNum <= 5.5 ? '&lt;6.0' : srpeNum.toFixed(1);
 
         html += `
           <main class="flex-1 min-h-0 overflow-y-auto space-y-3 w-full pr-0.5" onclick="appActions.closeCardMenu()">
@@ -8821,13 +8847,17 @@ const SPECIALIZED_SCHEMES = [
 
             <div class="space-y-2">
               ${(workout.exercises || []).map(ex => {
-                const cleanMods = sanitizeModifiers(ex.modifiers || []);
-                const setDetails = (ex.sets || []).map((s, idx) => {
-                  const effectiveW = getExerciseLoad(ex.exercise, s.actualWeight, dKey);
-                  const cleanRpe = roundRpe(s.actualRpe);
-                  const displayRpe = cleanRpe <= 5.5 ? '&lt;6.0' : cleanRpe.toFixed(1);
-                  return `${idx + 1}. ${effectiveW}lbs × ${s.actualReps || 0}r @${displayRpe}`;
-                }).join(' • ');
+          const exName = ex.exercise || ex.name || 'Exercise';
+          const cleanMods = sanitizeModifiers(ex.modifiers || []);
+          const setDetails = (ex.sets || []).map((s, idx) => {
+            const rawW = s.actualWeight ?? s.weight ?? s.targetWeight ?? 0;
+            const rawR = s.actualReps ?? s.reps ?? s.targetReps ?? 0;
+            const rawRpe = s.actualRpe ?? s.rpe ?? s.targetRpe ?? 8;
+            const effectiveW = getExerciseLoad(exName, rawW, dKey);
+            const cleanRpe = roundRpe(rawRpe);
+            const displayRpe = cleanRpe <= 5.5 ? '&lt;6.0' : cleanRpe.toFixed(1);
+            return `${idx + 1}. ${effectiveW}lbs × ${rawR}r @${displayRpe}`;
+          }).join(' • ');
 
                 return `
                   <div class="bg-card-sub p-3 rounded-2xl border border-sub space-y-1.5 font-mono text-xs shadow-sm">
