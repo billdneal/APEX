@@ -1,4 +1,4 @@
-const CACHE_NAME = 'apex-engine-cache-v4.6.4';
+const CACHE_NAME = 'apex-engine-cache-v4.6.5';
 
 const CORE_ASSETS = [
   './',
@@ -54,7 +54,7 @@ self.addEventListener('fetch', (event) => {
 
   if (isCoreCode) {
     event.respondWith(
-      fetch(req)
+      fetch(req, { cache: 'no-store' })
         .then((networkResponse) => {
           if (networkResponse && networkResponse.status === 200) {
             const resClone = networkResponse.clone();
