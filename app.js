@@ -11847,3 +11847,31 @@ if (typeof appActions !== 'undefined') {
     if (typeof render === 'function') render();
   };
 }
+
+// ==========================================
+// SVG PATH SANITIZER & MOBILE CLICK GUARD
+// ==========================================
+window.sanitizeSvgPath = function(pathStr) {
+  if (!pathStr || typeof pathStr !== 'string') return 'M0 0H24V24H0z';
+  // Check if string contains NaN or invalid number tokens
+  if (pathStr.includes('NaN') || pathStr.includes('undefined')) {
+    return 'M0 0H24V24H0z';
+  }
+  return pathStr;
+};
+
+// Global click safety wrapper for mobile history review / edit modals
+window.appActions = window.appActions || {};
+const originalEdit = window.appActions.editCompletedSession;
+window.appActions.editCompletedSession = function(dateKey) {
+  try {
+    if (typeof originalEdit === 'function') {
+      originalEdit(dateKey);
+    } else {
+      console.warn("editCompletedSession fallback triggered for:", dateKey);
+    }
+  } catch (err) {
+    console.error("Mobile edit click caught error:", err);
+    alert("Could not open session editor. Check console for details.");
+  }
+};
