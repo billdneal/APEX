@@ -11875,3 +11875,60 @@ window.appActions.editCompletedSession = function(dateKey) {
     alert("Could not open session editor. Check console for details.");
   }
 };
+// ==========================================
+// ROBUST MOBILE EDIT SESSION OVERRIDE
+// ==========================================
+window.appActions = window.appActions || {};
+window.appActions.editCompletedSession = function(dateKey) {
+  try {
+    const normKey = typeof normalizeDateKey === 'function' ? normalizeDateKey(dateKey) : (dateKey || getCurKey());
+    const dLog = state.dayLogs?.[normKey] || {};
+    const histFallback = (Array.isArray(state.history) ? state.history.find(h => (h.date || h.dateKey) === normKey) : null) || {};
+    const rawExs = dLog.workout?.exercises || dLog.exercises || histFallback.workout?.exercises || histFallback.exercises || [];
+
+    state.activeWorkout = rawExs.map(ex => ({
+      ...ex,
+      sets: (ex.sets || []).map(s => {
+        const w = s.actualWeight ?? s.weight ?? s.targetWeight ?? 0;
+        const r = s.actualReps ?? s.reps ?? s.targetReps ?? 0;
+        const rpe = s.actualRpe ?? s.rpe ?? s.targetRpe ?? 8;
+        return {
+          ...s,
+          actualWeight: w,
+          actualReps: r,
+          actualRpe: typeof roundRpe === 'function' ? roundRpe(rpe) : rpe,
+          targetRpe: typeof roundRpe === 'function' ? roundRpe(s.targetRpe || rpe) : (s.targetRpe || rpe),
+          done: s.done !== undefined ? s.done : true
+        };
+      })
+    }));
+
+    state.activeWorkoutDay = Number(String(normKey).split('-')[2]) || 1;
+    state.activeWorkoutDateKey = normKey;
+    state.isEditingHistorical = true;
+    state.historicalDateKey = normKey;
+
+    const durSecs = (dLog.workout?.dur || dLog.dur || histFallback.dur || 45) * 60;
+    state.sessionSecs = durSecs;
+    state.sStart = Date.now() - (state.sessionSecs * 1000);
+    state.restStart = Date.now();
+    if (typeof resumestopwatch === 'function') resumestopwatch();
+
+    // Force screen state and close modals
+    state.screen = 'logger';
+    if (state.dateActionModal) state.dateActionModal.open = false;
+    if (state.coachDrawerOpen) state.coachDrawerOpen = false;
+
+    if (typeof persist === 'function') persist();
+
+    // Immediate mobile render trigger
+    if (typeof render === 'function') {
+      render();
+    } else if (typeof safeRender === 'function') {
+      safeRender();
+    }
+  } catch (err) {
+    console.error("Edit session error:", err);
+    alert("Edit Error: " + err.message);
+  }
+};
