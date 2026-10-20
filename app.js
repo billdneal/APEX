@@ -1881,26 +1881,29 @@ window.DEFAULT_SCHEME_BLUEPRINTS = DEFAULT_SCHEME_BLUEPRINTS;
       return Math.round((Number(val) || 0) / inc) * inc;
     }
 
-    // Multi-Formula 1RM Prediction Engine
-    function calculate1RmEquivalent(weight, reps, formula = 'apex') {
-      const w = Number(weight) || 0;
-      const r = Math.max(1, Number(reps) || 1);
-      if (w <= 0) return 0;
-      if (r === 1) return w;
+   // Multi-Formula & RPE-Aware 1RM Prediction Engine
+function calculate1RmEquivalent(weight, reps, rpeOrFormula = 10, exName = '') {
+  const w = Number(weight) || 0;
+  const r = Math.max(1, Number(reps) || 1);
+  if (w <= 0) return 0;
 
-      if (formula === 'epley') {
-        return Math.round(w * (1 + (r / 30)));
-      } else if (formula === 'brzycki') {
-        return Math.round(w * (36 / (37 - r)));
-      } else if (formula === 'wathan') {
-        return Math.round((100 * w) / (48.8 + (53.8 * Math.exp(-0.075 * r))));
-      } else if (formula === 'lombardi') {
-        return Math.round(w * Math.pow(r, 0.10));
-      }
-      // Default: APEX Autoregulated Table Formula
-      const rirTablePct = Math.max(40, (100 - (r - 1) * 2.15));
-      return Math.round(w / (rirTablePct / 100));
-    }
+  // Determine if 3rd arg is a formula name ('epley', 'brzycki', etc.) or an RPE number
+  const isFormulaStr = typeof rpeOrFormula === 'string' && isNaN(Number(rpeOrFormula));
+  const formulaOverride = isFormulaStr ? rpeOrFormula.toLowerCase() : null;
+  const rpeVal = isFormulaStr ? 10 : (Number(rpeOrFormula) || 10);
+
+  // If no RIR and 1 rep, 1RM is simply the weight
+  if (r === 1 && rpeVal >= 10) return Math.round(w);
+
+  // Route through getUnifiedE1RM if no specific formula override was requested
+  if (!formulaOverride && typeof getUnifiedE1RM === 'function') {
+    return getUnifiedE1RM(w, r, rpeVal, exName);
+  }
+
+  // Otherwise use getPct with the requested formula & RPE
+  const pct = getPct(r, rpeVal, formulaOverride);
+  return Math.round(w / (Math.max(30, pct) / 100));
+}
 
     // Dynamic Percentage Resolver Linked to Selected 1RM Engine
     function getPct(reps, rpe, formulaOverride = null) {
@@ -2498,20 +2501,8 @@ function renderCustomRpeTool() {
   `;
 }
 // Global Single Source of Truth for e1RM
-function getE1RM(weight, reps, rpe) {
-  const w = Number(weight);
-  const r = Math.min(Math.max(Math.round(Number(reps) || 0), 1), 50);
-  const effort = Math.min(Math.max(Number(rpe) || 10.0, 5.0), 10.0);
-  if (!w || !r) return 0;
-
-  const activeProfile = (state.rpeProfiles && state.rpeProfiles[state.activeRpeProfileId]) || null;
-  const pct = activeProfile?.matrix?.[r]?.[effort];
-
-  if (!pct) {
-    // Fallback if specific cell is missing
-    return Math.round(w * (1 + (r + (10 - effort)) / 30));
-  }
-  return Math.round(w / (pct / 100));
+function getE1RM(weight, reps, rpe = 10, exName = '') {
+  return getUnifiedE1RM(weight, reps, rpe, exName);
 }
 window.getE1RM = getE1RM;
 // ==========================================
@@ -8099,15 +8090,15 @@ const SPECIALIZED_SCHEMES = [
 
           let livePeakE1 = 0;
           let liveLastE1 = 0;
-          completedSets.forEach(s => {
-            const effectiveW = getExerciseLoad(ex.exercise, s.actualWeight, sessionDateKey);
-            if (effectiveW && s.actualReps && s.actualRpe) {
-              const cleanRpe = roundRpe(s.actualRpe);
-              const c = getE1RM(effectiveW, s.actualReps, cleanRpe);
-              if (c > livePeakE1) livePeakE1 = c;
-              liveLastE1 = c;
-            }
-          });
+         completedSets.forEach(s => {
+        const rawW = Number(s.actualWeight) || 0;
+        if (rawW > 0 && s.actualReps && s.actualRpe) {
+          const cleanRpe = roundRpe(s.actualRpe);
+          const c = getUnifiedE1RM(rawW, s.actualReps, cleanRpe, ex.exercise);
+          if (c > livePeakE1) livePeakE1 = c;
+          liveLastE1 = c;
+        }
+      });
 
           const liveFatiguePct = (livePeakE1 > 0 && liveLastE1 > 0)
             ? Math.max(0, Math.round(((livePeakE1 - liveLastE1) / livePeakE1) * 100))
@@ -11635,3 +11626,194 @@ window.appActions.saveBlockDuration = (blockIndex) => {
     if (typeof safeRender === 'function') safeRender();
   }, 600);
 };
+
+// ==========================================
+// APEX TRAINING ENGINE - MASTER EXPORT BLOCK
+// ==========================================
+window.apexCore = window.apexCore || {};
+window.apexCore.getExerciseLoad = typeof getExerciseLoad === 'function' 
+  ? getExerciseLoad 
+  : (window.apexCore.getExerciseLoad || function(exName, rawWeight, dateKey) {
+      const w = Number(rawWeight) || 0;
+      if (!exName) return w;
+      const name = String(exName).toLowerCase();
+      const bw = Number(window.state?.settings?.bodyweight || window.state?.profile?.bodyweight) || 200;
+      // Hardware-aware bodyweight scaling for home gym setup (90% BW for Dips, 100% BW for Pull-Ups)
+      if (/\b(dip|dips)\b/.test(name)) return Math.round(w + (bw * 0.9));
+      if (/\b(pull-up|pullup|chin-up|chinup)\b/.test(name)) return Math.round(w + bw);
+      return w;
+    });
+
+// Bind unified global calculators to both window and apexCore
+window.getUnifiedE1RM = typeof getUnifiedE1RM === 'function' ? getUnifiedE1RM : function(w, r, rpe, ex) {
+  return Number(w) || 0;
+};
+window.calculate1RmEquivalent = typeof calculate1RmEquivalent === 'function' ? calculate1RmEquivalent : window.getUnifiedE1RM;
+window.getPct = typeof getPct === 'function' ? getPct : function(r, rpe) { return 100 - ((r + Math.max(0, 10 - rpe)) - 1) * 2.15; };
+
+window.apexCore.getUnifiedE1RM = window.getUnifiedE1RM;
+window.apexCore.calculate1RmEquivalent = window.calculate1RmEquivalent;
+window.apexCore.getPct = window.getPct;
+
+console.log("APEX Training Engine: Master Engine Block Initialized Successfully.");
+
+// ============================================================================
+// 6. HARDWARE-AWARE EQUIPMENT INVENTORY, DOUBLE PROGRESSION & AI COACH BRIDGE
+// ============================================================================
+
+window.APEX_HARDWARE_PROFILE = {
+  dumbbells: { maxLoad: 90, minLoad: 5, increment: 5, unit: 'lbs' },
+  cablePulley: { ratio: 0.5, increment: 2.5, notes: 'Plate-loaded 2:1 pulley ratio' },
+  specialtyBars: ['Safety Squat Bar (SSB)', 'Trap Bar', 'Neutral Grip Swiss Bar', 'EZ Curl Bar'],
+  stations: ['Folding Squat Rack', 'Dip Bar Station', 'Adjustable Bench']
+};
+
+/**
+ * Resolves hardware profile and constraints for a specific movement
+ */
+function getMovementHardwareBounds(exName = '') {
+  const name = String(exName).toLowerCase();
+  const isDB = /\b(db|dumbbell|dumbbells)\b/.test(name);
+  const isCable = /\b(cable|pulley|pushdown|tricep extension|lat pulldown|face pull)\b/.test(name);
+  const isDip = /\b(dip|dips)\b/.test(name);
+
+  return {
+    isDB,
+    isCable,
+    isDip,
+    maxLoad: isDB ? window.APEX_HARDWARE_PROFILE.dumbbells.maxLoad : Infinity,
+    step: isDB ? 5 : (isCable ? 2.5 : 5)
+  };
+}
+
+/**
+ * Historical Lookback Double Progression Engine
+ * Respects existing Movement Library / Phase Builder rep ranges (`repRangeStr`).
+ * Locks weight until all logged sets clear the rep ceiling, or pivots at the 90lb DB cap.
+ */
+function evaluateDoubleProgression(exName, repRangeStr = '8-12', fallbackWeight = 0) {
+  const bounds = getMovementHardwareBounds(exName);
+
+  // 1. Parse the active Phase / Library rep bracket (e.g. "8-12" or "10-15r")
+  const cleanStr = String(repRangeStr || '8-12').replace(/[^0-9-]/g, '');
+  const parts = cleanStr.split('-').map(Number).filter(Boolean);
+  const repFloor = parts[0] || 8;
+  const repCeiling = parts[1] || parts[0] || 12;
+
+  // 2. Scan workout history for the most recent completed session of this movement
+  const historyList = Array.isArray(window.state?.history) ? window.state.history : [];
+  let lastSessionSets = null;
+
+  for (let i = historyList.length - 1; i >= 0; i--) {
+    const sess = historyList[i];
+    const exMatch = (sess?.exercises || []).find(
+      e => String(e.exercise || e.name || '').toLowerCase() === String(exName).toLowerCase()
+    );
+    if (exMatch && Array.isArray(exMatch.sets)) {
+      const doneSets = exMatch.sets.filter(s => s && s.done && Number(s.actualReps) > 0);
+      if (doneSets.length > 0) {
+        lastSessionSets = doneSets;
+        break;
+      }
+    }
+  }
+
+  if (!lastSessionSets) {
+    return {
+      load: fallbackWeight,
+      repTarget: `${repFloor}-${repCeiling}`,
+      status: 'BASELINE',
+      coachingCue: 'Establish baseline working load within target bracket.'
+    };
+  }
+
+  // 3. Evaluate previous working load & whether all sets cleared the rep ceiling
+  const lastLoad = Math.max(...lastSessionSets.map(s => Number(s.actualWeight) || 0));
+  const allClearedCeiling = lastSessionSets.every(
+    s => (Number(s.actualReps) || 0) >= repCeiling && (Number(s.actualRpe) || 10) <= 9.5
+  );
+
+  if (allClearedCeiling) {
+    const proposedLoad = lastLoad + bounds.step;
+
+    // Hardware Cap Check: 90 lb Dumbbell Ceiling
+    if (bounds.isDB && proposedLoad > bounds.maxLoad) {
+      const expandedFloor = repFloor + 2;
+      const expandedCeiling = repCeiling + 3;
+      return {
+        load: bounds.maxLoad,
+        repTarget: `${expandedFloor}-${expandedCeiling}`,
+        status: 'HARDWARE_CAP_PIVOT',
+        coachingCue: `90lb DB ceiling reached. Locking at 90 lbs and shifting bracket to ${expandedFloor}-${expandedCeiling} reps (or pause/tempo density).`
+      };
+    }
+
+    return {
+      load: proposedLoad,
+      repTarget: `${repFloor}-${repCeiling}`,
+      status: 'LOAD_INCREASE',
+      coachingCue: `Cleared ${repCeiling} reps across all sets last session. Bump load +${bounds.step} lbs and build from ${repFloor} reps.`
+    };
+  }
+
+  // 4. Default Double Progression Hold: Keep load locked until ceiling is cleared
+  return {
+    load: lastLoad || fallbackWeight,
+    repTarget: `${repFloor}-${repCeiling}`,
+    status: 'HOLD_LOAD_BUILD_REPS',
+    coachingCue: `Hold at ${lastLoad} lbs until all sets hit ${repCeiling} reps.`
+  };
+}
+
+/**
+ * Generates the Hardware & Progression Context Prompt for the AI Coach
+ */
+function getHardwareCoachContext() {
+  return [
+    `[HOME GYM HARDWARE & PROGRESSION CONSTRAINTS]`,
+    `- Dumbbells: Capped at 90 lbs max per hand. Never prescribe DB loads > 90 lbs; once 90 lbs is maxed across sets, prescribe higher rep brackets, paused reps, slower eccentrics, rest-pause, or unilateral SSB/Barbell alternatives.`,
+    `- Cable Pulley System: Plate-loaded with a 2:1 mechanical ratio (effective resistance is 50% of loaded plate weight; minimum micro-step is 2.5 lbs).`,
+    `- Available Bars & Stations: Safety Squat Bar (SSB), Trap Bar, Neutral Grip Bar, EZ Bar, Dip Station, Folding Rack, Bumper Plates.`,
+    `- Progression Logic: Double Progression is active. Hold working weight constant across sessions until the top of the assigned rep range is hit on all sets.`
+  ].join('\n');
+}
+
+// Bind to global and apexCore namespaces
+window.apexCore = window.apexCore || {};
+window.apexCore.hardwareProfile = window.APEX_HARDWARE_PROFILE;
+window.apexCore.getMovementHardwareBounds = getMovementHardwareBounds;
+window.apexCore.evaluateDoubleProgression = evaluateDoubleProgression;
+window.apexCore.getHardwareCoachContext = getHardwareCoachContext;
+
+window.getMovementHardwareBounds = getMovementHardwareBounds;
+window.evaluateDoubleProgression = evaluateDoubleProgression;
+window.getHardwareCoachContext = getHardwareCoachContext;
+
+// Wire into appActions for UI buttons (Block Duration Steppers & Save)
+if (typeof appActions !== 'undefined') {
+  appActions.adjustBlockWeeks = appActions.adjustBlockWeeks || function(idx, delta) {
+    const blocks = state.program?.blocks || state.blocks || [];
+    if (!blocks[idx]) return;
+    const next = Math.min(16, Math.max(1, (Number(blocks[idx].weeks) || 4) + delta));
+    blocks[idx].weeks = next;
+    const inputEl = document.getElementById(`blockWeeksInput_${idx}`);
+    if (inputEl) inputEl.value = next;
+    if (typeof saveState === 'function') saveState();
+    if (typeof render === 'function') render();
+  };
+
+  appActions.setBlockWeeksExact = appActions.setBlockWeeksExact || function(idx, val) {
+    const blocks = state.program?.blocks || state.blocks || [];
+    if (!blocks[idx]) return;
+    blocks[idx].weeks = Math.min(16, Math.max(1, Number(val) || 4));
+  };
+
+  appActions.saveBlockDuration = appActions.saveBlockDuration || function(idx) {
+    const inputEl = document.getElementById(`blockWeeksInput_${idx}`);
+    if (inputEl && typeof appActions.setBlockWeeksExact === 'function') {
+      appActions.setBlockWeeksExact(idx, inputEl.value);
+    }
+    if (typeof saveState === 'function') saveState();
+    if (typeof render === 'function') render();
+  };
+}

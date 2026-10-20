@@ -181,11 +181,13 @@
       --tw-gradient-to: color-mix(in srgb, var(--accent-primary) 70%, transparent) !important;
     }
 
-    /* FORCE ALL TEXT INSIDE ORANGE/AMBER CONTAINERS TO BE PURE HIGH-CONTRAST BLACK */
-    [class*="orange"] *, [class*="amber"] * {
-      color: #000000 !important;
-      font-weight: 700 !important;
-    }
+    /* FORCE TEXT INSIDE BRIGHT ORANGE/AMBER GRADIENTS & SOLID BUTTONS TO BLACK */
+  [class*="from-orange-"] *,
+  [class*="from-amber-"] *,
+  .bg-orange-400 *, .bg-orange-500 *, .bg-orange-600 *,
+  .bg-amber-400 *, .bg-amber-500 *, .bg-amber-600 * {
+    color: #000000 !important;
+  }
 
     /* 6. Native Browser Sliders, Checkboxes & Radio Buttons */
     input[type="range"],
