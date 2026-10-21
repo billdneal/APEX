@@ -3016,9 +3016,7 @@ function renderRpeMatrixTable(profile) {
         if (typeof window.renderSyncIndicator === 'function') window.renderSyncIndicator();
       }
       try {
-        const { data, error } = await sbClient.from('apex_userdata').select('*').eq('user_id', state.user.id).single();
-        if (error && error.code !== 'PGRST116') throw error;
-        const { data, error } = await sbClient.from('apex_userdata').select('*').eq('user_id', state.user.id).single();
+    const { data, error } = await sbClient.from('apex_userdata').select('*').eq('user_id', state.user.id).single();
     if (error && error.code !== 'PGRST116') throw error;
     if (data) {
       // Do not let an automatic startup pull overwrite unsynced local workouts!
