@@ -2992,6 +2992,7 @@ function renderRpeMatrixTable(profile) {
         const { error } = await sbClient.from('apex_userdata').upsert(payload, { onConflict: 'user_id' });
         if (error) throw error;
         localStorage.setItem('apex_last_sync_timestamp', String(Date.now()));
+        localStorage.setItem('apex_has_unsynced_changes', 'false');
         state.syncStatus = 'synced';
         if (isManual) showToast("✓ Data pushed to Supabase successfully!");
       } catch (err) {
@@ -3017,7 +3018,17 @@ function renderRpeMatrixTable(profile) {
       try {
         const { data, error } = await sbClient.from('apex_userdata').select('*').eq('user_id', state.user.id).single();
         if (error && error.code !== 'PGRST116') throw error;
-        if (data) {
+        const { data, error } = await sbClient.from('apex_userdata').select('*').eq('user_id', state.user.id).single();
+    if (error && error.code !== 'PGRST116') throw error;
+    if (data) {
+      // Do not let an automatic startup pull overwrite unsynced local workouts!
+      if (!isManual && localStorage.getItem('apex_has_unsynced_changes') === 'true') {
+        console.log("Unsynced local changes detected on boot — pushing local state to Supabase first.");
+        await window.pushToCloud(false);
+        return;
+      }
+      if (data.settings) {
+        state.settings = { ...state.settings, ...data.settings };
           if (data.settings) {
             state.settings = { ...state.settings, ...data.settings };
             if (data.settings.customSplitBlueprints) state.customSplitBlueprints = data.settings.customSplitBlueprints;
@@ -3066,18 +3077,27 @@ function renderRpeMatrixTable(profile) {
     };
 
     // Debounced Auto-Sync Engine
-    let cloudSyncTimeout = null;
-    function queueCloudSync(delayMs = 2500) {
-      if (!state.user) return;
-      if (cloudSyncTimeout) clearTimeout(cloudSyncTimeout);
-      state.syncStatus = 'syncing';
-      if (typeof window.renderSyncIndicator === 'function') window.renderSyncIndicator();
+let cloudSyncTimeout = null;
+function queueCloudSync(delayMs = 1000) {
+  localStorage.setItem('apex_has_unsynced_changes', 'true');
+  localStorage.setItem('apex_last_local_edit', String(Date.now()));
+  if (!state.user) return;
+  if (cloudSyncTimeout) clearTimeout(cloudSyncTimeout);
+  state.syncStatus = 'syncing';
+  if (typeof window.renderSyncIndicator === 'function') window.renderSyncIndicator();
 
-      cloudSyncTimeout = setTimeout(() => {
-        window.pushToCloud(false);
-      }, delayMs);
-    }
-    window.queueCloudSync = queueCloudSync;
+  cloudSyncTimeout = setTimeout(() => {
+    window.pushToCloud(false);
+  }, delayMs);
+}
+window.queueCloudSync = queueCloudSync;
+
+// Flush any pending cloud sync immediately if the page is refreshed or backgrounded
+window.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && localStorage.getItem('apex_has_unsynced_changes') === 'true') {
+    window.pushToCloud(false);
+  }
+});
 
     // 60-Second Background Heartbeat Auto-Sync for In-Progress Workouts
     setInterval(() => {
