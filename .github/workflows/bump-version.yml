@@ -1,0 +1,54 @@
+name: Auto Bump Version
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'app.js'
+      - 'index.html'
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Increment version across sw.js, index.html, and app.js
+        run: |
+          node -e '
+            const fs = require("fs");
+            let sw = fs.readFileSync("sw.js", "utf8");
+            const m = sw.match(/apex-engine-cache-v(\d+)\.(\d+)\.(\d+)/);
+            if (!m) process.exit(0);
+            const oldV = `${m[1]}.${m[2]}.${m[3]}`;
+            const newV = `${m[1]}.${m[2]}.${Number(m[3]) + 1}`;
+            
+            fs.writeFileSync("sw.js", sw.replace(`v${oldV}`, `v${newV}`));
+            
+            if (fs.existsSync("index.html")) {
+              let html = fs.readFileSync("index.html", "utf8");
+              html = html.replace(/app\.js\?v=[0-9.]+/g, `app.js?v=${newV}`);
+              fs.writeFileSync("index.html", html);
+            }
+            
+            if (fs.existsSync("app.js")) {
+              let app = fs.readFileSync("app.js", "utf8");
+              app = app.replace(new RegExp(oldV.replace(/\./g, "\\."), "g"), newV);
+              fs.writeFileSync("app.js", app);
+            }
+            console.log(`Bumped ${oldV} -> ${newV}`);
+          '
+
+      - name: Commit and Push Version Bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add sw.js index.html app.js
+          git diff --staged --quiet || git commit -m "chore: auto-bump version [skip ci]"
+          git push
