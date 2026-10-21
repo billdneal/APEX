@@ -3151,7 +3151,7 @@ function renderRpeMatrixTable(profile) {
 })();
 // ============================================================================
 // APEX TRAINING ENGINE - PART 2 OF 4: MATHEMATICAL PERIODIZATION MATRIX
-// Production Release v4.6.0-PWA (Neutral Schemes / Multi-Engine / Date-Aware)
+// Production Release v4.6.5-PWA (Neutral Schemes / Multi-Engine / Date-Aware)
 // Includes: Full Mathematical Logic for all 31 Hypertrophy & Strength Schemes,
 //           Neutral Scheme Nomenclature with Backward-Compatibility Aliasing,
 //           Multi-Formula 1RM Prediction Engine Integration (Dynamic getPct),
@@ -4400,7 +4400,7 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
 })();
 // ============================================================================
 // APEX TRAINING ENGINE - PART 3 OF 4: CONTROLLER ACTIONS & RUNTIME ENGINE
-// Complete Production Release v4.6.0-PWA (Wizard & 1RM Engine Controllers)
+// Complete Production Release v4.6.5-PWA (Wizard & 1RM Engine Controllers)
 // Includes: Full Integration with Part 2 31-Scheme Mathematical Periodization Engine,
 //           Block Transition Wizard (openBlockWizard, commitBlockWizard),
 //           Multi-Formula 1RM Selection Controller (setOneRmFormula),
@@ -6551,7 +6551,7 @@ updateSplitSlotTier(splitName, slotIdx, newTier) {
 })();
 // ============================================================================
 // APEX TRAINING ENGINE - PART 4 OF 4: VIEW LAYER, RENDER PIPELINE & BOOTSTRAP
-// Complete Unabridged Production Release v4.6.0-PWA (Full View Architecture)
+// Complete Unabridged Production Release v4.6.5-PWA (Full View Architecture)
 // Includes: On-Demand Block Transition Wizard (Tier Routing & Telemetry Analysis),
 //           Multi-Engine 1RM Selection UI (APEX, Epley, Brzycki, Wathan, Lombardi),
 //           1RM Mathematical Breakdown in System Codex Screen,
@@ -10950,7 +10950,7 @@ const SPECIALIZED_SCHEMES = [
 
       html += `
         <footer class="pt-2 border-t border-sub/50 flex justify-between items-center text-[9px] font-mono text-slate-500 shrink-0" onclick="appActions.closeCardMenu()">
-          <span>APEX Training Engine ${core.APP_VERSION || 'v4.6.1'}</span>
+          <span>APEX Training Engine ${core.APP_VERSION || 'v4.6.5-PWA'}</span>
           <span>${state.user ? '☁️ Connected (' + state.user.email.split('@')[0] + ')' : '⚡ Offline PWA Mode'}</span>
         </footer>
       `;
