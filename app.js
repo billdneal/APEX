@@ -3041,7 +3041,7 @@ function renderRpeMatrixTable(profile) {
         if (data.scheme_recipes) state.schemeRecipes = { ...defaultSchemeRecipes, ...data.scheme_recipes };
         if (data.exercise_rep_overrides) state.exerciseRepOverrides = data.exercise_rep_overrides;
         if (data.modifier_cats) state.modifierCats = data.modifier_cats;
-        if (data.exercises) state.exercises = [ ...new Set([ ...state.exercises, ...data.exercises ]) ];
+        if (data.exercises) state.exercises = Array.isArray(data.exercises) ? data.exercises : { ...state.exercises, ...data.exercises };
         if (data.day_logs) {
           const normalizedLogs = {};
           Object.keys(data.day_logs).forEach(k => {
