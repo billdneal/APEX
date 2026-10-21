@@ -3004,75 +3004,80 @@ function renderRpeMatrixTable(profile) {
     };
 
     window.pullFromCloud = async function(isManual = false, isSilent = false) {
-      if (!sbClient) window.initSupabase();
-      if (!sbClient || !state.user) {
-        state.syncStatus = 'offline';
-        if (typeof window.renderSyncIndicator === 'function') window.renderSyncIndicator();
-        if (isManual) showToast("❌ Please sign in to Supabase first.");
-        return;
-      }
-      if (!isSilent) {
-        state.syncStatus = 'syncing';
-        if (typeof window.renderSyncIndicator === 'function') window.renderSyncIndicator();
-      }
-      try {
-    const { data, error } = await sbClient.from('apex_userdata').select('*').eq('user_id', state.user.id).single();
-    if (error && error.code !== 'PGRST116') throw error;
-    if (data) {
-      // Do not let an automatic startup pull overwrite unsynced local workouts!
-      if (!isManual && localStorage.getItem('apex_has_unsynced_changes') === 'true') {
-        console.log("Unsynced local changes detected on boot — pushing local state to Supabase first.");
-        await window.pushToCloud(false);
-        return;
-      }
-      if (data.settings) {
-        state.settings = { ...state.settings, ...data.settings };
-          if (data.settings) {
-            state.settings = { ...state.settings, ...data.settings };
-            if (data.settings.customSplitBlueprints) state.customSplitBlueprints = data.settings.customSplitBlueprints;
-            if (data.settings.schemeRecipes) state.schemeRecipes = { ...defaultSchemeRecipes, ...data.settings.schemeRecipes };
-            if (data.settings.anchorE1rms) state.anchorE1rms = { ...state.e1rms, ...data.settings.anchorE1rms };
-            if (data.settings.oneRmFormula) state.settings.oneRmFormula = data.settings.oneRmFormula;
-          }
-          if (data.profile) state.profile = { ...state.profile, ...data.profile };
-          if (data.mesocycle) state.mesocycle = data.mesocycle;
-          if (data.weekday_split) state.weekdaySplit = data.weekday_split;
-          if (data.exercise_meta) state.exerciseMeta = { ...state.exerciseMeta, ...data.exercise_meta };
-          if (data.phase_rep_matrix) state.phaseRepMatrix = data.phase_rep_matrix;
-          if (data.scheme_blueprints) state.schemeBlueprints = { ...(typeof DEFAULT_SCHEME_BLUEPRINTS !== 'undefined' ? DEFAULT_SCHEME_BLUEPRINTS : {}), ...data.scheme_blueprints };
-          if (data.scheme_recipes) state.schemeRecipes = { ...defaultSchemeRecipes, ...data.scheme_recipes };
-          if (data.exercise_rep_overrides) state.exerciseRepOverrides = data.exercise_rep_overrides;
-          if (data.modifier_cats) state.modifierCats = data.modifier_cats;
-          if (data.exercises) state.exercises = { ...state.exercises, ...data.exercises };
-          if (data.day_logs) {
-            const normalizedLogs = {};
-            Object.keys(data.day_logs).forEach(k => {
-              normalizedLogs[normalizeDateKey(k)] = data.day_logs[k];
-            });
-            state.dayLogs = { ...state.dayLogs, ...normalizedLogs };
-          }
-          if (data.e1rms) state.e1rms = { ...state.e1rms, ...data.e1rms };
-          if (data.anchor_e1rms) state.anchorE1rms = { ...state.e1rms, ...data.anchor_e1rms };
-          else if (!state.anchorE1rms || !Object.keys(state.anchorE1rms).length) state.anchorE1rms = { ...state.e1rms };
-          if (data.pr_ledger) state.prLedger = data.pr_ledger;
-          localStorage.setItem('apex_last_sync_timestamp', String(Date.now()));
-          syncMesocycleProgression();
-          state.formMetrics.weight = getLatestBodyweight();
-          if (typeof window.persist === 'function') window.persist();
-          state.syncStatus = 'synced';
-          if (isManual) showToast("✓ Latest cloud data loaded!");
-          if (isSilent) showToast("⚡ Cloud data auto-synced via Realtime");
-          if (typeof window.render === 'function') window.render();
-        } else {
-          await window.pushToCloud(false);
-        }
-      } catch (err) {
-        console.error("Cloud pull error:", err);
-        state.syncStatus = 'error';
-        if (isManual) showToast(`❌ Pull Error: ${err.message || 'Check RLS / Table'}`);
-      }
+    if (!sbClient) window.initSupabase();
+    if (!sbClient || !state.user) {
+      state.syncStatus = 'offline';
       if (typeof window.renderSyncIndicator === 'function') window.renderSyncIndicator();
-    };
+      if (isManual) showToast("❌ Please sign in to Supabase first.");
+      return;
+    }
+    if (!isSilent) {
+      state.syncStatus = 'syncing';
+      if (typeof window.renderSyncIndicator === 'function') window.renderSyncIndicator();
+    }
+    try {
+      const { data, error } = await sbClient.from('apex_userdata').select('*').eq('user_id', state.user.id).single();
+      if (error && error.code !== 'PGRST116') throw error;
+      if (data) {
+        // Do not let an automatic startup pull overwrite unsynced local workouts!
+        if (!isManual && localStorage.getItem('apex_has_unsynced_changes') === 'true') {
+          console.log("Unsynced local changes detected on boot — pushing local state to Supabase first.");
+          await window.pushToCloud(false);
+          return;
+        }
+        if (data.settings) {
+          state.settings = { ...state.settings, ...data.settings };
+          if (data.settings.customSplitBlueprints) state.customSplitBlueprints = data.settings.customSplitBlueprints;
+          if (data.settings.schemeRecipes) state.schemeRecipes = { ...defaultSchemeRecipes, ...data.settings.schemeRecipes };
+          if (data.settings.anchorE1rms) state.anchorE1rms = { ...state.e1rms, ...data.settings.anchorE1rms };
+          if (data.settings.oneRmFormula) state.settings.oneRmFormula = data.settings.oneRmFormula;
+        }
+        if (data.profile) state.profile = { ...state.profile, ...data.profile };
+        if (data.mesocycle) state.mesocycle = data.mesocycle;
+        if (data.weekday_split) state.weekdaySplit = data.weekday_split;
+        if (data.exercise_meta) state.exerciseMeta = { ...state.exerciseMeta, ...data.exercise_meta };
+        if (data.phase_rep_matrix) state.phaseRepMatrix = data.phase_rep_matrix;
+        if (data.scheme_blueprints) state.schemeBlueprints = { ...(typeof DEFAULT_SCHEME_BLUEPRINTS !== 'undefined' ? DEFAULT_SCHEME_BLUEPRINTS : {}), ...data.scheme_blueprints };
+        if (data.scheme_recipes) state.schemeRecipes = { ...defaultSchemeRecipes, ...data.scheme_recipes };
+        if (data.exercise_rep_overrides) state.exerciseRepOverrides = data.exercise_rep_overrides;
+        if (data.modifier_cats) state.modifierCats = data.modifier_cats;
+        if (data.exercises) state.exercises = [ ...new Set([ ...state.exercises, ...data.exercises ]) ];
+        if (data.day_logs) {
+          const normalizedLogs = {};
+          Object.keys(data.day_logs).forEach(k => {
+            const nk = normalizeDateKey(k);
+            const cloudLog = data.day_logs[k];
+            const localLog = state.dayLogs ? state.dayLogs[nk] : null;
+            if (localLog && localLog.exercises && localLog.exercises.length > 0 && (!cloudLog || !cloudLog.exercises || cloudLog.exercises.length === 0)) {
+              normalizedLogs[nk] = localLog;
+            } else {
+              normalizedLogs[nk] = cloudLog;
+            }
+          });
+          state.dayLogs = { ...state.dayLogs, ...normalizedLogs };
+        }
+        if (data.e1rms) state.e1rms = { ...state.e1rms, ...data.e1rms };
+        if (data.anchor_e1rms) state.anchorE1rms = { ...state.e1rms, ...data.anchor_e1rms };
+        else if (!state.anchorE1rms || !Object.keys(state.anchorE1rms).length) state.anchorE1rms = { ...state.e1rms };
+        if (data.pr_ledger) state.prLedger = data.pr_ledger;
+        localStorage.setItem('apex_last_sync_timestamp', String(Date.now()));
+        syncMesocycleProgression();
+        state.formMetrics.weight = getLatestBodyweight();
+        if (typeof window.persist === 'function') window.persist();
+        state.syncStatus = 'synced';
+        if (isManual) showToast("✅ Latest cloud data loaded!");
+        if (isSilent) showToast("⚡ Cloud data auto-synced via Realtime");
+        if (typeof window.render === 'function') window.render();
+      } else {
+        await window.pushToCloud(false);
+      }
+    } catch (err) {
+      console.error("Cloud pull error:", err);
+      state.syncStatus = 'error';
+      if (isManual) showToast(`❌ Pull Error: ${err.message || 'Check RLS / Table'}`);
+    }
+    if (typeof window.renderSyncIndicator === 'function') window.renderSyncIndicator();
+  };
 
     // Debounced Auto-Sync Engine
 let cloudSyncTimeout = null;
