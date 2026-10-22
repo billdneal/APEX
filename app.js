@@ -3003,7 +3003,7 @@ function renderRpeMatrixTable(profile) {
       if (typeof window.renderSyncIndicator === 'function') window.renderSyncIndicator();
     };
 
-    window.pullFromCloud = async function(isManual = false, isSilent = false) {
+   window.pullFromCloud = async function(isManual = false, isSilent = false) {
     if (!sbClient) window.initSupabase();
     if (!sbClient || !state.user) {
       state.syncStatus = 'offline';
@@ -3019,12 +3019,8 @@ function renderRpeMatrixTable(profile) {
       const { data, error } = await sbClient.from('apex_userdata').select('*').eq('user_id', state.user.id).single();
       if (error && error.code !== 'PGRST116') throw error;
       if (data) {
-        // Do not let an automatic startup pull overwrite unsynced local workouts!
-        if (!isManual && localStorage.getItem('apex_has_unsynced_changes') === 'true') {
-          console.log("Unsynced local changes detected on boot — pushing local state to Supabase first.");
-          await window.pushToCloud(false);
-          return;
-        }
+        const hasUnsyncedLocal = !isManual && localStorage.getItem('apex_has_unsynced_changes') === 'true';
+
         if (data.settings) {
           state.settings = { ...state.settings, ...data.settings };
           if (data.settings.customSplitBlueprints) state.customSplitBlueprints = data.settings.customSplitBlueprints;
@@ -3045,16 +3041,20 @@ function renderRpeMatrixTable(profile) {
         if (data.day_logs) {
           const normalizedLogs = {};
           Object.keys(data.day_logs).forEach(k => {
-            const nk = normalizeDateKey(k);
-            const cloudLog = data.day_logs[k];
-            const localLog = state.dayLogs ? state.dayLogs[nk] : null;
-            if (localLog && localLog.exercises && localLog.exercises.length > 0 && (!cloudLog || !cloudLog.exercises || cloudLog.exercises.length === 0)) {
-              normalizedLogs[nk] = localLog;
-            } else {
-              normalizedLogs[nk] = cloudLog;
+            normalizedLogs[normalizeDateKey(k)] = data.day_logs[k];
+          });
+          // Smart merge: keep whichever device has more logged sets/exercises for each date!
+          const mergedLogs = { ...normalizedLogs, ...state.dayLogs };
+          Object.keys(mergedLogs).forEach(k => {
+            const cLog = normalizedLogs[k];
+            const lLog = state.dayLogs ? state.dayLogs[k] : null;
+            if (cLog && lLog) {
+              const cCount = (cLog.exercises || []).reduce((acc, ex) => acc + (ex.sets ? ex.sets.length : 1), 0);
+              const lCount = (lLog.exercises || []).reduce((acc, ex) => acc + (ex.sets ? ex.sets.length : 1), 0);
+              mergedLogs[k] = (lCount >= cCount) ? lLog : cLog;
             }
           });
-          state.dayLogs = { ...state.dayLogs, ...normalizedLogs };
+          state.dayLogs = mergedLogs;
         }
         if (data.e1rms) state.e1rms = { ...state.e1rms, ...data.e1rms };
         if (data.anchor_e1rms) state.anchorE1rms = { ...state.e1rms, ...data.anchor_e1rms };
@@ -3064,7 +3064,13 @@ function renderRpeMatrixTable(profile) {
         syncMesocycleProgression();
         state.formMetrics.weight = getLatestBodyweight();
         if (typeof window.persist === 'function') window.persist();
+        // Prevent window.persist() from falsely marking a cloud pull as an unsynced local edit:
+        if (cloudSyncTimeout) clearTimeout(cloudSyncTimeout);
+        localStorage.setItem('apex_has_unsynced_changes', 'false');
         state.syncStatus = 'synced';
+        if (hasUnsyncedLocal) {
+          await window.pushToCloud(false);
+        }
         if (isManual) showToast("✅ Latest cloud data loaded!");
         if (isSilent) showToast("⚡ Cloud data auto-synced via Realtime");
         if (typeof window.render === 'function') window.render();
@@ -3079,20 +3085,21 @@ function renderRpeMatrixTable(profile) {
     if (typeof window.renderSyncIndicator === 'function') window.renderSyncIndicator();
   };
 
-    // Debounced Auto-Sync Engine
-let cloudSyncTimeout = null;
-function queueCloudSync(delayMs = 1000) {
-  localStorage.setItem('apex_has_unsynced_changes', 'true');
-  localStorage.setItem('apex_last_local_edit', String(Date.now()));
-  if (!state.user) return;
-  if (cloudSyncTimeout) clearTimeout(cloudSyncTimeout);
-  state.syncStatus = 'syncing';
-  if (typeof window.renderSyncIndicator === 'function') window.renderSyncIndicator();
+  // Debounced Auto-Sync Engine
+  let cloudSyncTimeout = null;
+  function queueCloudSync(delayMs = 250) {
+    localStorage.setItem('apex_has_unsynced_changes', 'true');
+    localStorage.setItem('apex_last_local_edit', String(Date.now()));
+    if (!state.user) return;
+    if (cloudSyncTimeout) clearTimeout(cloudSyncTimeout);
+    state.syncStatus = 'syncing';
+    if (typeof window.renderSyncIndicator === 'function') window.renderSyncIndicator();
 
-  cloudSyncTimeout = setTimeout(() => {
-    window.pushToCloud(false);
-  }, delayMs);
-}
+    cloudSyncTimeout = setTimeout(() => {
+      window.pushToCloud(false);
+    }, delayMs);
+  }
+  window.queueCloudSync = queueCloudSync;
 window.queueCloudSync = queueCloudSync;
 
 // Flush any pending cloud sync immediately if the page is refreshed or backgrounded
