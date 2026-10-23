@@ -3043,15 +3043,34 @@ function renderRpeMatrixTable(profile) {
           Object.keys(data.day_logs).forEach(k => {
             normalizedLogs[normalizeDateKey(k)] = data.day_logs[k];
           });
-          // Smart merge: keep whichever device has more logged sets/exercises for each date!
-          const mergedLogs = { ...normalizedLogs, ...state.dayLogs };
-          Object.keys(mergedLogs).forEach(k => {
+          // Deep-merge cloud logs and local logs per date so weight, recovery, and workout never wipe each other out!
+          const allDates = new Set([
+            ...Object.keys(normalizedLogs),
+            ...Object.keys(state.dayLogs || {})
+          ]);
+          const mergedLogs = {};
+          allDates.forEach(k => {
             const cLog = normalizedLogs[k];
             const lLog = state.dayLogs ? state.dayLogs[k] : null;
             if (cLog && lLog) {
-              const cCount = (cLog.exercises || []).reduce((acc, ex) => acc + (ex.sets ? ex.sets.length : 1), 0);
-              const lCount = (lLog.exercises || []).reduce((acc, ex) => acc + (ex.sets ? ex.sets.length : 1), 0);
-              mergedLogs[k] = (lCount >= cCount) ? lLog : cLog;
+              const getExList = (log) => (log.workout && Array.isArray(log.workout.exercises)) ? log.workout.exercises
+                : Array.isArray(log.exercises) ? log.exercises
+                : (log.workout && Array.isArray(log.workout.lifts)) ? log.workout.lifts : [];
+              const cSets = getExList(cLog).reduce((acc, ex) => acc + (ex.sets ? ex.sets.length : 1), 0);
+              const lSets = getExList(lLog).reduce((acc, ex) => acc + (ex.sets ? ex.sets.length : 1), 0);
+              const bestWorkout = (lSets >= cSets)
+                ? (lLog.workout || cLog.workout)
+                : (cLog.workout || lLog.workout);
+
+              mergedLogs[k] = {
+                ...cLog,
+                ...lLog,
+                weight: lLog.weight || cLog.weight,
+                recovery: { ...(cLog.recovery || {}), ...(lLog.recovery || {}) },
+                ...(bestWorkout ? { workout: bestWorkout } : {})
+              };
+            } else {
+              mergedLogs[k] = lLog || cLog;
             }
           });
           state.dayLogs = mergedLogs;
