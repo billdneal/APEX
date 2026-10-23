@@ -27,7 +27,21 @@ jobs:
             const m = sw.match(/apex-engine-cache-v(\d+)\.(\d+)\.(\d+)/);
             if (!m) process.exit(0);
             const oldV = `${m[1]}.${m[2]}.${m[3]}`;
-            const newV = `${m[1]}.${m[2]}.${Number(m[3]) + 1}`;
+            
+            let major = Number(m[1]);
+            let minor = Number(m[2]);
+            let patch = Number(m[3]) + 1;
+
+            if (patch >= 10) {
+              patch = 0;
+              minor += 1;
+            }
+            if (minor >= 10) {
+              minor = 0;
+              major += 1;
+            }
+
+            const newV = `${major}.${minor}.${patch}`;
             
             fs.writeFileSync("sw.js", sw.replace(`v${oldV}`, `v${newV}`));
             
