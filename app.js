@@ -90,23 +90,7 @@
       const clean = String(rawName).trim();
       return schemeAliases[clean] || clean;
     }
-function getIcon(name, cls = 'w-4 h-4') {
-  const paths = {
-    calendar: '<rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/>',
-    builder: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
-    programs: '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>',
-    splits: '<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>',
-    periodization: '<path d="m12 2 10 5-10 5-10-5Z"/><path d="m2 12 10 5 10-5"/><path d="m2 17 10 5 10-5"/>',
-    analytics: '<line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/>',
-    prs: '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>',
-    movements: '<path d="m6.5 6.5 11 11"/><path d="m21 21-1-1"/><path d="m3 3 1 1"/><path d="m18 22 4-4"/><path d="m2 6 4-4"/><path d="m3 10 7-7"/><path d="m14 21 7-7"/>',
-    profile: '<circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/>',
-    settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
-    system: '<circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="16" y2="12"/><line x1="12" x2="12.01" y1="8" y2="8"/>'
-  };
 
-  return `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths[name] || ''}</svg>`;
-}
     const phaseDescriptions = {
       'Accumulation': 'High-volume base building (8-14 reps) focused on work capacity, connective tissue resilience, and hypertrophy priming.',
       'Hypertrophy': 'Targeted muscle mass accretion (6-12 reps) operating at 2-3 RIR with high mechanical tension and density clusters.',
@@ -613,10 +597,6 @@ function getIcon(name, cls = 'w-4 h-4') {
       if (window.state) window.state.canInstall = true;
       if (typeof window.render === 'function') window.render();
     });
-
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js').catch(() => {});
-    }
 
     function formatIsoDate(year, monthIndex, dayNumber) {
       const y = Number(year);
@@ -2212,25 +2192,6 @@ function generateSetsFromBlueprint(paramsOrName, metaArg, e1rmArg, baseWorkingSe
 // ==========================================
 window.appActions = window.appActions || {};
 
-// 1. Sidebar Selector
-window.appActions.selectRecipeScheme = function(schemeName) {
-  state.selectedRecipeScheme = schemeName;
-  state.selectedProgrammingScheme = schemeName;
-
-  // Ensure blueprint exists in state when selected
-  if (!state.schemeBlueprints) {
-    state.schemeBlueprints = JSON.parse(JSON.stringify(state.schemeRecipes || DEFAULT_SCHEME_BLUEPRINTS));
-  }
-  if (!state.schemeBlueprints[schemeName]) {
-    const fallback = DEFAULT_SCHEME_BLUEPRINTS[schemeName] || DEFAULT_SCHEME_BLUEPRINTS['Straight Sets'];
-    state.schemeBlueprints[schemeName] = JSON.parse(JSON.stringify(fallback));
-    state.schemeBlueprints[schemeName].name = schemeName;
-  }
-
-  if (typeof saferRender === 'function') saferRender();
-  else if (typeof window.render === 'function') window.render();
-};
-
 // --- Rep Scheme Builder Actions (Phase Scope & Persistence) ---
 
 // 1. Phase Scope Selector
@@ -2432,7 +2393,6 @@ window.appActions.updateTierScalingParam = function(schemeName, tier, field, val
   else if (typeof window.render === 'function') window.render();
 };
 // Aliases for legacy button bindings
-window.appActions.saveCurrentRecipe = window.appActions.saveSchemeBlueprint;
 window.appActions.resetSchemeBlueprints = window.appActions.resetSchemeRecipes;
 window.renderCustomRpeTool = renderCustomRpeTool;
 function renderCustomRpeTool() {
@@ -3119,7 +3079,6 @@ function renderRpeMatrixTable(profile) {
     }, delayMs);
   }
   window.queueCloudSync = queueCloudSync;
-window.queueCloudSync = queueCloudSync;
 
 // Flush any pending cloud sync immediately if the page is refreshed or backgrounded
 window.addEventListener('visibilitychange', () => {
@@ -6827,13 +6786,6 @@ window.appActions.removeRpeMatrixSet = function(idx) {
     state.activeRepOverrideEx = (state.activeRepOverrideEx === exName) ? null : exName;
     state.overrideDraft = { phase: 'All', minReps: 8, maxReps: 12 };
     window.render();
-  };
-window.appActions.setBlockProgressionMode = function(idx, mode) {
-    if (state.mesocycle && state.mesocycle[idx]) {
-      state.mesocycle[idx].progressionMode = mode;
-      if (typeof window.saveState === 'function') window.saveState();
-      window.render();
-    }
   };
 
   function applyGlobalThemeAndFont() {
@@ -11104,55 +11056,6 @@ const COACH_DOCTRINES = {
   }
 };
 
-async function askApexCoach(userPrompt, taskType = 'general') {
-  const config = getApexCoachConfig();
-  if (!config.apiKey) {
-    safeCoachToast('Please add your Gemini API Key in Settings first.');
-    return '⚠️ Missing Gemini API Key. Open Settings → APEX AI Coach Engine and paste your API key.';
-  }
-
-  const doctrineObj = COACH_DOCTRINES[config.doctrine] || COACH_DOCTRINES.adaptive;
-  const systemInstruction = `${doctrineObj.prompt}\n\nRULES:\n- Be ruthlessly direct and actionable.\n- Reference my actual logged numbers.\n- NEVER use LaTeX math mode, backslashes, or symbol tags like $\\rightarrow$. Use plain text like '->'.`;
-  
-  let telemetry = '';
-  try {
-    telemetry = buildCoachTelemetryContext();
-  } catch (tErr) {
-    console.warn('Telemetry build warning:', tErr);
-    telemetry = 'Telemetry snapshot unavailable.';
-  }
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 25000);
-
-  try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${config.apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      signal: controller.signal,
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: systemInstruction }] },
-        contents: [{
-          role: 'user',
-          parts: [{ text: `LIFTER TELEMETRY:\n${telemetry}\n\nTASK: ${taskType}\nDIRECTIVE:\n${userPrompt}` }]
-        }],
-        generationConfig: { temperature: 0.3, maxOutputTokens: 600 }
-      })
-    });
-
-    clearTimeout(timeoutId);
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.error?.message || `HTTP ${res.status}: Failed to call model "${config.model}"`);
-    }
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response generated.';
-  } catch (err) {
-    clearTimeout(timeoutId);
-    console.error('Coach Error:', err);
-    return `⚠️ Coach Error (${config.model}): ${err.message}`;
-  }
-}
-
 const FALLBACK_GEMINI_MODELS = [
   { id: 'gemini-4-argon', name: 'Gemini 4 Argon (Flagship Frontier)' },
   { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash (High-Speed Workhorse)' },
@@ -11250,40 +11153,7 @@ function buildCoachTelemetryContext() {
   `.trim();
 }
 
-async function askApexCoach(userPrompt, taskType = 'general') {
-  const config = getApexCoachConfig();
-  if (!config.apiKey) {
-    showToast('Please add your Gemini API Key in Settings first.');
-    return null;
-  }
 
-  const doctrineObj = COACH_DOCTRINES[config.doctrine] || COACH_DOCTRINES.adaptive;
-  const systemInstruction = `${doctrineObj.prompt}\n\nYou are embedded inside the APEX Training Engine. Be concise, data-driven, tactical, and reference the lifter's actual numbers.`;
-  const telemetry = buildCoachTelemetryContext();
-
-  try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${config.apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: systemInstruction }] },
-        contents: [{
-          role: 'user',
-          parts: [{ text: `TELEMETRY SNAPSHOT:\n${telemetry}\n\nTASK TYPE: ${taskType}\nUSER REQUEST:\n${userPrompt}` }]
-        }],
-        generationConfig: { temperature: 0.4, maxOutputTokens: 900 }
-      })
-    });
-
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error?.message || 'Gemini API Error');
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response generated.';
-  } catch (err) {
-    console.error('Coach Error:', err);
-    showToast(`Coach Error: ${err.message}`);
-    return null;
-  }
-}
 
 function renderApexCoachSettingsCard() {
   const config = getApexCoachConfig();
@@ -11353,13 +11223,6 @@ window.appActions = window.appActions || {};
 window.appActions.setCoachDoctrine = (doctrineKey) => {
   localStorage.setItem('apex_coach_doctrine', doctrineKey);
   showToast(`Doctrine: ${COACH_DOCTRINES[doctrineKey]?.title || doctrineKey}`);
-  if (typeof safeRender === 'function') safeRender();
-};
-
-window.appActions.refreshCoachModels = async () => {
-  showToast('Syncing live Gemini models from Google...');
-  const models = await fetchDynamicGeminiModels();
-  showToast(`Synced ${models.length} Gemini models`);
   if (typeof safeRender === 'function') safeRender();
 };
 
@@ -11627,22 +11490,6 @@ window.appActions.adjustBlockWeeks = (blockIndex, delta) => {
   if (!targetBlock) return;
 
   const curWeeks = Number(targetBlock.weeks || targetBlock.durationWeeks || 3);
-  const nextWeeks = Math.max(1, Math.min(12, curWeeks + delta));
-
-  targetBlock.weeks = nextWeeks;
-  targetBlock.durationWeeks = nextWeeks;
-
-  if (typeof saveState === 'function') saveState();
-  if (typeof saveStateToStorage === 'function') saveStateToStorage();
-  if (typeof safeRender === 'function') safeRender();
-};
-
-window.appActions.adjustBlockWeeks = (blockIndex, delta) => {
-  const blocks = Array.isArray(state.mesocycle) ? state.mesocycle : [];
-  const targetBlock = blocks[blockIndex];
-  if (!targetBlock) return;
-
-  const curWeeks = Number(targetBlock.weeks || targetBlock.durationWeeks || 3);
   const nextWeeks = Math.max(1, Math.min(16, curWeeks + delta));
   targetBlock.weeks = nextWeeks;
   targetBlock.durationWeeks = nextWeeks;
@@ -11868,35 +11715,6 @@ window.getMovementHardwareBounds = getMovementHardwareBounds;
 window.evaluateDoubleProgression = evaluateDoubleProgression;
 window.getHardwareCoachContext = getHardwareCoachContext;
 
-// Wire into appActions for UI buttons (Block Duration Steppers & Save)
-if (typeof appActions !== 'undefined') {
-  appActions.adjustBlockWeeks = appActions.adjustBlockWeeks || function(idx, delta) {
-    const blocks = state.program?.blocks || state.blocks || [];
-    if (!blocks[idx]) return;
-    const next = Math.min(16, Math.max(1, (Number(blocks[idx].weeks) || 4) + delta));
-    blocks[idx].weeks = next;
-    const inputEl = document.getElementById(`blockWeeksInput_${idx}`);
-    if (inputEl) inputEl.value = next;
-    if (typeof saveState === 'function') saveState();
-    if (typeof render === 'function') render();
-  };
-
-  appActions.setBlockWeeksExact = appActions.setBlockWeeksExact || function(idx, val) {
-    const blocks = state.program?.blocks || state.blocks || [];
-    if (!blocks[idx]) return;
-    blocks[idx].weeks = Math.min(16, Math.max(1, Number(val) || 4));
-  };
-
-  appActions.saveBlockDuration = appActions.saveBlockDuration || function(idx) {
-    const inputEl = document.getElementById(`blockWeeksInput_${idx}`);
-    if (inputEl && typeof appActions.setBlockWeeksExact === 'function') {
-      appActions.setBlockWeeksExact(idx, inputEl.value);
-    }
-    if (typeof saveState === 'function') saveState();
-    if (typeof render === 'function') render();
-  };
-}
-
 // ==========================================
 // SVG PATH SANITIZER & MOBILE CLICK GUARD
 // ==========================================
@@ -11907,77 +11725,4 @@ window.sanitizeSvgPath = function(pathStr) {
     return 'M0 0H24V24H0z';
   }
   return pathStr;
-};
-
-// Global click safety wrapper for mobile history review / edit modals
-window.appActions = window.appActions || {};
-const originalEdit = window.appActions.editCompletedSession;
-window.appActions.editCompletedSession = function(dateKey) {
-  try {
-    if (typeof originalEdit === 'function') {
-      originalEdit(dateKey);
-    } else {
-      console.warn("editCompletedSession fallback triggered for:", dateKey);
-    }
-  } catch (err) {
-    console.error("Mobile edit click caught error:", err);
-    alert("Could not open session editor. Check console for details.");
-  }
-};
-// ==========================================
-// ROBUST MOBILE EDIT SESSION OVERRIDE
-// ==========================================
-window.appActions = window.appActions || {};
-window.appActions.editCompletedSession = function(dateKey) {
-  try {
-    const normKey = typeof normalizeDateKey === 'function' ? normalizeDateKey(dateKey) : (dateKey || getCurKey());
-    const dLog = state.dayLogs?.[normKey] || {};
-    const histFallback = (Array.isArray(state.history) ? state.history.find(h => (h.date || h.dateKey) === normKey) : null) || {};
-    const rawExs = dLog.workout?.exercises || dLog.exercises || histFallback.workout?.exercises || histFallback.exercises || [];
-
-    state.activeWorkout = rawExs.map(ex => ({
-      ...ex,
-      sets: (ex.sets || []).map(s => {
-        const w = s.actualWeight ?? s.weight ?? s.targetWeight ?? 0;
-        const r = s.actualReps ?? s.reps ?? s.targetReps ?? 0;
-        const rpe = s.actualRpe ?? s.rpe ?? s.targetRpe ?? 8;
-        return {
-          ...s,
-          actualWeight: w,
-          actualReps: r,
-          actualRpe: typeof roundRpe === 'function' ? roundRpe(rpe) : rpe,
-          targetRpe: typeof roundRpe === 'function' ? roundRpe(s.targetRpe || rpe) : (s.targetRpe || rpe),
-          done: s.done !== undefined ? s.done : true
-        };
-      })
-    }));
-
-    state.activeWorkoutDay = Number(String(normKey).split('-')[2]) || 1;
-    state.activeWorkoutDateKey = normKey;
-    state.isEditingHistorical = true;
-    state.historicalDateKey = normKey;
-
-    const durSecs = (dLog.workout?.dur || dLog.dur || histFallback.dur || 45) * 60;
-    state.sessionSecs = durSecs;
-    state.sStart = Date.now() - (state.sessionSecs * 1000);
-    state.restStart = Date.now();
-    if (typeof resumestopwatch === 'function') resumestopwatch();
-
-    // Force screen state and close modals
-    state.screen = 'logger';
-    if (state.dateActionModal) state.dateActionModal.open = false;
-    if (state.coachDrawerOpen) state.coachDrawerOpen = false;
-
-    if (typeof persist === 'function') persist();
-
-    // Immediate mobile render trigger
-    if (typeof render === 'function') {
-      render();
-    } else if (typeof safeRender === 'function') {
-      safeRender();
-    }
-  } catch (err) {
-    console.error("Edit session error:", err);
-    alert("Edit Error: " + err.message);
-  }
 };
