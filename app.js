@@ -8555,10 +8555,10 @@ const SPECIALIZED_SCHEMES = [
             : 0;
 
           const setRows = (ex.sets || []).map((s, sIdx) => {
-          const isLapActive = s.lapRunning;
-          const targetRpeNum = roundRpe(s.targetRpe);
-          const displayTargetRpe = targetRpeNum <= 5.5 ? '&lt;6.0' : targetRpeNum.toFixed(1);
-          const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.actualRpe !== '') ? Number(s.actualRpe) : 0;
+         const isLapActive = s.lapRunning;
+const targetRpenum = roundRpe(s.targetRpe);
+const displayTargetRpe = targetRpenum <= 5.5 ? '&lt;6.0' : targetRpenum.toFixed(1);
+const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.actualRpe !== '') ? Number(s.actualRpe) : 0;
 
           // Dynamic Inventory-Aware Plate, Dumbbell & 2:1 Cable Hint
           const wNum = Number(s.actualWeight !== undefined && s.actualWeight !== null && s.actualWeight !== '' ? s.actualWeight : s.targetLoad) || 0;
