@@ -8591,11 +8591,19 @@ const SPECIALIZED_SCHEMES = [
                       <input type="number" placeholder="reps" value="${s.actualReps !== undefined && s.actualReps !== null ? s.actualReps : ''}" onchange="appActions.updateSetInput(${exIdx}, ${sIdx}, 'actualReps', this.value)" class="w-full h-11 text-center bg-card-sub border border-sub/50 rounded-lg text-white font-mono text-sm font-bold">
                     ` : '<div></div>'}
 
-                    ${meta.rpe ? `
+                   ${meta.rpe ? `
                       <div class="relative">
                         <select onchange="appActions.updateSetInput(${exIdx}, ${sIdx}, 'actualRpe', this.value)" class="w-full h-11 text-center bg-card-sub border border-sub/50 rounded-lg text-accent font-mono text-xs font-bold appearance-none px-1">
                           <option value="5.5" ${actualRpenum <= 5.5 ? 'selected' : ''}>&lt;6.0</option>
-                          ${[6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0].map(r => `<option value="${r}" ${actualRpenum === r ? 'selected' : ''}>${r.toFixed(1)}</option>`).join('')}
+                          <option value="6.0" ${actualRpenum === 6.0 ? 'selected' : ''}>6.0</option>
+                          <option value="6.5" ${actualRpenum === 6.5 ? 'selected' : ''}>6.5</option>
+                          <option value="7.0" ${actualRpenum === 7.0 ? 'selected' : ''}>7.0</option>
+                          <option value="7.5" ${actualRpenum === 7.5 ? 'selected' : ''}>7.5</option>
+                          <option value="8.0" ${actualRpenum === 8.0 ? 'selected' : ''}>8.0</option>
+                          <option value="8.5" ${actualRpenum === 8.5 ? 'selected' : ''}>8.5</option>
+                          <option value="9.0" ${actualRpenum === 9.0 ? 'selected' : ''}>9.0</option>
+                          <option value="9.5" ${actualRpenum === 9.5 ? 'selected' : ''}>9.5</option>
+                          <option value="10.0" ${actualRpenum === 10.0 ? 'selected' : ''}>10.0</option>
                         </select>
                       </div>
                     ` : '<div></div>'}
