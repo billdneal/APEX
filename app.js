@@ -13,7 +13,7 @@
 
 (function() {
   try {
-    const APP_VERSION = 'v4.7.8-PWA';
+    const APP_VERSION = 'v4.7.9-PWA';
     const now = new Date();
     const TODAY_YEAR = now.getFullYear();
     const TODAY_MONTH = now.getMonth();
@@ -5799,7 +5799,7 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
   
     exportProgrammingBuilderJson() {
       const chassisData = {
-        version: window.apexCore?.APP_VERSION || 'v4.7.8-PWA',
+        version: window.apexCore?.APP_VERSION || 'v4.7.9-PWA',
         timestamp: new Date().toISOString(),
         phaseRepMatrix: state.phaseRepMatrix,
         schemeRecipes: state.schemeRecipes,
@@ -6815,7 +6815,7 @@ updateSplitSlotTier(splitName, slotIdx, newTier) {
     // Data Backup, Migration & CSV Export
     exportBackup() {
       const backupData = {
-        version: window.apexCore?.APP_VERSION || 'v4.7.8-PWA',
+        version: window.apexCore?.APP_VERSION || 'v4.7.9-PWA',
         timestamp: new Date().toISOString(),
         settings: state.settings,
         profile: state.profile,
