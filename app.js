@@ -8558,7 +8558,7 @@ const SPECIALIZED_SCHEMES = [
           const isLapActive = s.lapRunning;
           const targetRpeNum = roundRpe(s.targetRpe);
           const displayTargetRpe = targetRpeNum <= 5.5 ? '&lt;6.0' : targetRpeNum.toFixed(1);
-          const actualRpeNum = roundRpe(s.actualRpe);
+          const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.actualRpe !== '') ? Number(s.actualRpe) : 0;
 
           // Dynamic Inventory-Aware Plate, Dumbbell & 2:1 Cable Hint
           const wNum = Number(s.actualWeight !== undefined && s.actualWeight !== null && s.actualWeight !== '' ? s.actualWeight : s.targetLoad) || 0;
