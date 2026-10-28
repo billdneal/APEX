@@ -1603,7 +1603,20 @@ window.DEFAULT_SCHEME_BLUEPRINTS = DEFAULT_SCHEME_BLUEPRINTS;
         state.settings.activeRpeProfileId = state.activeRpeProfileId;
         state.settings.equipment = state.equipment;
         localStorage.setItem('apex_equipment', JSON.stringify(state.equipment));
+        try {
         localStorage.setItem('apex_dayLogs', JSON.stringify(state.dayLogs));
+      } catch (e) {
+        console.warn('LocalStorage quota exceeded, trimming older logs locally:', e);
+        const keys = Object.keys(state.dayLogs).sort();
+        if (keys.length > 60) {
+          const trimmed = {};
+          keys.slice(-60).forEach(k => trimmed[k] = state.dayLogs[k]);
+          state.dayLogs = trimmed;
+          try {
+            localStorage.setItem('apex_dayLogs', JSON.stringify(state.dayLogs));
+          } catch (_err) {}
+        }
+      }
         localStorage.setItem('apex_savedStaged', JSON.stringify(state.savedStaged));
         localStorage.setItem('apex_e1rms', JSON.stringify(state.e1rms));
         localStorage.setItem('apex_anchorE1rms', JSON.stringify(state.anchorE1rms || {}));
@@ -8555,17 +8568,45 @@ const SPECIALIZED_SCHEMES = [
           const plateHint = s.plateLoadText || plateInfo.text || '';
           const hasCustomLabel = s.label && !/^Set \d+$/i.test(s.label);
 
-          return `
-            <div id="set-row-${exIdx}-${sIdx}" class="p-2.5 rounded-xl border space-y-1.5 transition-colors ${s.done ? 'bg-emerald-950/30 border-emerald-600' : 'bg-input border-sub'}">
-              ${(hasCustomLabel || plateHint || s.smartHardwareCue) ? `
-                <div class="flex flex-wrap items-center justify-between gap-1 border-b border-sub/40 pb-1 text-[9.5px] font-mono">
-                  <div class="flex items-center space-x-1.5">
-                    ${hasCustomLabel ? `<span class="px-1.5 py-0.5 rounded bg-blue-950/60 border border-blue-700/50 text-blue-300 font-bold uppercase tracking-tight">${s.label}</span>` : ''}
-                    ${s.smartHardwareCue ? `<span class="text-amber-400 font-semibold">${s.smartHardwareCue}</span>` : ''}
+            return `
+              <div id="set-row-${exIdx}-${sIdx}" class="p-2.5 rounded-xl border transition-colors ${s.done ? 'bg-emerald-950/20 border-emerald-600/40' : 'bg-input border-sub'}">
+                <div class="grid grid-cols-12 gap-1.5 items-center text-center">
+                  <div class="col-span-2 flex items-center space-x-1.5 text-left min-w-0">
+                    <button type="button" onclick="appActions.deleteSet(${exIdx},${sIdx})" class="text-[10px] text-slate-500 hover:text-rose-400 p-0.5" title="Remove Set">✕</button>
+                    <span class="px-2 py-0.5 rounded-lg bg-card-sub border border-sub font-mono text-[10px] font-bold text-slate-300 truncate">${hasCustomLabel ? s.label : `Set ${sIdx + 1}`}</span>
                   </div>
-                  ${plateHint ? `<span class="text-accent font-bold bg-card-sub px-1.5 py-0.5 rounded border border-sub/80">🧮 ${plateHint}</span>` : ''}
+
+                  <span class="col-span-3 font-mono text-[10px] md:text-xs text-slate-300 text-left pl-0.5 leading-tight truncate">
+                    ${(s.targetLoad !== undefined && s.targetLoad !== null && s.targetLoad !== '') ? s.targetLoad + 'x' : ''}${s.targetReps || ''}${meta.r ? 'r' : ''} @${displayTargetRpe}
+                  </span>
+
+                  <div class="col-span-5 grid grid-cols-3 gap-1 items-center">
+                    <div class="w-full bg-card-sub border border-sub rounded-xl p-1 text-center font-mono text-xs font-bold text-white">
+                      ${s.actualWeight !== undefined && s.actualWeight !== '' ? s.actualWeight : (s.targetLoad || '')}
+                    </div>
+                    <input type="number" step="1" inputmode="numeric" placeholder="Reps" value="${s.actualReps !== undefined ? s.actualReps : ''}" onchange="appActions.updateSetActual(${exIdx}, ${sIdx}, 'actualReps', this.value)" class="w-full bg-card-sub border border-sub rounded-xl p-1 text-center font-mono text-xs font-bold text-white">
+                    <select onchange="appActions.updateSetActual(${exIdx}, ${sIdx}, 'actualRpe', this.value)" class="w-full bg-card-sub border border-sub rounded-xl p-1 text-center font-mono text-xs font-bold text-accent">
+                      <option value="">RPE</option>
+                      <option value="10" ${actualRpenum === 10 ? 'selected' : ''}>10</option>
+                      <option value="9.5" ${actualRpenum === 9.5 ? 'selected' : ''}>9.5</option>
+                      <option value="9" ${actualRpenum === 9 ? 'selected' : ''}>9</option>
+                      <option value="8.5" ${actualRpenum === 8.5 ? 'selected' : ''}>8.5</option>
+                      <option value="8" ${actualRpenum === 8 ? 'selected' : ''}>8</option>
+                      <option value="7.5" ${actualRpenum === 7.5 ? 'selected' : ''}>7.5</option>
+                      <option value="7" ${actualRpenum === 7 ? 'selected' : ''}>7</option>
+                      <option value="6.5" ${actualRpenum === 6.5 ? 'selected' : ''}>6.5</option>
+                      <option value="6" ${actualRpenum === 6 ? 'selected' : ''}>6</option>
+                    </select>
+                  </div>
+
+                  <div class="col-span-2 flex justify-end">
+                    <button type="button" onclick="appActions.toggleSetDone(${exIdx}, ${sIdx})" class="w-full py-1.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center ${s.done ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/30' : 'bg-card-sub border border-sub text-slate-400 hover:text-white'}">
+                      ${s.done ? '✓' : 'Log'}
+                    </button>
+                  </div>
                 </div>
-              ` : ''}
+              </div>
+            `;
 
               <div class="grid grid-cols-12 gap-1.5 items-center text-center">
                 <div class="col-span-2 flex items-center space-x-1 text-left min-w-0">
