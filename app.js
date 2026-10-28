@@ -3286,6 +3286,41 @@ function renderRpeMatrixTable(profile) {
       if (state.activeBlockIdx >= state.mesocycle.length) state.activeBlockIdx = 0;
       return state.mesocycle[state.activeBlockIdx];
     }
+  // =========================================================================
+  // DYNAMIC EQUIPMENT INVENTORY, PLATE SOLVER & SMART HARDWARE CONSTRAINTS
+  // =========================================================================
+  function getEquipmentConfig() {
+    return state.equipment || state.settings?.equipment || {
+      dumbbells: { pairedMax: 90, singleHandleMax: 185, singleHandleTare: 5, increment: 5 },
+      cable: { ratio: 0.5, carriageWeight: 0, increment: 2.5 },
+      bars: { 'Barbell': 45, 'Safety Bar': 65, 'Trap Bar': 55, 'Swiss Bar': 35, 'EZ Bar': 25 },
+      plates: [
+        { weight: 45, pairs: 5, enabled: true },
+        { weight: 35, pairs: 0, enabled: false },
+        { weight: 25, pairs: 2, enabled: true },
+        { weight: 10, pairs: 4, enabled: true },
+        { weight: 5, pairs: 2, enabled: true },
+        { weight: 2.5, pairs: 2, enabled: true }
+      ]
+    };
+  }
+
+  function resolveActiveBar(exName, mods = []) {
+    const eq = getEquipmentConfig();
+    const bars = eq.bars || { 'Barbell': 45, 'Safety Bar': 65, 'Trap Bar': 55, 'Swiss Bar': 35, 'EZ Bar': 25 };
+    const cleanMods = Array.isArray(mods) ? mods : [];
+
+    for (const bName of ['Safety Bar', 'Trap Bar', 'Swiss Bar', 'EZ Bar', 'Barbell']) {
+      if (cleanMods.includes(bName)) return { name: bName, weight: Number(bars[bName]) || 45 };
+    }
+    if (/\b(ssb|safety)\b/i.test(exName)) return { name: 'Safety Bar', weight: Number(bars['Safety Bar']) || 65 };
+    if (/\b(trap)\b/i.test(exName)) return { name: 'Trap Bar', weight: Number(bars['Trap Bar']) || 55 };
+    if (/\b(swiss)\b/i.test(exName)) return { name: 'Swiss Bar', weight: Number(bars['Swiss Bar']) || 35 };
+    if (/\b(ez|curl|skullcrusher|tricep extension)\b/i.test(exName) && !cleanMods.includes('Barbell')) {
+      return { name: 'EZ Bar', weight: Number(bars['EZ Bar']) || 25 };
+    }
+    return { name: 'Barbell', weight: Number(bars['Barbell']) || 45 };
+  }
     // Inventory-Aware Greedy Plate Calculator (Barbells, Specialty Bars, 2:1 Cable & Loadable Heavy DB Handle)
     function calculatePlateLoading(targetWeight, exName = '', mods = []) {
       const eq = getEquipmentConfig();
