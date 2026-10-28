@@ -679,8 +679,39 @@
       } catch(e) {}
       return defaultLifts;
     }
+const defaultEquipmentInventory = {
+      dumbbells: {
+    pairedMax: 90,          // Max per-hand for fixed/adjustable paired DBs (Presses, Flyes, Curls)
+    singleHandleMax: 185,   // Max capacity for your heavy loadable DB handle (Rows, Carries, Single-Arm)
+    singleHandleTare: 5,    // Empty weight of the loadable DB handle + collars (lbs)
+    increment: 5
+  },
+      cable: {
+        ratio: 0.5,             // 0.5 = 2:1 Pulley (100lbs plated = 50lbs felt), 1.0 = 1:1
+        carriageWeight: 0,
+        increment: 2.5
+      },
+      bars: {
+        'Barbell': 45,
+        'Safety Bar': 65,
+        'Trap Bar': 55,
+        'Swiss Bar': 35,
+        'EZ Bar': 25
+      },
+      // Plate inventory: pairs owned (1 pair = 2 plates, one per sleeve)
+      plates: [
+        { weight: 45, pairs: 5, enabled: true },
+        { weight: 35, pairs: 0, enabled: true }, 
+        { weight: 25, pairs: 2, enabled: true },
+        { weight: 10, pairs: 4, enabled: true },
+        { weight: 5,  pairs: 2, enabled: true },
+        { weight: 2.5, pairs: 2, enabled: true },
+        { weight: 1.25, pairs: 0, enabled: true }
+      ]
+    };
 
     const state = {
+      equipment: JSON.parse(localStorage.getItem('apex_equipment')) || JSON.parse(JSON.stringify(defaultEquipmentInventory)),
       screen: 'calendar',
       screenScrolls: {},
       drawerOpen: false,
@@ -1433,6 +1464,7 @@ window.DEFAULT_SCHEME_BLUEPRINTS = DEFAULT_SCHEME_BLUEPRINTS;
         const p = JSON.parse(savedSet);
         if (p && typeof p === 'object') {
           state.settings = { ...state.settings, ...p };
+          if (p.equipment) state.equipment = { ...defaultEquipmentInventory, ...p.equipment };
           if (p.customSplitBlueprints) state.customSplitBlueprints = p.customSplitBlueprints;
           if (p.schemeRecipes) state.schemeRecipes = { ...defaultSchemeRecipes, ...p.schemeRecipes };
           if (p.anchorE1rms) state.anchorE1rms = { ...state.e1rms, ...p.anchorE1rms };
@@ -1566,7 +1598,11 @@ window.DEFAULT_SCHEME_BLUEPRINTS = DEFAULT_SCHEME_BLUEPRINTS;
         state.settings.schemeRecipes = state.schemeRecipes;
         state.settings.anchorE1rms = state.anchorE1rms;
         state.settings.oneRmFormula = state.settings.oneRmFormula || 'apex';
-
+        state.settings.mesocycleStartDate = state.mesocycleStartDate;
+        state.settings.rpeProfiles = state.rpeProfiles;
+        state.settings.activeRpeProfileId = state.activeRpeProfileId;
+        state.settings.equipment = state.equipment;
+        localStorage.setItem('apex_equipment', JSON.stringify(state.equipment));
         localStorage.setItem('apex_dayLogs', JSON.stringify(state.dayLogs));
         localStorage.setItem('apex_savedStaged', JSON.stringify(state.savedStaged));
         localStorage.setItem('apex_e1rms', JSON.stringify(state.e1rms));
@@ -2847,128 +2883,204 @@ function renderRpeMatrixTable(profile) {
       };
     }
 
-    let sbClient = null;
-    let realtimeChannel = null;
+   let sbClient = null;
+  let realtimeChannel = null;
+  let isPushingToCloud = false;
+  let lastPushStartedAt = 0;
 
-    function subscribeToRealtime() {
-      if (!sbClient || !state.user || realtimeChannel) return;
+  // Shared per-date deep merge so neither Pull nor Push can EVER erase a completed workout
+  function mergeDayLogs(localRaw = {}, cloudRaw = {}) {
+    const normLocal = {};
+    const normCloud = {};
+    Object.keys(localRaw || {}).forEach(k => { normLocal[normalizeDateKey(k)] = localRaw[k]; });
+    Object.keys(cloudRaw || {}).forEach(k => { normCloud[normalizeDateKey(k)] = cloudRaw[k]; });
+
+    const allDates = new Set([...Object.keys(normCloud), ...Object.keys(normLocal)]);
+    const merged = {};
+
+    const getWorkoutScore = (log) => {
+      const w = log?.workout;
+      if (!w) return -1;
+      const exList = Array.isArray(w.exercises) ? w.exercises : (Array.isArray(w.lifts) ? w.lifts : []);
+      const doneSets = exList.reduce((acc, ex) => acc + (Array.isArray(ex.sets) ? ex.sets.filter(s => s && s.done).length : 0), 0);
+      const totalSets = exList.reduce((acc, ex) => acc + (Array.isArray(ex.sets) ? ex.sets.length : 1), 0);
+      return (w.done ? 10000 : 0) + (doneSets * 100) + totalSets;
+    };
+
+    allDates.forEach(k => {
+      const cLog = normCloud[k];
+      const lLog = normLocal[k];
+      if (cLog && lLog) {
+        const lScore = getWorkoutScore(lLog);
+        const cScore = getWorkoutScore(cLog);
+        const bestWorkout = (lScore >= cScore)
+          ? (lLog.workout || cLog.workout)
+          : (cLog.workout || lLog.workout);
+
+        merged[k] = {
+          ...cLog,
+          ...lLog,
+          weight: lLog.weight || cLog.weight,
+          recovery: { ...(cLog.recovery || {}), ...(lLog.recovery || {}) },
+          ...(bestWorkout ? { workout: bestWorkout } : {})
+        };
+      } else {
+        merged[k] = lLog || cLog;
+      }
+    });
+    return merged;
+  }
+
+  function subscribeToRealtime() {
+    if (!sbClient || !state.user || realtimeChannel) return;
+    try {
+      realtimeChannel = sbClient
+        .channel('apex_userdata_changes')
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'apex_userdata',
+          filter: `user_id=eq.${state.user.id}`
+        }, (payload) => {
+          if (isPushingToCloud || (Date.now() - lastPushStartedAt < 4000)) return;
+          if (payload.new && payload.new.updated_at) {
+            const cloudTime = new Date(payload.new.updated_at).getTime();
+            const localTime = Number(localStorage.getItem('apex_last_sync_timestamp') || 0);
+            if (cloudTime > localTime + 3000) {
+              window.pullFromCloud(false, true);
+            }
+          }
+        })
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            console.log("Supabase Realtime synchronized");
+          }
+        });
+    } catch (e) {
+      console.warn("Realtime subscription warning:", e);
+    }
+  }
+
+  window.initSupabase = function() {
+    if (typeof window.supabase === 'undefined') return;
+    const { url, anonKey } = state.supabaseConfig;
+    if (url && anonKey) {
       try {
-        realtimeChannel = sbClient
-          .channel('apex_userdata_changes')
-          .on('postgres_changes', {
-            event: '*',
-            schema: 'public',
-            table: 'apex_userdata',
-            filter: `user_id=eq.${state.user.id}`
-          }, (payload) => {
-            if (payload.new && payload.new.updated_at) {
-              const cloudTime = new Date(payload.new.updated_at).getTime();
-              const localTime = Number(localStorage.getItem('apex_last_sync_timestamp') || 0);
-              if (cloudTime > localTime + 2000) {
-                window.pullFromCloud(false, true);
-              }
-            }
-          })
-          .subscribe((status) => {
-            if (status === 'SUBSCRIBED') {
-              console.log("Supabase Realtime synchronized");
-            }
-          });
-      } catch(e) {
-        console.warn("Realtime subscription warning:", e);
+        sbClient = window.supabase.createClient(url, anonKey);
+        sbClient.auth.getSession().then(({ data: { session } }) => {
+          state.user = session?.user || null;
+          state.syncStatus = state.user ? 'synced' : 'offline';
+          if (typeof window.renderSyncIndicator === 'function') window.renderSyncIndicator();
+          if (state.user) {
+            window.pullFromCloud(false);
+            subscribeToRealtime();
+          }
+        });
+        sbClient.auth.onAuthStateChange((_event, session) => {
+          const prevUser = state.user;
+          state.user = session?.user || null;
+          state.syncStatus = state.user ? 'synced' : 'offline';
+          if (typeof window.renderSyncIndicator === 'function') window.renderSyncIndicator();
+          if (state.user && !prevUser) {
+            window.pullFromCloud(false);
+            subscribeToRealtime();
+          } else if (!state.user && realtimeChannel) {
+            sbClient.removeChannel(realtimeChannel);
+            realtimeChannel = null;
+          }
+        });
+      } catch (e) {
+        console.warn("Supabase init error:", e);
       }
     }
+  };
 
-    window.initSupabase = function() {
-      if (typeof window.supabase === 'undefined') return;
-      const { url, anonKey } = state.supabaseConfig;
-      if (url && anonKey) {
-        try {
-          sbClient = window.supabase.createClient(url, anonKey);
-          sbClient.auth.getSession().then(({ data: { session } }) => {
-            state.user = session?.user || null;
-            state.syncStatus = state.user ? 'synced' : 'offline';
-            if (typeof window.renderSyncIndicator === 'function') window.renderSyncIndicator();
-            if (state.user) {
-              window.pullFromCloud(false);
-              subscribeToRealtime();
-            }
-          });
-          sbClient.auth.onAuthStateChange((_event, session) => {
-            const prevUser = state.user;
-            state.user = session?.user || null;
-            state.syncStatus = state.user ? 'synced' : 'offline';
-            if (typeof window.renderSyncIndicator === 'function') window.renderSyncIndicator();
-            if (state.user && !prevUser) {
-              window.pullFromCloud(false);
-              subscribeToRealtime();
-            } else if (!state.user && realtimeChannel) {
-              sbClient.removeChannel(realtimeChannel);
-              realtimeChannel = null;
-            }
-          });
-        } catch (e) {
-          console.warn("Supabase init error:", e);
-        }
-      }
-    };
-
-    window.pushToCloud = async function(isManual = false) {
-      if (!sbClient) window.initSupabase();
-      if (!sbClient || !state.user) {
-        state.syncStatus = 'offline';
-        if (typeof window.renderSyncIndicator === 'function') window.renderSyncIndicator();
-        if (isManual) showToast("❌ Please sign in to Supabase first.");
-        return;
-      }
-      state.syncStatus = 'syncing';
-      if (typeof window.renderSyncIndicator === 'function') window.renderSyncIndicator();
-      try {
-        state.settings.customSplitBlueprints = state.customSplitBlueprints;
-        state.settings.schemeRecipes = state.schemeRecipes;
-        state.settings.anchorE1rms = state.anchorE1rms;
-        state.settings.oneRmFormula = state.settings.oneRmFormula || 'apex';
-
-        const nowIso = new Date().toISOString();
-        const payload = {
-          user_id: state.user.id,
-          settings: state.settings,
-          profile: state.profile,
-          mesocycle: state.mesocycle,
-          weekday_split: state.weekdaySplit,
-          exercise_meta: state.exerciseMeta,
-          phase_rep_matrix: state.phaseRepMatrix,
-          scheme_blueprints: state.schemeBlueprints,
-          exercise_rep_overrides: state.exerciseRepOverrides,
-          active_block_idx: state.activeBlockIdx,
-          active_week: state.activeWeek,
-          exercises: state.exercises,
-          modifier_cats: state.modifierCats,
-          day_logs: state.dayLogs,
-          e1rms: state.e1rms,
-          pr_ledger: state.prLedger,
-          updated_at: nowIso
-        };
-        const { error } = await sbClient.from('apex_userdata').upsert(payload, { onConflict: 'user_id' });
-        if (error) throw error;
-        localStorage.setItem('apex_last_sync_timestamp', String(Date.now()));
-        localStorage.setItem('apex_has_unsynced_changes', 'false');
-        state.syncStatus = 'synced';
-        if (isManual) showToast("✓ Data pushed to Supabase successfully!");
-      } catch (err) {
-        console.error("Cloud push error:", err);
-        state.syncStatus = 'error';
-        if (isManual) showToast(`❌ Push Error: ${err.message || 'Check database permissions'}`);
-      }
-      if (typeof window.renderSyncIndicator === 'function') window.renderSyncIndicator();
-    };
-
-   window.pullFromCloud = async function(isManual = false, isSilent = false) {
+  window.pushToCloud = async function(isManual = false) {
     if (!sbClient) window.initSupabase();
     if (!sbClient || !state.user) {
       state.syncStatus = 'offline';
       if (typeof window.renderSyncIndicator === 'function') window.renderSyncIndicator();
       if (isManual) showToast("❌ Please sign in to Supabase first.");
+      return;
+    }
+    if (cloudSyncTimeout) {
+      clearTimeout(cloudSyncTimeout);
+      cloudSyncTimeout = null;
+    }
+    isPushingToCloud = true;
+    lastPushStartedAt = Date.now();
+    localStorage.setItem('apex_last_sync_timestamp', String(lastPushStartedAt));
+    state.syncStatus = 'syncing';
+    if (typeof window.renderSyncIndicator === 'function') window.renderSyncIndicator();
+
+    try {
+      // Fetch cloud day_logs & e1rms first so a background tab can NEVER overwrite a completed workout on another device
+      const { data: existingCloud } = await sbClient
+        .from('apex_userdata')
+        .select('day_logs, e1rms, pr_ledger')
+        .eq('user_id', state.user.id)
+        .maybeSingle();
+
+      if (existingCloud?.day_logs) {
+        state.dayLogs = mergeDayLogs(state.dayLogs, existingCloud.day_logs);
+        localStorage.setItem('apex_dayLogs', JSON.stringify(state.dayLogs));
+      }
+      if (existingCloud?.e1rms) {
+        state.e1rms = { ...existingCloud.e1rms, ...state.e1rms };
+      }
+
+      state.settings.customSplitBlueprints = state.customSplitBlueprints;
+      state.settings.schemeRecipes = state.schemeRecipes;
+      state.settings.anchorE1rms = state.anchorE1rms;
+      state.settings.oneRmFormula = state.settings.oneRmFormula || 'apex';
+
+      const nowIso = new Date().toISOString();
+      const payload = {
+        user_id: state.user.id,
+        settings: state.settings,
+        profile: state.profile,
+        mesocycle: state.mesocycle,
+        weekday_split: state.weekdaySplit,
+        exercise_meta: state.exerciseMeta,
+        phase_rep_matrix: state.phaseRepMatrix,
+        scheme_blueprints: state.schemeBlueprints,
+        exercise_rep_overrides: state.exerciseRepOverrides,
+        active_block_idx: state.activeBlockIdx,
+        active_week: state.activeWeek,
+        exercises: state.exercises,
+        modifier_cats: state.modifierCats,
+        day_logs: state.dayLogs,
+        e1rms: state.e1rms,
+        pr_ledger: state.prLedger,
+        updated_at: nowIso
+      };
+      const { error } = await sbClient.from('apex_userdata').upsert(payload, { onConflict: 'user_id' });
+      if (error) throw error;
+      const doneTs = Date.now();
+      lastPushStartedAt = doneTs;
+      localStorage.setItem('apex_last_sync_timestamp', String(doneTs));
+      localStorage.setItem('apex_has_unsynced_changes', 'false');
+      state.syncStatus = 'synced';
+      if (isManual) showToast("✅ Data pushed to Supabase successfully!");
+    } catch (err) {
+      console.error("Cloud push error:", err);
+      state.syncStatus = 'error';
+      if (isManual) showToast(`❌ Push Error: ${err.message || 'Check database permissions'}`);
+    } finally {
+      isPushingToCloud = false;
+      if (typeof window.renderSyncIndicator === 'function') window.renderSyncIndicator();
+    }
+  };
+
+  window.pullFromCloud = async function(isManual = false, isSilent = false) {
+    if (!sbClient) window.initSupabase();
+    if (!sbClient || !state.user) {
+      state.syncStatus = 'offline';
+      if (typeof window.renderSyncIndicator === 'function') window.renderSyncIndicator();
+      if (isManual) showToast("❌ Please sign in to Supabase first.");
+      return;
+    }
+    if (!isManual && (isPushingToCloud || (Date.now() - lastPushStartedAt < 3500))) {
       return;
     }
     if (!isSilent) {
@@ -2987,6 +3099,9 @@ function renderRpeMatrixTable(profile) {
           if (data.settings.schemeRecipes) state.schemeRecipes = { ...defaultSchemeRecipes, ...data.settings.schemeRecipes };
           if (data.settings.anchorE1rms) state.anchorE1rms = { ...state.e1rms, ...data.settings.anchorE1rms };
           if (data.settings.oneRmFormula) state.settings.oneRmFormula = data.settings.oneRmFormula;
+          if (data.settings.mesocycleStartDate) state.mesocycleStartDate = data.settings.mesocycleStartDate;
+          if (data.settings.rpeProfiles) state.rpeProfiles = data.settings.rpeProfiles;
+          if (data.settings.activeRpeProfileId) state.activeRpeProfileId = data.settings.activeRpeProfileId;
         }
         if (data.profile) state.profile = { ...state.profile, ...data.profile };
         if (data.mesocycle) state.mesocycle = data.mesocycle;
@@ -2999,52 +3114,31 @@ function renderRpeMatrixTable(profile) {
         if (data.modifier_cats) state.modifierCats = data.modifier_cats;
         if (data.exercises) state.exercises = Array.isArray(data.exercises) ? data.exercises : { ...state.exercises, ...data.exercises };
         if (data.day_logs) {
-          const normalizedLogs = {};
-          Object.keys(data.day_logs).forEach(k => {
-            normalizedLogs[normalizeDateKey(k)] = data.day_logs[k];
-          });
-          // Deep-merge cloud logs and local logs per date so weight, recovery, and workout never wipe each other out!
-          const allDates = new Set([
-            ...Object.keys(normalizedLogs),
-            ...Object.keys(state.dayLogs || {})
-          ]);
-          const mergedLogs = {};
-          allDates.forEach(k => {
-            const cLog = normalizedLogs[k];
-            const lLog = state.dayLogs ? state.dayLogs[k] : null;
-            if (cLog && lLog) {
-              const getExList = (log) => (log.workout && Array.isArray(log.workout.exercises)) ? log.workout.exercises
-                : Array.isArray(log.exercises) ? log.exercises
-                : (log.workout && Array.isArray(log.workout.lifts)) ? log.workout.lifts : [];
-              const cSets = getExList(cLog).reduce((acc, ex) => acc + (ex.sets ? ex.sets.length : 1), 0);
-              const lSets = getExList(lLog).reduce((acc, ex) => acc + (ex.sets ? ex.sets.length : 1), 0);
-              const bestWorkout = (lSets >= cSets)
-                ? (lLog.workout || cLog.workout)
-                : (cLog.workout || lLog.workout);
-
-              mergedLogs[k] = {
-                ...cLog,
-                ...lLog,
-                weight: lLog.weight || cLog.weight,
-                recovery: { ...(cLog.recovery || {}), ...(lLog.recovery || {}) },
-                ...(bestWorkout ? { workout: bestWorkout } : {})
-              };
-            } else {
-              mergedLogs[k] = lLog || cLog;
-            }
-          });
-          state.dayLogs = mergedLogs;
+          state.dayLogs = mergeDayLogs(state.dayLogs, data.day_logs);
         }
-        if (data.e1rms) state.e1rms = { ...state.e1rms, ...data.e1rms };
+        if (data.e1rms) state.e1rms = { ... data.e1rms, ...state.e1rms };
         if (data.anchor_e1rms) state.anchorE1rms = { ...state.e1rms, ...data.anchor_e1rms };
         else if (!state.anchorE1rms || !Object.keys(state.anchorE1rms).length) state.anchorE1rms = { ...state.e1rms };
-        if (data.pr_ledger) state.prLedger = data.pr_ledger;
+        if (Array.isArray(data.pr_ledger)) {
+          const combinedLedger = [...(state.prLedger || []), ...data.pr_ledger];
+          const seen = new Set();
+          state.prLedger = combinedLedger.filter(item => {
+            if (!item) return false;
+            const sig = `${item.date}_${item.lift}_${item.newVal}`;
+            if (seen.has(sig)) return false;
+            seen.add(sig);
+            return true;
+          });
+        }
         localStorage.setItem('apex_last_sync_timestamp', String(Date.now()));
         syncMesocycleProgression();
         state.formMetrics.weight = getLatestBodyweight();
         if (typeof window.persist === 'function') window.persist();
         // Prevent window.persist() from falsely marking a cloud pull as an unsynced local edit:
-        if (cloudSyncTimeout) clearTimeout(cloudSyncTimeout);
+        if (cloudSyncTimeout) {
+          clearTimeout(cloudSyncTimeout);
+          cloudSyncTimeout = null;
+        }
         localStorage.setItem('apex_has_unsynced_changes', 'false');
         state.syncStatus = 'synced';
         if (hasUnsyncedLocal) {
@@ -3075,24 +3169,25 @@ function renderRpeMatrixTable(profile) {
     if (typeof window.renderSyncIndicator === 'function') window.renderSyncIndicator();
 
     cloudSyncTimeout = setTimeout(() => {
+      cloudSyncTimeout = null;
       window.pushToCloud(false);
     }, delayMs);
   }
   window.queueCloudSync = queueCloudSync;
 
-// Flush any pending cloud sync immediately if the page is refreshed or backgrounded
-window.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden' && localStorage.getItem('apex_has_unsynced_changes') === 'true') {
-    window.pushToCloud(false);
-  }
-});
+  // Flush any pending cloud sync immediately if the page is refreshed or backgrounded
+  window.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' && localStorage.getItem('apex_has_unsynced_changes') === 'true' && !isPushingToCloud) {
+      window.pushToCloud(false);
+    }
+  });
 
-    // 60-Second Background Heartbeat Auto-Sync for In-Progress Workouts
-    setInterval(() => {
-      if (state.user && state.activeWorkout && state.activeWorkout.length) {
-        window.pushToCloud(false);
-      }
-    }, 60000);
+  // 60-Second Background Heartbeat Auto-Sync for In-Progress Workouts
+  setInterval(() => {
+    if (state.user && state.activeWorkout && state.activeWorkout.length && !isPushingToCloud) {
+      window.pushToCloud(false);
+    }
+  }, 60000);
 
     window.apexCore = {
       APP_VERSION,
@@ -3191,11 +3286,209 @@ window.addEventListener('visibilitychange', () => {
       if (state.activeBlockIdx >= state.mesocycle.length) state.activeBlockIdx = 0;
       return state.mesocycle[state.activeBlockIdx];
     }
+    // Inventory-Aware Greedy Plate Calculator (Barbells, Specialty Bars, 2:1 Cable & Loadable Heavy DB Handle)
+    function calculatePlateLoading(targetWeight, exName = '', mods = []) {
+      const eq = getEquipmentConfig();
+      const cleanMods = Array.isArray(mods) ? mods : [];
+      const w = Number(targetWeight) || 0;
+      if (w <= 0) return { type: 'none', text: '', achievableWeight: 0 };
+
+      const isDB = cleanMods.includes('Dumbbell') || /\b(db|dumbbell|hammer curl|incline curl|lateral raise|lu raise)\b/i.test(exName);
+      const isCable = cleanMods.includes('Cable') || /\b(cable|pushdown|pull down|face pull|pull through)\b/i.test(exName);
+
+      // 1. Dumbbell Per-Hand & Heavy Loadable Row Handle Solver
+      if (isDB) {
+        const pairedMax = Number(eq.dumbbells?.pairedMax) || 90;
+        const singleMax = Number(eq.dumbbells?.singleHandleMax) || 185;
+        const handleTare = Number(eq.dumbbells?.singleHandleTare) || 5;
+        const isRowOrSingle = cleanMods.includes('Single Arm') || cleanMods.includes('Single Leg') || /\b(row|one arm|single arm|suitcase|shrug)\b/i.test(exName);
+        const maxCap = isRowOrSingle ? Math.max(pairedMax, singleMax) : pairedMax;
+
+        // If weight exceeds pairedMax (e.g. >90 lbs), compute plate breakdown for the Loadable DB Handle!
+        // (Prioritizes plates <= 25 lbs so big 45s don't limit ROM on DB rows, falling back to 45s only if needed)
+        if (w > pairedMax && w > handleTare) {
+          let remPerSide = (w - handleTare) / 2;
+          const dbPlates = (eq.plates || [])
+            .filter(p => p.enabled && Number(p.pairs) > 0 && Number(p.weight) > 0 && Number(p.weight) <= 25)
+            .sort((a, b) => Number(b.weight) - Number(a.weight));
+
+          const loaded = [];
+          dbPlates.forEach(p => {
+            const pW = Number(p.weight);
+            const maxOnOneHandleSide = Number(p.pairs) * 2; // All owned plates can go on a single handle!
+            const needed = Math.floor((remPerSide + 0.01) / pW);
+            const used = Math.min(maxOnOneHandleSide, needed);
+            if (used > 0) {
+              loaded.push(used > 1 ? `${used}×${pW}` : `${pW}`);
+              remPerSide -= used * pW;
+            }
+          });
+
+          const handleBreakdown = loaded.length ? ` (${handleTare}lb Hdl: ${loaded.join('+')}/side)` : '';
+          return {
+            type: 'dumbbell_loadable',
+            isSingleArm: true,
+            maxCap,
+            achievableWeight: Math.min(maxCap, w),
+            text: `${w} lb Handle${handleBreakdown}`
+          };
+        }
+
+        return {
+          type: 'dumbbell',
+          isSingleArm: isRowOrSingle,
+          maxCap,
+          achievableWeight: Math.min(maxCap, w),
+          text: `${w} lb / hand`
+        };
+      }
+
+      // 2. Cable Pulley Ratio Solver
+      if (isCable) {
+        const ratio = Number(eq.cable?.ratio) || 0.5;
+        const carriage = Number(eq.cable?.carriageWeight) || 0;
+        const physicalStackNeeded = Math.max(0, Math.round(((w / ratio) - carriage) * 10) / 10);
+        return {
+          type: 'cable',
+          ratio,
+          physicalStackNeeded,
+          achievableWeight: w,
+          text: ratio === 0.5 ? `Pin: ${physicalStackNeeded} lbs (2:1)` : `Pin: ${physicalStackNeeded} lbs`
+        };
+      }
+
+      // 3. Barbell / Specialty Bar Sleeve Solver (Using Only Enabled Plates & Owned Pairs)
+      const bar = resolveActiveBar(exName, cleanMods);
+      if (w <= bar.weight) {
+        return { type: 'barbell', barName: bar.name, barWeight: bar.weight, platesPerSide: [], achievableWeight: bar.weight, text: `Empty ${bar.name} (${bar.weight}lb)` };
+      }
+
+      let remPerSide = (w - bar.weight) / 2;
+      const availablePlates = (eq.plates || [])
+        .filter(p => p.enabled && Number(p.pairs) > 0 && Number(p.weight) > 0)
+        .sort((a, b) => Number(b.weight) - Number(a.weight));
+
+      const loadedPerSide = [];
+      let loadedWeightPerSide = 0;
+
+      availablePlates.forEach(p => {
+        const pWeight = Number(p.weight);
+        const maxPairs = Number(p.pairs);
+        const needed = Math.floor((remPerSide + 0.01) / pWeight);
+        const used = Math.min(maxPairs, needed);
+        if (used > 0) {
+          loadedPerSide.push(used > 1 ? `${used}×${pWeight}` : `${pWeight}`);
+          remPerSide -= used * pWeight;
+          loadedWeightPerSide += used * pWeight;
+        }
+      });
+
+      const achievableWeight = bar.weight + (loadedWeightPerSide * 2);
+      const shortPrefix = bar.name === 'Barbell' ? '' : `${bar.name.replace(' Bar', '')} ${bar.weight}lb: `;
+      const plateStr = loadedPerSide.length ? `[${shortPrefix}${loadedPerSide.join('+')}/side]` : `[${bar.name} ${bar.weight}lb]`;
+
+      return {
+        type: 'barbell',
+        barName: bar.name,
+        barWeight: bar.weight,
+        platesPerSide: loadedPerSide,
+        achievableWeight,
+        unmetRemainder: Math.round(remPerSide * 2 * 10) / 10,
+        text: plateStr
+      };
+    }
+
+    // Enforces Dynamic Equipment Ceilings, Smart Handle Recommendations & Rep/Tempo Pivots
+    function enforceHardwareConstraints(sets, exName, mods = [], effectiveE1rm = 100) {
+      if (!Array.isArray(sets) || !sets.length) return sets;
+      const eq = getEquipmentConfig();
+      const cleanMods = Array.isArray(mods) ? mods : [];
+      const isDB = cleanMods.includes('Dumbbell') || /\b(db|dumbbell|hammer curl|incline curl|lateral raise|lu raise)\b/i.test(exName);
+      const isCable = cleanMods.includes('Cable') || /\b(cable|pushdown|pull down|face pull|pull through)\b/i.test(exName);
+
+      const pairedMax = Number(eq.dumbbells?.pairedMax) || 90;
+      const singleMax = Number(eq.dumbbells?.singleHandleMax) || 185;
+      const dbStep = Number(eq.dumbbells?.increment) || 5;
+
+      // Rows, Shrugs, Split Squats, Carries, or anything tagged 'Single Arm' automatically unlock the Heavy Loadable Handle!
+      const isHeavyHandleMovement = cleanMods.includes('Single Arm') || cleanMods.includes('Single Leg') || /\b(row|one arm|single arm|suitcase|shrug|split squat|lunge)\b/i.test(exName);
+      const activeDbCeiling = isHeavyHandleMovement ? Math.max(pairedMax, singleMax) : pairedMax;
+
+      return sets.map(s => {
+        if (!s || !s.targetLoad || s.targetLoad <= 0) return s;
+
+        // 1. Cable Pulley Rounding
+        if (isCable && !isDB) {
+          const cStep = Number(eq.cable?.increment) || 2.5;
+          const cableLoad = Math.round(Number(s.targetLoad) / cStep) * cStep;
+          return { ...s, targetLoad: cableLoad, actualWeight: cableLoad };
+        }
+
+        // 2. Dumbbell Dynamic Ceiling & Smart Pivot Engine
+        if (isDB) {
+          const dbStepLoad = Math.round(Number(s.targetLoad) / dbStep) * dbStep;
+          if (dbStepLoad <= activeDbCeiling) {
+            const cue = (dbStepLoad > pairedMax && isHeavyHandleMovement)
+              ? `Using Heavy Loadable Handle (${dbStepLoad} lbs > ${pairedMax}lb paired max)`
+              : undefined;
+            return {
+              ...s,
+              loadBasis: 'per_hand',
+              targetLoad: dbStepLoad,
+              actualWeight: dbStepLoad,
+              ...(cue ? { smartHardwareCue: cue } : {})
+            };
+          }
+
+          // Ceiling Exceeded! Calculate exact equivalent reps at the ceiling load to match target RPE
+          const targetRpe = roundRpe(s.targetRpe || 8.0);
+          const rir = 10.0 - targetRpe;
+          const pctAtCap = Math.min(96, Math.max(45, (activeDbCeiling / Math.max(activeDbCeiling, effectiveE1rm)) * 100));
+          const totalEffReps = Math.round(1 + ((100 - pctAtCap) / 2.15));
+          const baseMinRep = parseInt(String(s.targetReps).split('-')[0], 10) || 6;
+          const pivotedReps = Math.min(25, Math.max(baseMinRep + 2, Math.round(totalEffReps - rir)));
+
+          let smartRec = pivotedReps >= 15 ? '3010 Tempo' : '1ct Stretch Pause';
+          if (/\b(bench|incline|press)\b/i.test(exName)) {
+            smartRec += ' (or swap to Swiss/BB)';
+          }
+
+          const baseLabel = String(s.label || 'Set').replace(/\s*\[.*Cap.*\]/i, '');
+          return {
+            ...s,
+            loadBasis: 'per_hand',
+            targetLoad: activeDbCeiling,
+            actualWeight: activeDbCeiling,
+            targetReps: `${pivotedReps}`,
+            actualReps: pivotedReps,
+            smartHardwareCue: `Capped at ${activeDbCeiling}lb/hand (Target was ${dbStepLoad}lb). Pivoted to ${pivotedReps}r • ${smartRec}`,
+            label: `${baseLabel} [${activeDbCeiling}lb Cap → ${pivotedReps}r]`
+          };
+        }
+
+        // 3. Barbell / Specialty Bar Snap-to-Available-Plates
+        const plateCheck = calculatePlateLoading(s.targetLoad, exName, cleanMods);
+        if (plateCheck.type === 'barbell' && plateCheck.achievableWeight > 0 && plateCheck.achievableWeight !== s.targetLoad) {
+          return {
+            ...s,
+            targetLoad: plateCheck.achievableWeight,
+            actualWeight: plateCheck.achievableWeight
+          };
+        }
+
+        return s;
+      });
+    }
+
+    window.apexCore.getEquipmentConfig = getEquipmentConfig;
+    window.apexCore.calculatePlateLoading = calculatePlateLoading;
+    window.apexCore.enforceHardwareConstraints = enforceHardwareConstraints;
+    window.calculatePlateLoading = calculatePlateLoading;
 
     // ========================================================================
     // UNIFIED 31-SCHEME TARGET DERIVATION ENGINE (NEUTRAL NOMENCLATURE)
     // ========================================================================
-    function buildSets(scheme, e1rm, factor = 1.0, tier = 'Main', exName = '', mods = [], opts = {}) {
+    function _rawBuildSets(scheme, e1rm, factor = 1.0, tier = 'Main', exName = '', mods = [], opts = {}) {
       const isGrounding = Boolean(opts && opts.isGrounding);
       const skipBackoffs = Boolean(opts && opts.skipBackoffs);
 
@@ -3464,7 +3757,7 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
             lapRunning: false
           });
         }
-        return setArray;
+        return enforceHardwareConstraints(setArray, exName, mods, adj);
       }
 
       // ----------------------------------------------------------------------
@@ -3496,7 +3789,7 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
             lapRunning: false
           });
         }
-        return setArray;
+        return enforceHardwareConstraints(setArray, exName, mods, adj);
       }
 
       // ----------------------------------------------------------------------
@@ -3542,7 +3835,7 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
             });
           }
         }
-        return setArray;
+        return enforceHardwareConstraints(setArray, exName, mods, adj);
       }
 
       // ----------------------------------------------------------------------
@@ -3953,7 +4246,7 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
             });
           }
         }
-        return setArray;
+        return enforceHardwareConstraints(setArray, exName, mods, adj);
       }
 
       // ----------------------------------------------------------------------
@@ -4397,7 +4690,10 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
         };
       });
     }
-
+    function buildSets(scheme, e1rm, factor = 1.0, tier = 'Main', exName = '', mods = [], opts = {}) {
+  const rawSets = _rawBuildSets(scheme, e1rm, factor, tier, exName, mods, opts);
+  return enforceHardwareConstraints(rawSets, exName, mods, (Number(e1rm) || 135) * (Number(factor) || 1.0));
+}
     window.apexCore.buildSets = buildSets;
     window.apexCore.getActiveBlock = getActiveBlock;
     window.buildSets = buildSets;
@@ -4738,6 +5034,61 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
   });
 
   Object.assign(window.appActions, {
+    // Equipment & Plate Inventory Controllers
+    updateEquipmentSetting(category, field, val) {
+      if (!state.equipment) state.equipment = JSON.parse(JSON.stringify(window.apexCore.getEquipmentConfig()));
+      if (!state.equipment[category]) state.equipment[category] = {};
+      state.equipment[category][field] = Number(val) || 0;
+      persist();
+      triggerCloudSync(1500);
+      safeRender();
+    },
+
+    updateBarWeight(barName, val) {
+      if (!state.equipment) state.equipment = JSON.parse(JSON.stringify(window.apexCore.getEquipmentConfig()));
+      if (!state.equipment.bars) state.equipment.bars = {};
+      state.equipment.bars[barName] = Math.max(0, Number(val) || 45);
+      persist();
+      triggerCloudSync(1500);
+      safeRender();
+    },
+
+    syncLiveAnchor(exIdx) {
+    const ex = state.activeWorkout[exIdx];
+    if (!ex || !ex.liveAnchorSync) return;
+
+    const newE1 = ex.liveAnchorSync.liveE1;
+    ex.e1rm = newE1;
+
+    if (typeof buildSets === 'function') {
+      const freshSets = buildSets(ex.scheme, newE1, ex.factor || 1.0, ex.tier || 'Main', ex.exercise, ex.modifiers, { isGrounding: false });
+      ex.sets = ex.sets.map((s, idx) => s.done ? s : (freshSets[idx] || s));
+    }
+
+    delete ex.liveAnchorSync;
+    persist();
+    safeRender();
+  },
+  
+    togglePlateDenom(idx) {
+      if (!state.equipment?.plates?.[idx]) return;
+      const p = state.equipment.plates[idx];
+      p.enabled = !p.enabled;
+      if (p.enabled && (!p.pairs || p.pairs <= 0)) p.pairs = 1;
+      persist();
+      triggerCloudSync(1500);
+      safeRender();
+    },
+
+    updatePlatePairs(idx, pairsVal) {
+      if (!state.equipment?.plates?.[idx]) return;
+      const count = Math.max(0, parseInt(pairsVal, 10) || 0);
+      state.equipment.plates[idx].pairs = count;
+      state.equipment.plates[idx].enabled = count > 0;
+      persist();
+      triggerCloudSync(1500);
+      safeRender();
+    },
     // Navigation & Shell
     // --- Inline Load & Planner Calculators ---
  // --- Inline Load & e1RM Calculator Actions ---
@@ -5505,6 +5856,41 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
       const meta = getExMeta(ex.exercise);
       s.done = !s.done;
 
+     // --- RANK 1: LIVE SET-1 AUTOREGULATED ANCHOR RE-CALIBRATION ---
+      if (sIdx === 0 && s.done && meta.w && meta.r && Number(s.actualWeight) > 0 && Number(s.actualReps) > 0) {
+        const actW = Number(s.actualWeight);
+        const actR = Number(s.actualReps);
+        const actRpe = roundRpe(s.actualRpe || s.targetRpe || 8.0);
+        const rawPct = typeof getPct === 'function' ? getPct(actR, actRpe) : (100 / (1 + actR / 30));
+        const pctDec = rawPct <= 1 ? rawPct : rawPct / 100;
+        const liveE1 = Math.round(actW / pctDec);
+
+        const cleanMods = sanitizeModifiers(ex.modifiers || []);
+        const variantKey = typeof getVariantKey === 'function' ? getVariantKey(ex.exercise, cleanMods) : ex.exercise;
+        const anchorE1 = Number(
+          ex.e1rm ||
+          (typeof getBaseAnchorE1rm === 'function' ? getBaseAnchorE1rm(ex.exercise, cleanMods) : null) ||
+          state.anchorE1rms?.[variantKey] ||
+          state.anchorE1rms?.[ex.exercise] ||
+          state.e1rms?.[variantKey] ||
+          state.e1rms?.[ex.exercise] ||
+          liveE1
+        );
+        const pctDiff = anchorE1 > 0 ? ((liveE1 - anchorE1) / anchorE1) * 100 : 0;
+
+        if (Math.abs(pctDiff) >= 2.5) {
+          ex.liveAnchorSync = {
+            liveE1,
+            pctDiff: Math.round(pctDiff * 10) / 10
+          };
+        } else {
+          delete ex.liveAnchorSync;
+        }
+      } else if (sIdx === 0 && !s.done) {
+        delete ex.liveAnchorSync;
+      }
+      // -------------------------------------------------------------
+
       state.restStart = Date.now();
       state.restStopwatchSecs = 0;
       const rEl = document.getElementById('workout-rest-display');
@@ -5783,9 +6169,10 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
         (x.sets || []).forEach(s => clearInterval(s.lapTimerObj));
       });
 
-      const targetKey = state.isEditingHistorical 
-        ? state.historicalDateKey 
-        : (state.activeWorkoutDateKey || getCurKey());
+      const rawTargetKey = state.isEditingHistorical
+      ? state.historicalDateKey
+      : (state.activeWorkoutDateKey || getCurKey());
+    const targetKey = typeof normalizeDateKey === 'function' ? normalizeDateKey(rawTargetKey) : rawTargetKey;
 
       if (!state.dayLogs[targetKey]) state.dayLogs[targetKey] = {};
       
@@ -5876,7 +6263,7 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
     state.sessionSecs = durSecs;
     state.sStart = Date.now() - (state.sessionSecs * 1000);
     state.restStart = Date.now();
-    resumestopwatch();
+    resumeStopwatch();
     state.screen = 'logger';
     state.dateActionModal.open = false;
     persist();
@@ -8120,57 +8507,81 @@ const SPECIALIZED_SCHEMES = [
             : 0;
 
           const setRows = (ex.sets || []).map((s, sIdx) => {
-            const isLapActive = s.lapRunning;
-            const targetRpeNum = roundRpe(s.targetRpe);
-            const displayTargetRpe = targetRpeNum <= 5.5 ? '&lt;6.0' : targetRpeNum.toFixed(1);
-            const actualRpeNum = roundRpe(s.actualRpe);
+          const isLapActive = s.lapRunning;
+          const targetRpeNum = roundRpe(s.targetRpe);
+          const displayTargetRpe = targetRpeNum <= 5.5 ? '&lt;6.0' : targetRpeNum.toFixed(1);
+          const actualRpeNum = roundRpe(s.actualRpe);
 
-            return `
-              <div id="set-row-${exIdx}-${sIdx}" class="p-2 rounded-xl border space-y-1.5 ${s.done ? 'bg-emerald-950/30 border-emerald-800' : 'bg-input border-sub'}">
-                <div class="grid grid-cols-12 gap-1 items-center text-center">
-                  <div class="col-span-2 flex items-center space-x-1 text-left min-w-0">
-  <button type="button" onclick="appActions.deleteSet(${exIdx},${sIdx})" class="text-[9px] md:text-xs font-mono text-slate-400 hover:text-red-400 font-bold shrink-0">${sIdx + 1}</button>${s.label ? `<span class="text-[7px] md:text-[7.5px] font-mono px-1 py-0.5 bg-card-sub rounded text-blue-300 border border-sub leading-[9px] whitespace-normal break-words text-center flex-1">${s.label}</span>` : ''}
-</div>
-                  <span class="col-span-3 font-mono text-[9px] md:text-xs text-slate-300 text-left pl-0.5 leading-tight truncate">
-                    ${(s.targetLoad !== undefined && s.targetLoad !== null && s.targetLoad !== '') ? s.targetLoad + 'x' : ''}${s.targetReps ? s.targetReps + 'r' : ''}${s.targetTime ? s.targetTime + 's' : ''} @${displayTargetRpe}
-                  </span>
-                  
-                  <div class="col-span-6 grid grid-cols-3 gap-1 items-center">
-                    ${meta.w ? `
-  <input type="number" step="2.5" placeholder="lbs" value="${s.actualWeight !== undefined && s.actualWeight !== null ? s.actualWeight : ''}" onchange="appActions.updateSetInput(${exIdx}, ${sIdx}, 'actualWeight', this.value)" class="w-full text-center bg-card-sub border border-sub rounded-lg py-1 text-xs text-white focus:border-blue-500 focus:outline-none" />
-` : `
-  <div class="w-full py-1 text-center bg-card-sub/40 border border-sub/50 rounded-lg text-slate-400 text-[11px] font-bold tracking-wider select-none">
-    BW
-  </div>
-`}
-                    ${meta.r ? `<input type="number" placeholder="reps" value="${s.actualReps !== undefined && s.actualReps !== null ? s.actualReps : ''}" onchange="appActions.updateSetInput(${exIdx}, ${sIdx}, 'actualReps', this.value)" class="w-full text-center bg-card-sub border border-sub rounded-lg py-1 text-xs text-center font-mono text-white focus:outline-none">` : ''}
-                    ${meta.rpe ? `
-                      <select onchange="appActions.updateSetInput(${exIdx}, ${sIdx}, 'actualRpe', this.value)" class="w-full text-center bg-card-sub border border-sub rounded-lg py-1 text-[9px] md:text-xs font-mono text-white px-0 focus:outline-none shrink-0 font-bold">
-                        <option value="5.5" ${actualRpeNum <= 5.5 ? 'selected' : ''}>&lt;6.0</option>
-                        ${[6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0].map(r => `<option value="${r}" ${actualRpeNum === r ? 'selected' : ''}>${r.toFixed(1)}</option>`).join('')}
-                      </select>
-                    ` : ''}
+          // Dynamic Inventory-Aware Plate, Dumbbell & 2:1 Cable Hint
+          const wNum = Number(s.actualWeight !== undefined && s.actualWeight !== null && s.actualWeight !== '' ? s.actualWeight : s.targetLoad) || 0;
+          const plateInfo = (meta.w && wNum > 0 && typeof calculatePlateLoading === 'function')
+            ? calculatePlateLoading(wNum, ex.exercise, cleanMods)
+            : { text: '' };
+          const plateHint = s.plateLoadText || plateInfo.text || '';
+          const hasCustomLabel = s.label && !/^Set \d+$/i.test(s.label);
+
+          return `
+            <div id="set-row-${exIdx}-${sIdx}" class="p-2.5 rounded-xl border space-y-1.5 transition-colors ${s.done ? 'bg-emerald-950/30 border-emerald-600' : 'bg-input border-sub'}">
+              ${(hasCustomLabel || plateHint || s.smartHardwareCue) ? `
+                <div class="flex flex-wrap items-center justify-between gap-1 border-b border-sub/40 pb-1 text-[9.5px] font-mono">
+                  <div class="flex items-center space-x-1.5">
+                    ${hasCustomLabel ? `<span class="px-1.5 py-0.5 rounded bg-blue-950/60 border border-blue-700/50 text-blue-300 font-bold uppercase tracking-tight">${s.label}</span>` : ''}
+                    ${s.smartHardwareCue ? `<span class="text-amber-400 font-semibold">${s.smartHardwareCue}</span>` : ''}
                   </div>
-                  <button type="button" id="set-btn-${exIdx}-${sIdx}" onclick="appActions.logSet(${exIdx}, ${sIdx}, event)" class="col-span-1 py-1 rounded text-xs font-bold transition tactile ${s.done ? 'bg-emerald-600 text-white shadow-sm' : 'bg-card-sub text-slate-400 border border-sub'}">✓</button>
+                  ${plateHint ? `<span class="text-accent font-bold bg-card-sub px-1.5 py-0.5 rounded border border-sub/80">🧮 ${plateHint}</span>` : ''}
+                </div>
+              ` : ''}
+
+              <div class="grid grid-cols-12 gap-1.5 items-center text-center">
+                <div class="col-span-2 flex items-center space-x-1 text-left min-w-0">
+                  <button type="button" onclick="appActions.deleteSet(${exIdx},${sIdx})" class="text-[10px] md:text-xs font-mono text-slate-400 hover:text-red-400 font-bold shrink-0 py-1 px-1 rounded" title="Delete Set">#${sIdx + 1} ✕</button>
                 </div>
 
-                ${meta.t ? `
-                  <div class="pt-1.5 mt-1 border-t border-sub/50 flex items-center justify-between text-xs font-mono">
-                    <span class="text-[9px] text-slate-400 uppercase font-bold flex items-center space-x-1">
-                      <span>⏱</span><span>Timer / Lap:</span>
-                    </span>
-                    <div class="flex items-center space-x-1.5">
-                      <button type="button" onclick="appActions.toggleSetLap(${exIdx}, ${sIdx})" class="px-2.5 py-1 rounded-lg font-mono text-[10px] font-bold tactile shadow ${isLapActive ? 'bg-amber-600 text-white animate-pulse' : 'bg-card-sub text-blue-400 border border-blue-800'}">
-                        ⏱ <span id="lap-display-${exIdx}-${sIdx}">${fmtTime(s.actualTime || 0)}</span>
-                      </button>
-                      <input type="number" placeholder="sec" value="${s.actualTime || ''}" onchange="appActions.updateSetInput(${exIdx}, ${sIdx}, 'actualTime', this.value)" class="w-14 bg-card-sub border border-sub rounded-lg py-1 text-[10px] text-center font-mono text-white focus:outline-none shrink-0" title="Manual seconds">
-                      <button type="button" onclick="appActions.resetSetLap(${exIdx}, ${sIdx})" class="px-2 py-1 bg-card-sub border border-sub rounded-lg text-[9px] text-slate-400 hover:text-white tactile font-bold">↺</button>
-                    </div>
-                  </div>
-                ` : ''}
+                <span class="col-span-3 font-mono text-[10px] md:text-xs text-slate-300 text-left pl-0.5 leading-tight truncate">
+                  ${(s.targetLoad !== undefined && s.targetLoad !== null && s.targetLoad !== '') ? s.targetLoad + 'x' : ''}${s.targetReps ? s.targetReps + 'r' : ''}${s.targetTime ? fmtTime(s.targetTime) : ''}${meta.rpe && s.targetRpe ? ' @' + displayTargetRpe : ''}
+                </span>
+
+                <div class="col-span-5 grid grid-cols-3 gap-1 items-center">
+                  ${meta.w ? `
+                    <input type="number" step="2.5" placeholder="lbs" value="${s.actualWeight !== undefined && s.actualWeight !== null ? s.actualWeight : ''}" onchange="appActions.updateSetInput(${exIdx}, ${sIdx}, 'actualWeight', this.value)" class="w-full h-11 text-center bg-card-sub border border-sub rounded-lg text-white font-mono text-xs font-bold focus:border-blue-500">
+                  ` : `
+                    <div class="w-full h-11 flex items-center justify-center bg-card-sub/40 border border-sub/50 rounded-lg text-slate-400 text-[11px] font-bold tracking-wider select-none">BW</div>
+                  `}
+
+                  ${meta.r ? `
+                    <input type="number" placeholder="reps" value="${s.actualReps !== undefined && s.actualReps !== null ? s.actualReps : ''}" onchange="appActions.updateSetInput(${exIdx}, ${sIdx}, 'actualReps', this.value)" class="w-full h-11 text-center bg-card-sub border border-sub rounded-lg text-white font-mono text-xs font-bold focus:border-blue-500">
+                  ` : `<div></div>`}
+
+                  ${meta.rpe ? `
+                    <select onchange="appActions.updateSetInput(${exIdx}, ${sIdx}, 'actualRpe', this.value)" class="w-full h-11 text-center bg-card-sub border border-sub rounded-lg text-accent font-mono text-xs font-bold">
+                      <option value="5.5" ${actualRpeNum <= 5.5 ? 'selected' : ''}>&lt;6.0</option>
+                      ${[6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0].map(r => `<option value="${r}" ${actualRpeNum === r ? 'selected' : ''}>${r.toFixed(1)}</option>`).join('')}
+                    </select>
+                  ` : `<div></div>`}
+                </div>
+
+                <button type="button" id="set-btn-${exIdx}-${sIdx}" onclick="appActions.logSet(${exIdx}, ${sIdx}, event)" class="col-span-2 h-11 rounded-xl text-xs font-bold transition tactile flex items-center justify-center shadow-sm ${s.done ? 'bg-emerald-600 text-white' : 'bg-card-sub border border-sub text-slate-300 hover:border-slate-500'}">
+                  ${s.done ? '✓' : 'Log'}
+                </button>
               </div>
-            `;
-          }).join('');
+
+              ${meta.t ? `
+                <div class="pt-1.5 mt-1 border-t border-sub/50 flex items-center justify-between text-xs font-mono">
+                  <span class="text-[9px] text-slate-400 uppercase font-bold flex items-center space-x-1">
+                    <span>⏱️</span><span>Timer / Lap:</span>
+                  </span>
+                  <div class="flex items-center space-x-1.5">
+                    <button type="button" onclick="appActions.toggleSetLap(${exIdx}, ${sIdx})" class="px-2.5 py-1 rounded-lg font-mono text-[10px] font-bold tactile shadow-sm ${isLapActive ? 'bg-red-600 text-white animate-pulse' : 'bg-blue-600 text-white'}">
+                      ${isLapActive ? '⏸' : '▶'} <span id="lap-display-${exIdx}-${sIdx}">${fmtTime(s.actualTime || 0)}</span>
+                    </button>
+                    <input type="number" placeholder="sec" value="${s.actualTime || ''}" onchange="appActions.updateSetInput(${exIdx}, ${sIdx}, 'actualTime', this.value)" class="w-14 py-1 text-center bg-card-sub border border-sub rounded-lg text-white text-[10px]">
+                    <button type="button" onclick="appActions.resetSetLap(${exIdx}, ${sIdx})" class="px-2 py-1 bg-card-sub border border-sub rounded-lg text-slate-400 hover:text-white text-[10px]">↺</button>
+                  </div>
+                </div>
+              ` : ''}
+            </div>
+          `;
+        }).join('');
 
 // Build Inline Load Calculator Drawer
    // --- Inline Load & e1RM Calculator Actions ---
@@ -8548,7 +8959,7 @@ const SPECIALIZED_SCHEMES = [
       <div class="col-span-3 flex items-end justify-center pb-0.5">TARGET</div>
       
       <!-- Stacked Actual + Sub-columns -->
-      <div class="col-span-6 flex flex-col items-center">
+      <div class="col-span-5 flex flex-col items-center">
         <span class="text-[7.5px] md:text-[8px] uppercase tracking-widest text-slate-500 font-semibold mb-0.5">
           ${meta.t ? 'LOAD' : 'ACTUAL'}
         </span>
@@ -8559,8 +8970,16 @@ const SPECIALIZED_SCHEMES = [
         </div>
       </div>
 
-      <div class="col-span-1 flex items-end justify-center pb-0.5">LOG</div>
+      <div class="col-span-2 flex items-end justify-center pb-0.5">LOG</div>
     </div>
+    ${ex.liveAnchorSync ? `
+                <div class="mb-2 p-2 bg-amber-500/10 border border-amber-500/40 rounded-xl flex items-center justify-between font-mono text-xs">
+                  <span class="text-amber-300">⚡ Set 1 Drift: <b>${ex.liveAnchorSync.pctDiff > 0 ? '+' : ''}${ex.liveAnchorSync.pctDiff}%</b> (Live e1RM: <b>${ex.liveAnchorSync.liveE1} lbs</b>)</span>
+                  <button type="button" onclick="appActions.syncLiveAnchor(${exIdx})" class="px-2.5 py-1 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-bold shadow-sm transition tactile">
+                    Sync Remaining Sets
+                  </button>
+                </div>
+              ` : ''}
                     ${setRows}
                     
                     <div class="flex justify-between items-center pt-2 mt-1 border-t border-sub/40 font-mono text-[10px]">
@@ -9047,10 +9466,11 @@ const SPECIALIZED_SCHEMES = [
               <button type="button" onclick="appActions.navigate('calendar', event)" class="text-slate-400 hover:text-white underline">Calendar</button>
             </div>
 
-            <div class="grid grid-cols-2 gap-1.5 p-1 bg-input rounded-2xl border border-sub font-mono text-xs w-full">
-              <button type="button" onclick="appActions.setResTab('exercises')" class="py-2 rounded-xl font-bold transition tactile ${activeTab === 'exercises' ? 'bg-blue-600 text-white shadow' : 'text-slate-400'}">Movements (${catKeys.length})</button>
-              <button type="button" onclick="appActions.setResTab('modifiers')" class="py-2 rounded-xl font-bold transition tactile ${activeTab === 'modifiers' ? 'bg-blue-600 text-white shadow' : 'text-slate-400'}">Modifiers (${(state.modifierCats || []).length})</button>
-            </div>
+            <div class="grid grid-cols-3 gap-1.5 p-1 bg-input rounded-2xl border border-sub font-mono text-xs w-full">
+            <button type="button" onclick="appActions.setResTab('exercises')" class="py-2 rounded-xl font-bold transition tactile ${activeTab === 'exercises' ? 'bg-blue-600 text-white shadow' : 'text-slate-400'}">Movements (${catKeys.length})</button>
+            <button type="button" onclick="appActions.setResTab('modifiers')" class="py-2 rounded-xl font-bold transition tactile ${activeTab === 'modifiers' ? 'bg-blue-600 text-white shadow' : 'text-slate-400'}">Modifiers (${(state.modifierCats || []).length})</button>
+            <button type="button" onclick="appActions.setResTab('equipment')" class="py-2 rounded-xl font-bold transition tactile ${activeTab === 'equipment' ? 'bg-blue-600 text-white shadow' : 'text-slate-400'}">⚙️ Gym Inventory</button>
+          </div>
 
             ${activeTab === 'exercises' ? `
               <div class="p-3.5 bg-card-sub rounded-2xl border border-sub space-y-2.5 text-xs font-mono shadow-sm w-full">
@@ -9139,7 +9559,7 @@ const SPECIALIZED_SCHEMES = [
                   </div>
                 `).join('')}
               </div>
-            ` : `
+            ` : activeTab === 'modifiers' ? `
               <div class="p-3.5 bg-card-sub rounded-2xl border border-sub space-y-2.5 text-xs font-mono shadow-sm w-full">
                 <div class="text-[10px] text-accent font-bold uppercase">Add New Modifier Tag</div>
                 <div class="grid grid-cols-12 gap-1.5">
@@ -9169,7 +9589,102 @@ const SPECIALIZED_SCHEMES = [
                   </div>
                 `).join('')}
               </div>
-            `}
+            ` : ''}
+        
+            ${activeTab === 'equipment' ? (() => {
+              const eq = window.apexCore.getEquipmentConfig();
+              return `
+                <div class="space-y-3 font-mono text-xs pb-6">
+                  <!-- 1. Dumbbell & Cable Pulley Constraints -->
+                  <div class="p-4 bg-card-sub rounded-3xl border border-sub space-y-3 shadow-md">
+                    <div>
+                      <span class="text-[10px] text-accent font-bold uppercase">Dumbbell & Cable Pulley Constraints</span>
+                      <div class="text-[9px] text-slate-400">Drives automatic per-hand load caps, unilateral handle swaps, and 2:1 pin math</div>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
+                      <div class="bg-input p-3 rounded-2xl border border-sub space-y-1">
+                        <label class="text-[9px] text-slate-400 font-bold uppercase">Paired DB Max (Per Hand)</label>
+                        <div class="flex items-center space-x-1.5">
+                          <input type="number" step="5" min="5" max="200" value="${eq.dumbbells?.pairedMax ?? 90}" onchange="appActions.updateEquipmentSetting('dumbbells', 'pairedMax', this.value)" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-center text-white font-bold text-xs">
+                          <span class="text-slate-400 text-[10px]">lbs</span>
+                        </div>
+                        <div class="text-[8.5px] text-slate-500">Bilateral presses, flyes & curls</div>
+                      </div>
+
+                      <div class="bg-input p-3 rounded-2xl border border-sub space-y-1">
+                        <label class="text-[9px] text-slate-400 font-bold uppercase">Heavy Row Handle Max</label>
+                        <div class="flex items-center space-x-1.5">
+                          <input type="number" step="5" min="25" max="300" value="${eq.dumbbells?.singleHandleMax ?? 185}" onchange="appActions.updateEquipmentSetting('dumbbells', 'singleHandleMax', this.value)" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-center text-accent font-bold text-xs">
+                          <span class="text-slate-400 text-[10px]">lbs</span>
+                        </div>
+                        <div class="text-[8.5px] text-slate-500">Auto-used on DB Rows, Shrugs & 1-Arm</div>
+                      </div>
+
+                      <div class="bg-input p-3 rounded-2xl border border-sub space-y-1">
+                        <label class="text-[9px] text-slate-400 font-bold uppercase">Row Handle Empty Tare</label>
+                        <div class="flex items-center space-x-1.5">
+                          <input type="number" step="2.5" min="0" max="25" value="${eq.dumbbells?.singleHandleTare ?? 5}" onchange="appActions.updateEquipmentSetting('dumbbells', 'singleHandleTare', this.value)" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-center text-white font-bold text-xs">
+                          <span class="text-slate-400 text-[10px]">lbs</span>
+                        </div>
+                        <div class="text-[8.5px] text-slate-500">Empty handle + collars for plate math</div>
+                      </div>
+
+                      <div class="bg-input p-3 rounded-2xl border border-sub space-y-1">
+                        <label class="text-[9px] text-slate-400 font-bold uppercase">Cable Pulley Ratio</label>
+                        <select onchange="appActions.updateEquipmentSetting('cable', 'ratio', this.value)" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-white font-bold text-xs">
+                          <option value="0.5" ${Number(eq.cable?.ratio) === 0.5 ? 'selected' : ''}>2:1 Ratio (50% Felt Load)</option>
+                          <option value="1" ${Number(eq.cable?.ratio) === 1.0 ? 'selected' : ''}>1:1 Ratio (True Weight)</option>
+                        </select>
+                        <div class="text-[8.5px] text-slate-500">Calculates physical pin weight</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 2. Plate Inventory (Pairs Owned) -->
+                  <div class="p-4 bg-card-sub rounded-3xl border border-sub space-y-3 shadow-md">
+                    <div class="flex justify-between items-center">
+                      <div>
+                        <span class="text-[10px] text-accent font-bold uppercase">Available Plate Inventory (Pairs Owned)</span>
+                        <div class="text-[9px] text-slate-400">Uncheck plates you don't own (e.g., 35 lb plates) so the plate loader skips them</div>
+                      </div>
+                    </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2">
+                      ${(eq.plates || []).map((p, idx) => `
+                        <div class="p-2.5 rounded-2xl border transition flex flex-col justify-between space-y-2 ${p.enabled && p.pairs > 0 ? 'bg-input border-accent/60 shadow-sm' : 'bg-input/40 border-sub opacity-50'}">
+                          <div class="flex items-center justify-between">
+                            <span class="font-black text-xs text-white">${p.weight} <span class="text-[9px] font-normal text-slate-400">lb</span></span>
+                            <input type="checkbox" ${p.enabled && p.pairs > 0 ? 'checked' : ''} onchange="appActions.togglePlateDenom(${idx})" class="w-4 h-4 rounded cursor-pointer">
+                          </div>
+                          <div class="space-y-0.5">
+                            <label class="text-[8px] text-slate-400 uppercase block">Pairs (${p.pairs * 2} plates)</label>
+                            <input type="number" min="0" max="20" value="${p.pairs}" onchange="appActions.updatePlatePairs(${idx}, this.value)" class="w-full bg-card-sub border border-sub rounded-lg py-1 text-center text-white font-bold text-xs">
+                          </div>
+                        </div>
+                      `).join('')}
+                    </div>
+                  </div>
+
+                  <!-- 3. Specialty Bar Tare Weights -->
+                  <div class="p-4 bg-card-sub rounded-3xl border border-sub space-y-3 shadow-md">
+                    <div>
+                      <span class="text-[10px] text-accent font-bold uppercase">Barbell & Specialty Bar Tare Weights</span>
+                      <div class="text-[9px] text-slate-400">Automatically subtracted before calculating plates per sleeve</div>
+                    </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                      ${Object.entries(eq.bars || {}).map(([barName, bWeight]) => `
+                        <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1 text-center">
+                          <div class="text-[9.5px] font-bold text-slate-200 truncate">${barName}</div>
+                          <div class="flex items-center justify-center space-x-1">
+                            <input type="number" step="2.5" value="${bWeight}" onchange="appActions.updateBarWeight('${barName}', this.value)" class="w-16 bg-card-sub border border-sub rounded-lg py-1 text-center text-accent font-bold text-xs">
+                            <span class="text-[9px] text-slate-400">lb</span>
+                          </div>
+                        </div>
+                      `).join('')}
+                    </div>
+                  </div>
+                </div>
+              `;
+            })() : ''}
           </main>
         `;
       }
@@ -10611,37 +11126,23 @@ const SPECIALIZED_SCHEMES = [
       `;
     }
         html += `
-          <div class="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center p-3 z-50 overflow-y-auto" onclick="event.stopPropagation()">
-            <div class="bg-card border border-sub rounded-3xl w-full max-w-md p-4 space-y-3 shadow-2xl my-auto text-xs font-mono max-h-[88vh] flex flex-col">
-              <div class="flex justify-between items-center border-b border-sub pb-2">
-                <div>
-                  <span class="font-bold text-accent text-sm">🧮 Planner: ${ex}</span>
-                </div>
-                <div class="flex items-center space-x-1">
-            <button type="button" onclick="appActions.openRpeMatrixModal('${ex}')" class="text-slate-400 hover:text-accent p-1" title="RPE Matrix">
-              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
-            </button>
-            <div class="flex items-center space-x-1">
-        <button type="button" onclick="appActions.openRpeMatrixModal('${ex}')" class="text-slate-400 hover:text-accent p-1" title="RPE Matrix">
-          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">...</svg>
-        </button>
-
-        <!-- INSERT BOLT BUTTON HERE -->
-        <button type="button" 
-          onclick="appActions.togglePlannerCalc()" 
-          title="Load Calculator"
-          class="p-1 rounded-lg border transition-colors flex items-center justify-center ${state.plannerCalcOpen ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm' : 'text-slate-400 hover:text-amber-400 border-transparent'}">
-          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-          </svg>
-        </button>
-
-        <button type="button" onclick="appActions.closePlanner()" class="text-slate-400 hover:text-white text-base leading-none p-1 tactile">
-        ✕
-      </button>
-    </div>
-  </div>
+        <div class="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center p-3 z-50 overflow-y-auto" onclick="event.stopPropagation()">
+          <div class="bg-card border border-sub rounded-3xl w-full max-w-sm p-4 space-y-3 shadow-2xl my-auto text-xs font-mono max-h-[88vh] flex flex-col">
+            
+            <div class="flex justify-between items-center border-b border-sub pb-2">
+              <div>
+                <span class="font-bold text-accent text-sm">📊 Planner: ${ex}</span>
               </div>
+              <div class="flex items-center space-x-1.5">
+                <button type="button" onclick="appActions.openRpeMatrixModal('${ex}')" class="p-1.5 rounded-lg bg-input border border-sub text-slate-300 hover:text-accent tactile" title="RPE Matrix">
+                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+                </button>
+                <button type="button" onclick="appActions.togglePlannerCalc()" title="Load Calculator" class="p-1.5 rounded-lg border transition-colors flex items-center justify-center tactile ${state.plannerCalcOpen ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm' : 'bg-input text-slate-300 hover:text-amber-400 border-sub'}">
+                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                </button>
+                <button type="button" onclick="appActions.closePlanner()" class="p-1.5 rounded-lg bg-input border border-sub text-slate-400 hover:text-white leading-none tactile">✕</button>
+              </div>
+            </div>
 
               ${plannerCalcHtml}
 
@@ -11118,39 +11619,28 @@ async function fetchDynamicGeminiModels() {
 function buildCoachTelemetryContext() {
   const recentDates = Object.keys(state.dayLogs || {}).sort().slice(-14);
   const recentSummary = recentDates.map(d => {
-    const log = state.dayLogs[d];
-    const exSummary = (log.exercises || []).map(ex => {
-      const doneSets = (ex.sets || []).filter(s => s.completed || s.done);
+    const log = state.dayLogs[d] || {};
+    const wk = log.workout || {};
+    const exList = wk.exercises || log.exercises || [];
+    const exSummary = exList.map(ex => {
+      const doneSets = (ex.sets || []).filter(s => s && (s.done || s.completed));
       if (!doneSets.length) return null;
-      const top = doneSets[0];
-      const w = top.actualWeight ?? top.weight ?? top.targetLoad;
-      const r = top.actualReps ?? top.reps ?? top.targetReps;
-      const rpe = top.actualRpe ?? top.rpe ?? top.targetRpe;
-      return `${ex.name}: ${doneSets.length} sets (Top: ${w}x${r} @ RPE ${rpe})`;
+      const top = doneSets.reduce((best, cur) => (Number(cur.actualWeight) > Number(best.actualWeight) ? cur : best), doneSets[0]);
+      return `${ex.exercise || ex.name}: ${doneSets.length}s (Top: ${top.actualWeight}lbs x ${top.actualReps} @${top.actualRpe})`;
     }).filter(Boolean).join('; ');
-    return `${d}: BW=${log.weight || '-'} | Rdy=${log.recovery?.score ? log.recovery.score + '%' : '-'} | sRPE=${log.sessionRpe || '-'} (${log.duration || '-'}m) | ${exSummary}`;
+    return `${d}: BW=${log.weight || '-'} | Rdy=${log.recovery?.score ? log.recovery.score + '%' : '-'} | sRPE=${wk.srpe || '-'} (${wk.dur || '-'}m) | ${exSummary || 'Rest/No sets'}`;
   }).join('\n');
 
-  // Accurately resolve active block & week from state
-  const activeBlockIdx = state.currentBlockIndex ?? state.activeBlockIndex ?? 0;
-  const blocks = Array.isArray(state.mesocycle) ? state.mesocycle : [];
-  const curBlock = blocks[activeBlockIdx] || {};
-  
-  const blockName = curBlock.name || curBlock.title || 'Powerbuilding Block';
-  const blockPhase = curBlock.phase || curBlock.type || 'Powerbuilding';
-  // Check state.currentWeek first, then block week properties, defaulting to 3 based on your setup
-  const blockWeek = state.currentWeek || curBlock.currentWeek || curBlock.week || 3;
-  const totalWeeks = curBlock.durationWeeks || curBlock.weeks || 4;
-
+  const pos = window.apexCore?.getMesocyclePosition ? window.apexCore.getMesocyclePosition(new Date()) : { phase: 'Hypertrophy', week: 1, block: { weeks: 3 } };
   const e1rmSnap = Object.entries(state.e1rms || {}).map(([k, v]) => `${k}: ${v}lbs`).join(', ');
 
-  return `
-    LIFTER PROFILE: Age ${state.profile?.age || 41}, Skill: ${state.profile?.skillLevel || 'Advanced'}, Current BW: ${state.profile?.bodyweight || '-'} lbs
-    ANCHOR e1RMs: ${e1rmSnap || 'None'}
-    ACTIVE MESOCYCLE BLOCK: ${blockName} | Phase: ${blockPhase} | Week ${blockWeek} of ${totalWeeks} (Progression Mode: ${curBlock.progressionMode || 'load'})
-    RECENT 14-DAY LOGGED WORKOUTS:
-    ${recentSummary || 'No recent logs found.'}
-  `.trim();
+  return [
+    `LIFTER PROFILE: Age ${state.profile?.age || 40}, Skill: ${state.profile?.skillLevel || 'Advanced'}, Current BW: ${window.apexCore?.getLatestBodyweight ? window.apexCore.getLatestBodyweight() : '-'} lbs`,
+    `ANCHOR e1RMs: ${e1rmSnap || 'None'}`,
+    `ACTIVE MESOCYCLE BLOCK: Phase: ${pos.phase} | Week ${pos.week} of ${pos.block?.weeks || 3} (Progression Mode: ${pos.block?.progressionMode || 'intensity'})`,
+    window.getHardwareCoachContext ? window.getHardwareCoachContext() : '',
+    `RECENT 14-DAY LOGGED WORKOUTS:\n${recentSummary || 'No recent logs found.'}`
+  ].filter(Boolean).join('\n');
 }
 
 
@@ -11695,11 +12185,20 @@ function evaluateDoubleProgression(exName, repRangeStr = '8-12', fallbackWeight 
  * Generates the Hardware & Progression Context Prompt for the AI Coach
  */
 function getHardwareCoachContext() {
+  const eq = window.apexCore?.getEquipmentConfig ? window.apexCore.getEquipmentConfig() : {};
+  const pairedMax = eq.dumbbells?.pairedMax ?? 90;
+  const singleMax = eq.dumbbells?.singleHandleMax ?? 185;
+  const ratio = Number(eq.cable?.ratio) === 0.5 ? '2:1 mechanical ratio (effective resistance is 50% of loaded plate weight)' : '1:1 ratio';
+  const ownedPlates = (eq.plates || []).filter(p => p.enabled && p.pairs > 0).map(p => `${p.weight}lb (${p.pairs} pairs)`).join(', ');
+  const barsList = Object.entries(eq.bars || {}).map(([k, v]) => `${k} (${v}lb)`).join(', ');
+
   return [
     `[HOME GYM HARDWARE & PROGRESSION CONSTRAINTS]`,
-    `- Dumbbells: Capped at 90 lbs max per hand. Never prescribe DB loads > 90 lbs; once 90 lbs is maxed across sets, prescribe higher rep brackets, paused reps, slower eccentrics, rest-pause, or unilateral SSB/Barbell alternatives.`,
-    `- Cable Pulley System: Plate-loaded with a 2:1 mechanical ratio (effective resistance is 50% of loaded plate weight; minimum micro-step is 2.5 lbs).`,
-    `- Available Bars & Stations: Safety Squat Bar (SSB), Trap Bar, Neutral Grip Bar, EZ Bar, Dip Station, Folding Rack, Bumper Plates.`,
+    `- Paired Dumbbells: Capped at ${pairedMax} lbs max per hand for bilateral presses/flyes/curls.`,
+    `- Heavy Loadable Single Dumbbell Handle: Capped at ${singleMax} lbs for DB Rows, Shrugs, Carries, and Single-Arm work.`,
+    `- Cable Pulley System: Plate-loaded with a ${ratio}.`,
+    `- Owned Bars: ${barsList}.`,
+    `- Owned Plates: ${ownedPlates}.`,
     `- Progression Logic: Double Progression is active. Hold working weight constant across sessions until the top of the assigned rep range is hit on all sets.`
   ].join('\n');
 }
