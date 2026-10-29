@@ -8569,37 +8569,42 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
           const hasCustomLabel = s.label && !/^Set \d+$/i.test(s.label);
 
             return `
-              <div id="set-row-${exIdx}-${sIdx}" class="px-2.5 py-1.5 rounded-lg border transition-colors ${s.done ? 'bg-emerald-950/20 border-emerald-600/40' : 'bg-input border-sub'}">
+              <div id="set-row-${exIdx}-${sIdx}" class="px-2 py-1.5 rounded-lg border transition-colors ${s.done ? 'bg-emerald-950/20 border-emerald-600/40' : 'bg-input border-sub'}">
                 <div class="grid grid-cols-12 gap-1.5 items-center text-center">
                   
-                  <!-- Col 1-2: Delete & Set Label -->
+                  <!-- Col 1-2: Delete & Wrapped, Taller Set Label -->
                   <div class="col-span-2 flex items-center space-x-1 text-left min-w-0">
-                    <button type="button" onclick="appActions.deleteSet(${exIdx},${sIdx})" class="text-[10px] text-slate-500 hover:text-rose-400 p-0.5" title="Remove Set">✕</button>
-                    <span class="px-1.5 py-0.5 rounded bg-card-sub border border-sub font-mono text-[10px] font-bold text-slate-300 truncate">${hasCustomLabel ? s.label : `Set ${sIdx + 1}`}</span>
+                    <button type="button" onclick="appActions.deleteSet(${exIdx},${sIdx})" class="text-[10px] text-slate-500 hover:text-rose-400 p-0.5 shrink-0" title="Remove Set">✕</button>
+                    <span class="w-full min-h-[30px] px-1 py-0.5 rounded bg-card-sub border border-sub font-mono text-[9px] font-bold text-slate-300 leading-[1.1] whitespace-normal break-words flex items-center justify-center text-center">${hasCustomLabel ? s.label : `Set ${sIdx + 1}`}</span>
                   </div>
 
-                  <!-- Col 3-6: Target Prescription -->
-                  <span class="col-span-4 font-mono text-xs text-slate-300 text-left truncate">
-                    ${s.targetLoad !== undefined && s.targetLoad !== null && s.targetLoad !== '' ? s.targetLoad + 'x' : ''}${s.targetReps || ''}${meta.r ? 'r' : ''} @${displayTargetRpe}
+                  <!-- Col 3-5: Target Prescription -->
+                  <span class="col-span-3 font-mono text-[11px] text-slate-300 text-left pl-0.5 leading-tight truncate">
+                    ${(s.targetLoad !== undefined && s.targetLoad !== null && s.targetLoad !== '' && Number(s.targetLoad) > 0) ? s.targetLoad + 'x' : ''}${s.targetReps || ''}${meta.r ? 'r' : ''} @${displayTargetRpe}
                   </span>
 
-                  <!-- Col 7-10: Actual Inputs (Lbs, Reps, RPE) -->
-                  <div class="col-span-4 grid grid-cols-3 gap-1 items-center">
-                    <div class="w-full h-8 bg-card-sub border border-sub rounded flex items-center justify-center font-mono text-xs font-bold text-white">
-                      ${s.actualWeight !== undefined && s.actualWeight !== '' ? s.actualWeight : (s.targetLoad || '')}
-                    </div>
-                    <input type="number" step="1" inputmode="numeric" placeholder="Reps" value="${s.actualReps !== undefined ? s.actualReps : ''}" onchange="appActions.updateSetInput(${exIdx}, ${sIdx}, 'actualReps', this.value)" class="w-full h-8 bg-card-sub border border-sub rounded text-center font-mono text-xs font-bold text-white px-0.5">
-                    <select onchange="appActions.updateSetInput(${exIdx}, ${sIdx}, 'actualRpe', this.value)" class="w-full h-8 bg-card-sub border border-sub rounded text-center font-mono text-xs font-bold text-accent px-0.5">
+                  <!-- Col 6-10: Actual Inputs (Lbs, Reps, Wider RPE) -->
+                  <div class="col-span-5 grid grid-cols-[1fr_0.85fr_1.25fr] gap-1 items-center">
+                    ${meta.w ? `
+                      <input type="number" step="2.5" inputmode="decimal" placeholder="lbs" value="${s.actualWeight !== undefined && s.actualWeight !== null && s.actualWeight !== '' ? s.actualWeight : (s.targetLoad || '')}" onchange="appActions.updateSetInput(${exIdx}, ${sIdx}, 'actualWeight', this.value)" class="w-full h-8 bg-card-sub border border-sub rounded text-center font-mono text-xs font-bold text-white px-0.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
+                    ` : `
+                      <div class="w-full h-8 bg-card-sub/40 border border-sub/50 rounded flex items-center justify-center font-mono text-xs font-bold text-slate-400">—</div>
+                    `}
+
+                    <input type="number" step="1" inputmode="numeric" placeholder="Reps" value="${s.actualReps !== undefined && s.actualReps !== null ? s.actualReps : ''}" onchange="appActions.updateSetInput(${exIdx}, ${sIdx}, 'actualReps', this.value)" class="w-full h-8 bg-card-sub border border-sub rounded text-center font-mono text-xs font-bold text-white px-0.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
+
+                    <select onchange="appActions.updateSetInput(${exIdx}, ${sIdx}, 'actualRpe', this.value)" style="background-image: none;" class="w-full h-8 bg-card-sub border border-sub rounded text-center font-mono text-xs font-bold text-accent px-1 appearance-none cursor-pointer">
                       <option value="">RPE</option>
-                      <option value="10" ${actualRpenum === 10 ? 'selected' : ''}>10</option>
-                      <option value="9.5" ${actualRpenum === 9.5 ? 'selected' : ''}>9.5</option>
-                      <option value="9" ${actualRpenum === 9 ? 'selected' : ''}>9</option>
-                      <option value="8.5" ${actualRpenum === 8.5 ? 'selected' : ''}>8.5</option>
-                      <option value="8" ${actualRpenum === 8 ? 'selected' : ''}>8</option>
-                      <option value="7.5" ${actualRpenum === 7.5 ? 'selected' : ''}>7.5</option>
-                      <option value="7" ${actualRpenum === 7 ? 'selected' : ''}>7</option>
+                      <option value="5.5" ${actualRpenum > 0 && actualRpenum <= 5.5 ? 'selected' : ''}>&lt;6.0</option>
+                      <option value="6.0" ${actualRpenum === 6 ? 'selected' : ''}>6.0</option>
                       <option value="6.5" ${actualRpenum === 6.5 ? 'selected' : ''}>6.5</option>
-                      <option value="6" ${actualRpenum === 6 ? 'selected' : ''}>6</option>
+                      <option value="7.0" ${actualRpenum === 7 ? 'selected' : ''}>7.0</option>
+                      <option value="7.5" ${actualRpenum === 7.5 ? 'selected' : ''}>7.5</option>
+                      <option value="8.0" ${actualRpenum === 8 ? 'selected' : ''}>8.0</option>
+                      <option value="8.5" ${actualRpenum === 8.5 ? 'selected' : ''}>8.5</option>
+                      <option value="9.0" ${actualRpenum === 9 ? 'selected' : ''}>9.0</option>
+                      <option value="9.5" ${actualRpenum === 9.5 ? 'selected' : ''}>9.5</option>
+                      <option value="10.0" ${actualRpenum === 10 ? 'selected' : ''}>10.0</option>
                     </select>
                   </div>
 
@@ -8611,22 +8616,22 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                   </div>
 
                 </div>
-              </div>
 
-              ${meta.t ? `
-                <div class="px-2.5 py-1 mt-1 border-t border-sub/50 flex items-center justify-between text-xs font-mono">
-                  <span class="text-[9px] text-slate-400 uppercase font-bold flex items-center space-x-1">
-                    <span>⏱️</span><span>Timer / Lap:</span>
-                  </span>
-                  <div class="flex items-center space-x-1.5">
-                    <button type="button" onclick="appActions.toggleSetLap(${exIdx}, ${sIdx})" class="px-2 py-0.5 rounded font-mono text-[10px] font-bold ${isLapActive ? 'bg-amber-600 text-white animate-pulse' : 'bg-card-sub border border-sub text-slate-400'}">
-                      ${isLapActive ? '⏸️' : '▶️'} <span id="lap-display-${exIdx}-${sIdx}">${fmtTime(s.actualTime || 0)}</span>
-                    </button>
-                    <input type="number" placeholder="sec" value="${s.actualTime || ''}" onchange="appActions.updateSetInput(${exIdx}, ${sIdx}, 'actualTime', this.value)" class="w-14 h-7 text-center bg-card-sub border border-sub/50 rounded text-white text-xs font-mono">
-                    <button type="button" onclick="appActions.resetSetLap(${exIdx}, ${sIdx})" class="px-1.5 py-0.5 bg-card-sub border border-sub rounded text-slate-400 hover:text-white text-xs">↺</button>
+                ${meta.t ? `
+                  <div class="pt-1.5 mt-1 border-t border-sub/50 flex items-center justify-between text-xs font-mono">
+                    <span class="text-[9px] text-slate-400 uppercase font-bold flex items-center space-x-1">
+                      <span>⏱️</span><span>Timer / Lap:</span>
+                    </span>
+                    <div class="flex items-center space-x-1.5">
+                      <button type="button" onclick="appActions.toggleSetLap(${exIdx}, ${sIdx})" class="px-2 py-0.5 rounded font-mono text-[10px] font-bold ${isLapActive ? 'bg-amber-600 text-white animate-pulse' : 'bg-card-sub border border-sub text-slate-400'}">
+                        ${isLapActive ? '⏸️' : '▶️'} <span id="lap-display-${exIdx}-${sIdx}">${fmtTime(s.actualTime || 0)}</span>
+                      </button>
+                      <input type="number" placeholder="sec" value="${s.actualTime || ''}" onchange="appActions.updateSetInput(${exIdx}, ${sIdx}, 'actualTime', this.value)" class="w-14 h-7 text-center bg-card-sub border border-sub/50 rounded text-white text-xs font-mono">
+                      <button type="button" onclick="appActions.resetSetLap(${exIdx}, ${sIdx})" class="px-1.5 py-0.5 bg-card-sub border border-sub rounded text-slate-400 hover:text-white text-xs">↺</button>
+                    </div>
                   </div>
-                </div>
-              ` : ''}
+                ` : ''}
+              </div>
             `;
           }).join('');
 
@@ -9010,7 +9015,7 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
         <span class="text-[7.5px] md:text-[8px] uppercase tracking-widest text-slate-500 font-semibold mb-0.5">
           ${meta.t ? 'LOAD' : 'ACTUAL'}
         </span>
-        <div class="w-full grid grid-cols-3 text-center text-[9px] md:text-[10px] text-slate-400">
+        <div class="w-full grid grid-cols-[1fr_0.85fr_1.25fr] gap-1 text-center text-[9px] md:text-[10px] text-slate-400">
           <span>LBS</span>
           <span>REPS</span>
           <span>RPE</span>
@@ -9027,7 +9032,9 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                   </button>
                 </div>
               ` : ''}
-                    ${setRows}
+                    <div class="space-y-1">
+                  ${setRows}
+                </div>
                     
                     <div class="flex justify-between items-center pt-2 mt-1 border-t border-sub/40 font-mono text-[10px]">
                       <button type="button" onclick="appActions.addSet(${exIdx})" class="text-[9px] md:text-xs font-mono text-slate-300 bg-input px-2.5 py-1 rounded-xl border border-sub font-semibold hover:text-white tactile">+ Add Set</button>
