@@ -8590,9 +8590,9 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                     <span class="w-full min-h-[30px] px-1 py-0.5 rounded bg-card-sub border border-sub font-mono text-[9px] font-bold text-slate-300 leading-[1.1] whitespace-normal break-words flex items-center justify-center text-center">${hasCustomLabel ? s.label : `Set ${sIdx + 1}`}</span>
                   </div>
 
-                  <!-- Col 3-5: Target Prescription -->
-                  <span class="col-span-3 font-mono text-[11px] text-slate-300 text-left pl-0.5 leading-tight truncate">
-                    ${(s.targetLoad !== undefined && s.targetLoad !== null && s.targetLoad !== '' && Number(s.targetLoad) > 0) ? s.targetLoad + 'x' : ''}${s.targetReps || ''}${meta.r ? 'r' : ''} @${displayTargetRpe}
+                  <!-- Col 3-5: Target Prescription (Wrapped & Full Text on Mobile) -->
+                  <span class="col-span-3 font-mono text-[10px] md:text-xs font-semibold text-slate-300 text-left pl-0.5 leading-[1.15] whitespace-normal break-words">
+                    ${(s.targetLoad !== undefined && s.targetLoad !== null && s.targetLoad !== '' && Number(s.targetLoad) > 0) ? s.targetLoad + 'x' : ''}${s.targetReps || ''}${meta.r ? 'r' : ''} <span class="text-slate-400 whitespace-nowrap">@${displayTargetRpe}</span>
                   </span>
 
                   <!-- Col 6-10: Actual Inputs (Lbs, Reps, Wider RPE) -->
