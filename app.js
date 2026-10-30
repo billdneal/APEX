@@ -842,10 +842,9 @@ const defaultEquipmentInventory = {
     }
 
     function sanitizeModifiers(mods) {
-      if (!Array.isArray(mods)) return [];
-      const valid = getAllValidModifiers();
-      return mods.filter(m => valid.has(m));
-    }
+  if (!Array.isArray(mods)) return [];
+  return [...new Set(mods.map(m => typeof m === 'string' ? m.trim() : '').filter(Boolean))];
+}
 // ==========================================
 // SCHEME BLUEPRINTS & UNIVERSAL GENERATOR
 // ==========================================
@@ -1591,32 +1590,41 @@ window.DEFAULT_SCHEME_BLUEPRINTS = DEFAULT_SCHEME_BLUEPRINTS;
       return normalizeRepBookends(raw, tierFallback.min, tierFallback.max);
     }
 
-    // Global Persistence Engine with Database-Safe Settings Mirroring
-    function persist() {
+    function safeSaveDayLogsLocal(dayLogsObj) {
+  if (!dayLogsObj || typeof dayLogsObj !== 'object') return;
+  try {
+    localStorage.setItem('apex_dayLogs', JSON.stringify(dayLogsObj));
+  } catch (e) {
+    // 1. Free the existing localStorage key first so the 5MB quota clears immediately
+    try { localStorage.removeItem('apex_dayLogs'); } catch (_) {}
+    // 2. Trim ONLY the localStorage cache copy (NEVER mutate state.dayLogs in memory!)
+    const allKeys = Object.keys(dayLogsObj).sort();
+    for (const keepCount of [60, 40, 25, 15, 5]) {
       try {
-        state.settings.customSplitBlueprints = state.customSplitBlueprints;
-        state.settings.schemeRecipes = state.schemeRecipes;
-        state.settings.anchorE1rms = state.anchorE1rms;
-        state.settings.oneRmFormula = state.settings.oneRmFormula || 'apex';
-        state.settings.mesocycleStartDate = state.mesocycleStartDate;
-        state.settings.rpeProfiles = state.rpeProfiles;
-        state.settings.activeRpeProfileId = state.activeRpeProfileId;
-        state.settings.equipment = state.equipment;
-        localStorage.setItem('apex_equipment', JSON.stringify(state.equipment));
-        try {
-        localStorage.setItem('apex_dayLogs', JSON.stringify(state.dayLogs));
-      } catch (e) {
-        console.warn('LocalStorage quota exceeded, trimming older logs locally:', e);
-        const keys = Object.keys(state.dayLogs).sort();
-        if (keys.length > 60) {
-          const trimmed = {};
-          keys.slice(-60).forEach(k => trimmed[k] = state.dayLogs[k]);
-          state.dayLogs = trimmed;
-          try {
-            localStorage.setItem('apex_dayLogs', JSON.stringify(state.dayLogs));
-          } catch (_err) {}
-        }
+        const subset = {};
+        allKeys.slice(-keepCount).forEach(k => { subset[k] = dayLogsObj[k]; });
+        localStorage.setItem('apex_dayLogs', JSON.stringify(subset));
+        return;
+      } catch (_) {
+        try { localStorage.removeItem('apex_dayLogs'); } catch (_) {}
       }
+    }
+  }
+}
+
+// Global Persistence Engine with Database-Safe Settings Mirroring
+function persist() {
+  try {
+    state.settings.customSplitBlueprints = state.customSplitBlueprints;
+    state.settings.schemeRecipes = state.schemeRecipes;
+    state.settings.anchorE1rms = state.anchorE1rms;
+    state.settings.oneRmFormula = state.settings.oneRmFormula || 'apex';
+    state.settings.mesocycleStartDate = state.mesocycleStartDate;
+    state.settings.rpeProfiles = state.rpeProfiles;
+    state.settings.activeRpeProfileId = state.activeRpeProfileId;
+    state.settings.equipment = state.equipment;
+    localStorage.setItem('apex_equipment', JSON.stringify(state.equipment));
+    safeSaveDayLogsLocal(state.dayLogs);
         localStorage.setItem('apex_savedStaged', JSON.stringify(state.savedStaged));
         localStorage.setItem('apex_e1rms', JSON.stringify(state.e1rms));
         localStorage.setItem('apex_anchorE1rms', JSON.stringify(state.anchorE1rms || {}));
@@ -3036,7 +3044,7 @@ function renderRpeMatrixTable(profile) {
 
       if (existingCloud?.day_logs) {
         state.dayLogs = mergeDayLogs(state.dayLogs, existingCloud.day_logs);
-        localStorage.setItem('apex_dayLogs', JSON.stringify(state.dayLogs));
+        safeSaveDayLogsLocal(state.dayLogs);
       }
       if (existingCloud?.e1rms) {
         state.e1rms = { ...existingCloud.e1rms, ...state.e1rms };
@@ -4909,27 +4917,29 @@ if (!state.editingRpeProfile) {
 
   // Biomechanical Load Resolver (BW + External Load for Calisthenics)
   function getExerciseLoad(exName, inputWeight = 0, targetDateKey = null) {
-    const meta = getExMeta(exName);
-    const bw = getLatestBodyweight(targetDateKey);
-    const w = Number(inputWeight) || 0;
+  const name = String(exName || '').trim();
+  const lower = name.toLowerCase();
+  const meta = getExMeta(name);
+  const bw = getLatestBodyweight(targetDateKey);
+  const w = Number(inputWeight) || 0;
 
-    if (exName === 'BW Pull Up' || exName === 'Pull Up' || exName === 'BW Chin Up') {
-      return Math.round(bw * 1.0) + w;
-    }
-    if (exName === 'BW Dips' || exName === 'Dips') {
-      return Math.round(bw * 0.90) + w;
-    }
-    if (exName === 'Push Up') {
-      return Math.round(bw * 0.65) + w;
-    }
-    if (exName === 'Ab Wheel' || exName === 'Hanging Leg Raise') {
-      return Math.round(bw * 0.50) + w;
-    }
-    if (!meta.w && meta.r) {
-      return Math.round(bw * 0.70) + w;
-    }
-    return w;
+  if (lower.includes('pull up') || lower.includes('pull-up') || lower.includes('chin up') || lower.includes('chin-up')) {
+    return Math.round(bw * 1.0) + w;
   }
+  if (lower === 'dips' || lower.startsWith('dips ') || lower.includes('bw dips') || lower.includes('weighted dips') || lower.includes('dip +') || lower.includes('dips +')) {
+    return Math.round(bw * 0.90) + w;
+  }
+  if (lower.includes('push up') || lower.includes('push-up')) {
+    return Math.round(bw * 0.65) + w;
+  }
+  if (lower.includes('ab wheel') || lower.includes('hanging leg raise')) {
+    return Math.round(bw * 0.50) + w;
+  }
+  if (!meta.w && meta.r) {
+    return Math.round(bw * 0.70) + w;
+  }
+  return w;
+}
   core.getExerciseLoad = getExerciseLoad;
   window.apexCore.getExerciseLoad = getExerciseLoad;
 
@@ -4955,14 +4965,15 @@ if (!state.editingRpeProfile) {
 // Evaluates performance across APEX (RPE/RIR), Epley, Brzycki, Wathan, & Lombardi
 // Incorporates biomechanical bodyweight factoring via getExerciseLoad
 // ============================================================================
-function getUnifiedE1RM(weight, reps, rpe = 10, exName = '') {
+function getUnifiedE1RM(weight, reps, rpe = 10, exName = '', targetDateKey = null) {
   const w = Number(weight) || 0;
   const r = Number(reps) || 0;
-  if (w <= 0 || r <= 0) return 0;
+  if (r <= 0) return 0;
 
   // 1. Resolve true biomechanical system load (e.g. +90% BW for Dips, +100% BW for Pull-Ups)
   const loadResolver = core.getExerciseLoad || window.apexCore?.getExerciseLoad;
-  const effectiveLoad = typeof loadResolver === 'function' ? loadResolver(exName, w) : w;
+  const effectiveLoad = typeof loadResolver === 'function' ? loadResolver(exName, w, targetDateKey) : w;
+  if (effectiveLoad <= 0) return 0;
 
   // 2. Read user's chosen formula from Settings
   const formula = (state.settings?.oneRmFormula || 'apex').toLowerCase();
@@ -8541,15 +8552,16 @@ const SPECIALIZED_SCHEMES = [
           let livePeakE1 = 0;
           let liveLastE1 = 0;
          completedSets.forEach(s => {
-        const rawW = Number(s.actualWeight) || 0;
-        if (rawW > 0 && s.actualReps && s.actualRpe) {
-          const cleanRpe = roundRpe(s.actualRpe);
-          const c = getUnifiedE1RM(rawW, s.actualReps, cleanRpe, ex.exercise);
-          if (c > livePeakE1) livePeakE1 = c;
-          liveLastE1 = c;
-        }
-      });
-
+  const rawW = Number(s.actualWeight) || 0;
+  if (s.actualReps && s.actualRpe) {
+    const cleanRpe = roundRpe(s.actualRpe);
+    const c = getUnifiedE1RM(rawW, s.actualReps, cleanRpe, ex.exercise, sessionDateKey);
+    if (c > 0) {
+      if (c > livePeakE1) livePeakE1 = c;
+      liveLastE1 = c;
+    }
+  }
+});
           const liveFatiguePct = (livePeakE1 > 0 && liveLastE1 > 0)
             ? Math.max(0, Math.round(((livePeakE1 - liveLastE1) / livePeakE1) * 100))
             : 0;
