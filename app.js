@@ -35,10 +35,9 @@
    // Neutralized Scheme Definitions
     const hypertrophySchemes = [
       'Straight Sets',
-      'Dynamic Double Progression (Rep Range)',
+      'Double Progression',
       'Myo-reps',
       'Rest-Pause (Dogcrapp)',
-      'Step Loading (Double Progression)',
       'Density Block',
       'Rep Goal System (Metabolic 50)',
       'Reverse Pyramid',
@@ -106,10 +105,8 @@
 
     const schemeDescriptions = {
       'Straight Sets': 'Phase-calibrated sets with consistent baseline volume and autoregulated load.',
-      'Dynamic Double Progression (Rep Range)': 'Fixed load across sets; work within a rep window (e.g., 6-8r or 10-12r). Add reps each week; add weight once upper rep limit is achieved across all sets.',
-      'Myo-reps': '1 activation set (12-15r @ RPE 9.0) followed by short mini-sets (3-5r) on strict 15-20s rest intervals.',
+      'Double Progression': 'Add reps within the phase rep range at a fixed load until the ceiling is cleared, then increase weight by your step (lbs) and reset reps.',      'Myo-reps': '1 activation set (12-15r @ RPE 9.0) followed by short mini-sets (3-5r) on strict 15-20s rest intervals.',
       'Rest-Pause (Dogcrapp)': '1 all-out activation set followed by two 15-second rest-pause failure clusters.',
-      'Step Loading (Double Progression)': 'Fixed weight across sets; reps increase weekly before adding bar weight.',
       'Density Block': 'Target countdown block (7-10 min). Complete as many high-quality sets as possible within the timer.',
       'Rep Goal System (Metabolic 50)': 'Target 50 total accumulated reps across as few sets as possible (1-2 RIR). Optimal for core, calves, and isolation.',
       'Reverse Pyramid': 'Heaviest set first (RPE 8.5-9.0), systematically tapering load (-10% to -15%) as rep targets expand.',
@@ -155,10 +152,9 @@
     // Declarative Programming Builder Scheme Recipes (Neutral Names & Strict 0.5 RPE)
     const defaultSchemeRecipes = {
       'Straight Sets': { targetRpe: 7.5, setsCount: 3, enableRpeProgression: true, minReps: 0, maxReps: 0 },
-      'Dynamic Double Progression (Rep Range)': { targetRpe: 7.5, setsCount: 3, enableRpeProgression: true, minReps: 0, maxReps: 0 },
+      'Double Progression': { targetRpe: 7.5, setsCount: 3, enableRpeProgression: true, minReps: 0, maxReps: 0 },
       'Myo-reps': { actRpe: 9.0, miniRpe: 9.5, miniSets: 4, intraRestSec: 15, enableRpeProgression: false, minReps: 0, maxReps: 0 },
       'Rest-Pause (Dogcrapp)': { actRpe: 9.5, clusterRpe: 10.0, clusters: 2, intraRestSec: 15, enableRpeProgression: false, minReps: 0, maxReps: 0 },
-      'Step Loading (Double Progression)': { targetRpe: 8.0, setsCount: 3, enableRpeProgression: true, minReps: 0, maxReps: 0 },
       'Density Block': { targetLoadPct: 65, defaultMinutes: 8, setsCount: 3, enableRpeProgression: false, minReps: 0, maxReps: 0 },
       'Rep Goal System (Metabolic 50)': { targetLoadPct: 58, repTargets: [15, 13, 12, 10], enableRpeProgression: false, minReps: 0, maxReps: 0 },
       'Reverse Pyramid': { topRpe: 8.5, drop1Pct: 10, drop2Pct: 20, drop3Pct: 30, enableRpeProgression: true, minReps: 0, maxReps: 0 },
@@ -329,8 +325,8 @@
         1: 'Dreading training, zero appetite', 
         2: 'Apathetic, going through the motions', 
         3: 'Neutral, ready to execute plan', 
-        4: 'Eager to train, locked in', 
-        5: 'Aggressive drive, hungry to load bar' 
+        4: 'Eager to train', 
+        5: 'Aggressive drive to train' 
       }
     };
 
@@ -356,7 +352,7 @@
         { tier: 'Assistance', category: 'Isolation', exercise: 'Lateral Raise', modifiers: ['Dumbbell'], scheme: 'Myo-reps' }
       ],
       'Lower Hypertrophy Focus': [
-        { tier: 'Main', category: 'Knee Dominant', exercise: 'Hack Squat', modifiers: [], scheme: 'Dynamic Double Progression (Rep Range)' },
+        { tier: 'Main', category: 'Knee Dominant', exercise: 'Hack Squat', modifiers: [], scheme: 'Double Progression' },
         { tier: 'Secondary', category: 'Hip Dominant', exercise: 'RDL', modifiers: ['Dumbbell'], scheme: 'Reverse Pyramid' },
         { tier: 'Assistance', category: 'Isolation', exercise: 'Calf Raise', modifiers: [], scheme: 'Rep Goal System (Metabolic 50)' }
       ],
@@ -869,37 +865,26 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     instructions: 'Hold weight and target reps flat across all working sets. Increase bar weight (+5 lbs) when all sets reach the top rep target at or below target RPE.',
     sfrRating: 'B+'
   },
-  'Dynamic Double Progression (Rep Range)': {
-    id: 'ddp_rep_range',
-    name: 'Dynamic Double Progression (Rep Range)',
+  'Double Progression': {
+    id: 'double_progression',
+    name: 'Double Progression',
     category: 'Hypertrophy',
     pattern: 'straight',
     baseSets: 3,
-    reps: '8-12',
-    targetRpe: 8.5,
+    reps: '8-12',           // Overridden dynamically by active phase_rep_matrix
+    targetRpe: 8.5,         // Overridden dynamically by phase RPE (0.5 steps)
     rpeStepDelta: 0.0,
     fatigueDropPct: 0.0,
     restSeconds: 120,
     intraSetRest: 0,
     densityPenalty: 1.0,
-    instructions: 'Work within the prescribed rep bracket across all sets. Keep load constant and add reps weekly until all sets hit the rep ceiling, then advance bar weight.',
+    // Unified Double Progression Controls:
+    stepLbs: 5,             // Weight jump (+2.5, +5, or +10 lbs) when rep ceiling is cleared
+    dpMode: 'all',          // 'all' = all sets must hit top reps | 'independent' = per-set graduation
+    backoffStep: false,     // true = drop each subsequent set by 1 stepLbs (-5 lbs) from Set 1
+    deloadPct: 90,          // Reset to 90% load if stalled for 2+ consecutive sessions
+    instructions: 'Work within the phase rep range. Add reps weekly at a fixed load until the top of the range is reached, then increase load by your step (lbs) and reset reps to the bottom.',
     sfrRating: 'A-'
-  },
-  'Step Loading (Double Progression)': {
-    id: 'step_loading',
-    name: 'Step Loading (Double Progression)',
-    category: 'Hypertrophy',
-    pattern: 'straight',
-    baseSets: 3,
-    reps: 10,
-    targetRpe: 8.0,
-    rpeStepDelta: 0.0,
-    fatigueDropPct: 0.0,
-    restSeconds: 90,
-    intraSetRest: 0,
-    densityPenalty: 1.0,
-    instructions: 'Fix load across sets. Increase reps each week at that static weight across the block; take a deload/reset before advancing bar load.',
-    sfrRating: 'B'
   },
   'Myo-reps': {
     id: 'myo_reps',
@@ -1784,11 +1769,11 @@ function persist() {
     }
 
     function getVariantKey(ex, mods = []) {
-      const cleanMods = sanitizeModifiers(mods);
-      const sorted = cleanMods.slice().sort();
-      if (!sorted.length) return ex;
-      return `${ex} [${sorted.join(', ')}]`;
-    }
+  const cleanMods = sanitizeModifiers(mods).filter(m => m.toLowerCase() !== 'barbell');
+  const sorted = cleanMods.slice().sort();
+  if (!sorted.length) return ex;
+  return `${ex} [${sorted.join(', ')}]`;
+}
 
     function showToast(msg) {
       state.toastMsg = msg;
@@ -3816,37 +3801,49 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
         return enforceHardwareConstraints(setArray, exName, mods, adj);
       }
 
-      // ----------------------------------------------------------------------
-      // 2. DYNAMIC DOUBLE PROGRESSION (Rep Range Window)
-      // ----------------------------------------------------------------------
-      if (cleanScheme === 'Dynamic Double Progression (Rep Range)') {
-        const baseRecipeRpe = roundRpe(Number(recipe.targetRpe) || 7.5);
-        const topRpe = isGrounding ? 9.0 : roundRpe(Math.min(baseRecipeRpe + weekRpeBump, rpeCap));
-        const topLoad = calcLoad(adj, getPct(maxRep, topRpe));
-        const backoffLoad = roundLoad(topLoad * 0.90);
-        const targetCount = skipBackoffs ? 1 : baseWorkingSets;
+      // -----------------------------------------------------------------
+// DOUBLE PROGRESSION (Unified Step Loading & Dynamic Engine)
+// -----------------------------------------------------------------
+if (cleanScheme === 'Double Progression') {
+  const baseRecipeRpe = roundRpe(Number(recipe.targetRpe) || 8.0);
+  const targetRpe = isGrounding ? 9.0 : roundRpe(Math.min(baseRecipeRpe + weekRpeBump, rpeCap));
+  const baseLoad = calcLoad(adj, getPct(maxRep, targetRpe));
+  const count = skipBackoffs ? 1 : baseWorkingSets;
 
-        for (let i = 1; i <= targetCount; i++) {
-          const isTop = (i === 1 && isGrounding);
-          const load = (i === 1 || !isGrounding) ? topLoad : backoffLoad;
-          const rpe = (i === 1 || !isGrounding) ? topRpe : 8.0;
-          const repStr = (isGrounding && i > 1) ? `${minRep}` : rangeStr;
-          setArray.push({
-            label: isTop ? '🔥 Grounding DDP (@9.0)' : (isGrounding ? `Back-off ${i - 1} (-10%)` : `[${rangeStr}r] S${i}`),
-            targetLoad: meta.w ? load : 0,
-            targetReps: repStr,
-            targetTime: 0,
-            targetRpe: rpe,
-            actualWeight: meta.w ? load : 0,
-            actualReps: minRep,
-            actualTime: 0,
-            actualRpe: rpe,
-            done: false,
-            lapRunning: false
-          });
-        }
-        return enforceHardwareConstraints(setArray, exName, mods, adj);
-      }
+  // Read unified control parameters from the blueprint/recipe
+  const stepLbs = Number(recipe.stepLbs) || 5;
+  const dpMode = recipe.dpMode || 'all'; // 'all' = Step Loading | 'independent' = Dynamic per-set
+  const backoffStep = recipe.backoffStep || false;
+
+  return Array.from({ length: count }, (_, idx) => {
+    const isTop = (idx === 0 && !isGrounding);
+    
+    // Calculate load based on backoff preferences
+    let load = baseLoad;
+    if (idx > 0 && backoffStep) {
+      load = Math.max(0, baseLoad - (idx * stepLbs));
+    } else if (idx > 0 && isGrounding) {
+      load = roundLoad(baseLoad * 0.90);
+    }
+
+    const rpe = isTop ? targetRpe : (isGrounding ? 8.0 : targetRpe);
+    const repStr = (dpMode === 'independent' && idx > 0) ? `${minRep}` : rangeStr;
+
+    return {
+      label: isTop ? '🔥 Grounding Step (@9.0)' : (isGrounding ? `Back-off ${idx} (-10%)` : `Step ${idx + 1}`),
+      targetLoad: meta.w ? roundLoad(load) : 0,
+      targetReps: repStr,
+      targetTime: 0,
+      targetRpe: rpe,
+      actualWeight: meta.w ? roundLoad(load) : 0,
+      actualReps: minRep,
+      actualTime: 0,
+      actualRpe: rpe,
+      done: false,
+      lapRunning: false
+    };
+  });
+}
 
       // ----------------------------------------------------------------------
       // 3. MYO-REPS (Rest-Pause Density Clusters)
@@ -3928,35 +3925,6 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
           }
         }
         return rpSets;
-      }
-
-      // ----------------------------------------------------------------------
-      // 5. STEP LOADING (Double Progression)
-      // ----------------------------------------------------------------------
-      if (cleanScheme === 'Step Loading (Double Progression)') {
-        const baseRecipeRpe = roundRpe(Number(recipe.targetRpe) || 8.0);
-        const targetRpe = isGrounding ? 9.0 : roundRpe(Math.min(baseRecipeRpe + weekRpeBump, rpeCap));
-        const l = calcLoad(adj, getPct(maxRep, targetRpe));
-        const count = skipBackoffs ? 1 : baseWorkingSets;
-
-        return Array.from({ length: count }, (_, idx) => {
-          const isTop = (idx === 0 && isGrounding);
-          const load = (idx === 0 || !isGrounding) ? l : roundLoad(l * 0.90);
-          const rpe = (idx === 0 || !isGrounding) ? targetRpe : 8.0;
-          return {
-            label: isTop ? '🔥 Grounding Step (@9.0)' : (isGrounding ? `Back-off ${idx} (-10%)` : `Step ${idx + 1}`),
-            targetLoad: meta.w ? load : 0,
-            targetReps: rangeStr,
-            targetTime: 0,
-            targetRpe: rpe,
-            actualWeight: meta.w ? load : 0,
-            actualReps: minRep,
-            actualTime: 0,
-            actualRpe: rpe,
-            done: false,
-            lapRunning: false
-          };
-        });
       }
 
       // ----------------------------------------------------------------------
@@ -10164,7 +10132,7 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
             <div class="p-3.5 bg-card-sub rounded-3xl border border-sub space-y-2 font-mono text-xs shadow-md">
               <span class="text-[10px] text-accent font-bold uppercase">Autoregulated Overload & Fatigue Stop Architecture</span>
               <ul class="text-[10px] text-slate-400 space-y-1 list-disc pl-4 pt-1">
-                <li><b>Dynamic Double Progression</b>: Lock load across sets; progress from bottom to top of rep window (e.g. 6-8r). Add bar weight only when all sets reach the upper ceiling.</li>
+                <li><b>Double Progression</b>: Work within phase rep range at a fixed load. Step up weight and reset reps when the ceiling is reached (supports independent per-set progression and back-off wave loading).</li>
                 <li><b>Autoregulated Load Drops & RPE Stops</b>: Ramp to top intensity (e.g. 4@8.0 or 6@9.0). Calculate down sets as a strict percentage reduction (-5% to -14%) or repeat until RPE 9.0 is hit.</li>
                 <li><b>Non-Specific GPP Work Capacity</b>: Dedicated 20-30 minute circuits (loaded carries, sled medleys, core, arms) 1-2 times weekly to promote systemic recovery and work capacity without competing with axial spinal recovery.</li>
               </ul>
