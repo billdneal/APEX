@@ -13,7 +13,7 @@
 
 (function() {
   try {
-    const APP_VERSION = 'v4.8.3-PWA';
+    const APP_VERSION = 'v4.8.2-PWA';
     const now = new Date();
     const TODAY_YEAR = now.getFullYear();
     const TODAY_MONTH = now.getMonth();
@@ -152,7 +152,7 @@
     // Declarative Programming Builder Scheme Recipes (Neutral Names & Strict 0.5 RPE)
     const defaultSchemeRecipes = {
       'Straight Sets': { targetRpe: 7.5, setsCount: 3, enableRpeProgression: true, minReps: 0, maxReps: 0 },
-      'Double Progression': { targetRpe: 7.5, setsCount: 3, enableRpeProgression: true, minReps: 0, maxReps: 0 },
+      'Double Progression': { targetRpe: 8.0, setsCount: 3, stepLbs: 5, enableRpeProgression: true, minReps: 0, maxReps: 0 },
       'Myo-reps': { actRpe: 9.0, miniRpe: 9.5, miniSets: 4, intraRestSec: 15, enableRpeProgression: false, minReps: 0, maxReps: 0 },
       'Rest-Pause (Dogcrapp)': { actRpe: 9.5, clusterRpe: 10.0, clusters: 2, intraRestSec: 15, enableRpeProgression: false, minReps: 0, maxReps: 0 },
       'Density Block': { targetLoadPct: 65, defaultMinutes: 8, setsCount: 3, enableRpeProgression: false, minReps: 0, maxReps: 0 },
@@ -878,12 +878,9 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     restSeconds: 120,
     intraSetRest: 0,
     densityPenalty: 1.0,
-    // Unified Double Progression Controls:
+    // Progression Control:
     stepLbs: 5,             // Weight jump (+2.5, +5, or +10 lbs) when rep ceiling is cleared
-    dpMode: 'all',          // 'all' = all sets must hit top reps | 'independent' = per-set graduation
-    backoffStep: false,     // true = drop each subsequent set by 1 stepLbs (-5 lbs) from Set 1
-    deloadPct: 90,          // Reset to 90% load if stalled for 2+ consecutive sessions
-    instructions: 'Work within the phase rep range. Add reps weekly at a fixed load until the top of the range is reached, then increase load by your step (lbs) and reset reps to the bottom.',
+    instructions: 'Work within the phase rep range at a fixed load. Add reps weekly until the ceiling of the range is reached, then increase load by your step (lbs) and reset reps to the bottom.',
     sfrRating: 'A-'
   },
   'Myo-reps': {
@@ -1461,6 +1458,18 @@ window.DEFAULT_SCHEME_BLUEPRINTS = DEFAULT_SCHEME_BLUEPRINTS;
       if (savedStart) state.mesocycleStartDate = normalizeDateKey(savedStart);
       const savedMacro = localStorage.getItem('apex_mesocycle');
       if (savedMacro) { const p = JSON.parse(savedMacro); if (Array.isArray(p) && p.length > 0) state.mesocycle = p; }
+      const savedBlockIdx = localStorage.getItem('apex_activeBlockIdx');
+      if (savedBlockIdx !== null && savedBlockIdx !== undefined && !isNaN(Number(savedBlockIdx))) {
+        state.activeBlockIdx = Math.max(0, Number(savedBlockIdx));
+      } else if (state.settings?.activeBlockIdx !== undefined) {
+        state.activeBlockIdx = Math.max(0, Number(state.settings.activeBlockIdx) || 0);
+      }
+      const savedActiveWeek = localStorage.getItem('apex_activeWeek');
+      if (savedActiveWeek !== null && savedActiveWeek !== undefined && !isNaN(Number(savedActiveWeek))) {
+        state.activeWeek = Math.max(1, Number(savedActiveWeek));
+      } else if (state.settings?.activeWeek !== undefined) {
+        state.activeWeek = Math.max(1, Number(state.settings.activeWeek) || 1);
+      }
       const savedSplit = localStorage.getItem('apex_weekdaySplit');
       if (savedSplit) { const p = JSON.parse(savedSplit); if (p && typeof p === 'object') state.weekdaySplit = { ...state.weekdaySplit, ...p }; }
       const savedCustomSplits = localStorage.getItem('apex_customSplitBlueprints');
@@ -1503,7 +1512,15 @@ window.DEFAULT_SCHEME_BLUEPRINTS = DEFAULT_SCHEME_BLUEPRINTS;
         try {
           const p = JSON.parse(savedBlueprints);
           if (p && typeof p === 'object' && Object.keys(p).length > 0) {
+            delete p['Dynamic Double Progression (Rep Range)'];
+            delete p['Step Loading (Double Progression)'];
             state.schemeBlueprints = { ...DEFAULT_SCHEME_BLUEPRINTS, ...p };
+            if (state.schemeBlueprints['Double Progression']) {
+              state.schemeBlueprints['Double Progression'] = {
+                ...DEFAULT_SCHEME_BLUEPRINTS['Double Progression'],
+                ...state.schemeBlueprints['Double Progression']
+              };
+            }
           }
         } catch(e) {}
       }
@@ -1605,6 +1622,10 @@ function persist() {
     state.settings.anchorE1rms = state.anchorE1rms;
     state.settings.oneRmFormula = state.settings.oneRmFormula || 'apex';
     state.settings.mesocycleStartDate = state.mesocycleStartDate;
+    state.settings.activeBlockIdx = state.activeBlockIdx;
+    state.settings.activeWeek = state.activeWeek;
+    localStorage.setItem('apex_activeBlockIdx', String(state.activeBlockIdx || 0));
+    localStorage.setItem('apex_activeWeek', String(state.activeWeek || 1));
     state.settings.rpeProfiles = state.rpeProfiles;
     state.settings.activeRpeProfileId = state.activeRpeProfileId;
     state.settings.equipment = state.equipment;
@@ -1710,62 +1731,77 @@ function persist() {
       } catch(e) {}
     }
 
-    // Date-Aware Mesocycle Position Resolver
-    function getMesocyclePosition(targetDate = new Date()) {
-      if (!state.mesocycle || !state.mesocycle.length || !state.mesocycleStartDate) {
+    // State-First Mesocycle Position Resolver (Decoupled from Modulo Timeline Wrap-Around)
+    function getMesocyclePosition(targetDate = null) {
+      if (!state.mesocycle || !state.mesocycle.length) {
         return { blockIdx: 0, week: 1, phase: 'Hypertrophy', block: { phase: 'Hypertrophy', weeks: 3 } };
       }
-      try {
-        const [sY, sM, sD] = state.mesocycleStartDate.split('-').map(Number);
-        const startDate = new Date(sY, sM - 1, sD);
-        startDate.setHours(0, 0, 0, 0);
 
-        let cur;
-        if (targetDate instanceof Date) {
-          cur = new Date(targetDate);
-        } else if (typeof targetDate === 'string' && targetDate.includes('-')) {
+      const activeIdx = Math.min(Math.max(0, Number(state.activeBlockIdx) || 0), state.mesocycle.length - 1);
+      const activeBlock = state.mesocycle[activeIdx] || state.mesocycle[0];
+      const maxBlockWeeks = Math.max(1, Number(activeBlock.weeks) || 3);
+      const currentActiveWeek = Math.min(Math.max(1, Number(state.activeWeek) || 1), maxBlockWeeks);
+
+      if (!targetDate) {
+        return {
+          blockIdx: activeIdx,
+          week: currentActiveWeek,
+          phase: activeBlock.phase,
+          block: activeBlock
+        };
+      }
+
+      // If staging a specific future date > today, project forward from current active Block/Week without looping back to Block 0
+      try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        let cur = (targetDate instanceof Date) ? new Date(targetDate) : new Date();
+        if (typeof targetDate === 'string' && targetDate.includes('-')) {
           const [tY, tM, tD] = targetDate.split('-').map(Number);
           cur = new Date(tY, tM - 1, tD);
-        } else {
-          cur = new Date();
         }
         cur.setHours(0, 0, 0, 0);
 
-        const diffTime = cur - startDate;
-        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-
-        if (diffDays < 0) {
-          return { blockIdx: 0, week: 1, phase: state.mesocycle[0].phase, block: state.mesocycle[0] };
+        const diffWeeks = Math.floor((cur - today) / (1000 * 60 * 60 * 24 * 7));
+        if (diffWeeks <= 0) {
+          return { blockIdx: activeIdx, week: currentActiveWeek, phase: activeBlock.phase, block: activeBlock };
         }
 
-        let totalWeeksElapsed = Math.floor(diffDays / 7);
-        const totalMacroWeeks = state.mesocycle.reduce((sum, b) => sum + (Number(b.weeks) || 1), 0);
-        if (totalMacroWeeks > 0) {
-          totalWeeksElapsed = totalWeeksElapsed % totalMacroWeeks;
-        }
+        let remWeeks = diffWeeks;
+        let bIdx = activeIdx;
+        let wNum = currentActiveWeek;
 
-        let accumulatedWeeks = 0;
-        for (let i = 0; i < state.mesocycle.length; i++) {
-          const bWeeks = Number(state.mesocycle[i].weeks) || 1;
-          if (totalWeeksElapsed < accumulatedWeeks + bWeeks) {
-            const weekNum = (totalWeeksElapsed - accumulatedWeeks) + 1;
-            return {
-              blockIdx: i,
-              week: weekNum,
-              phase: state.mesocycle[i].phase,
-              block: state.mesocycle[i]
-            };
+        while (remWeeks > 0 && bIdx < state.mesocycle.length) {
+          const bLimit = Math.max(1, Number(state.mesocycle[bIdx].weeks) || 3);
+          if (wNum < bLimit) {
+            wNum++;
+            remWeeks--;
+          } else if (bIdx < state.mesocycle.length - 1) {
+            bIdx++;
+            wNum = 1;
+            remWeeks--;
+          } else {
+            // Reached the end of the planned mesocycle queue: hold at final block rather than wrapping around to Block 0
+            wNum = bLimit;
+            break;
           }
-          accumulatedWeeks += bWeeks;
         }
+        const resolvedBlock = state.mesocycle[bIdx];
+        return { blockIdx: bIdx, week: wNum, phase: resolvedBlock.phase, block: resolvedBlock };
       } catch (e) {}
-      return { blockIdx: 0, week: 1, phase: state.mesocycle[0]?.phase || 'Hypertrophy', block: state.mesocycle[0] };
+
+      return { blockIdx: activeIdx, week: currentActiveWeek, phase: activeBlock.phase, block: activeBlock };
     }
 
-    function syncMesocycleProgression(targetDate = new Date()) {
-      const pos = getMesocyclePosition(targetDate);
-      state.activeBlockIdx = pos.blockIdx;
-      state.activeWeek = pos.week;
+    function syncMesocycleProgression() {
+      if (!state.mesocycle || !state.mesocycle.length) return;
+      if (state.activeBlockIdx >= state.mesocycle.length || state.activeBlockIdx < 0) {
+        state.activeBlockIdx = Math.max(0, state.mesocycle.length - 1);
+      }
+      const maxW = Math.max(1, Number(state.mesocycle[state.activeBlockIdx]?.weeks) || 3);
+      if (!state.activeWeek || state.activeWeek > maxW || state.activeWeek < 1) {
+        state.activeWeek = 1;
+      }
     }
 
     function getVariantKey(ex, mods = []) {
@@ -2270,7 +2306,7 @@ window.appActions.updateSchemeBlueprint = function(schemeName, key, value) {
       const trimmed = s.trim();
       return isNaN(Number(trimmed)) ? trimmed : Number(trimmed);
     });
-  } else if (['baseSets', 'topSetCount', 'restSeconds', 'intraSetRest', 'targetRpe', 'fatigueDropPct', 'densityPenalty', 'repGoal', 'rpeStepDelta', 'targetLoadPct'].includes(key)) {
+  } else if (['baseSets', 'topSetCount', 'restSeconds', 'intraSetRest', 'targetRpe', 'fatigueDropPct', 'densityPenalty', 'repGoal', 'rpeStepDelta', 'targetLoadPct', 'stepLbs'].includes(key)) {
     const num = Number(value);
     if (!isNaN(num)) value = num;
   }
@@ -3111,6 +3147,16 @@ function renderRpeMatrixTable(profile) {
         }
         if (data.profile) state.profile = { ...state.profile, ...data.profile };
         if (data.mesocycle) state.mesocycle = data.mesocycle;
+        if (data.active_block_idx !== undefined && data.active_block_idx !== null) {
+          state.activeBlockIdx = Math.max(0, Number(data.active_block_idx) || 0);
+        } else if (data.settings?.activeBlockIdx !== undefined) {
+          state.activeBlockIdx = Math.max(0, Number(data.settings.activeBlockIdx) || 0);
+        }
+        if (data.active_week !== undefined && data.active_week !== null) {
+          state.activeWeek = Math.max(1, Number(data.active_week) || 1);
+        } else if (data.settings?.activeWeek !== undefined) {
+          state.activeWeek = Math.max(1, Number(data.settings.activeWeek) || 1);
+        }
         if (data.weekday_split) state.weekdaySplit = data.weekday_split;
         if (data.exercise_meta) state.exerciseMeta = { ...state.exerciseMeta, ...data.exercise_meta };
         if (data.phase_rep_matrix) state.phaseRepMatrix = data.phase_rep_matrix;
@@ -3725,6 +3771,7 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
     // SCHEME ROUTING ENGINE: PARAMETRIC VS SPECIALIZED
     // ====================================================
     const SPECIALIZED_SCHEMES = [
+      'Double Progression',
       'Myo-reps',
       'Rest-Pause (Dogcrapp)',
       'Density Block',
@@ -3801,49 +3848,49 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
         return enforceHardwareConstraints(setArray, exName, mods, adj);
       }
 
+            // -----------------------------------------------------------------
+      // DOUBLE PROGRESSION (Standard Step-Loading Engine)
       // -----------------------------------------------------------------
-// DOUBLE PROGRESSION (Unified Step Loading & Dynamic Engine)
-// -----------------------------------------------------------------
-if (cleanScheme === 'Double Progression') {
-  const baseRecipeRpe = roundRpe(Number(recipe.targetRpe) || 8.0);
-  const targetRpe = isGrounding ? 9.0 : roundRpe(Math.min(baseRecipeRpe + weekRpeBump, rpeCap));
-  const baseLoad = calcLoad(adj, getPct(maxRep, targetRpe));
-  const count = skipBackoffs ? 1 : baseWorkingSets;
+      if (cleanScheme === 'Double Progression') {
+        const baseRecipeRpe = roundRpe(Number(recipe.targetRpe) || 8.0);
+        const targetRpe = isGrounding ? 9.0 : roundRpe(Math.min(baseRecipeRpe + weekRpeBump, rpeCap));
+        const fallbackLoad = calcLoad(adj, getPct(maxRep, targetRpe));
+        const count = skipBackoffs ? 1 : baseWorkingSets;
+        const stepLbs = Number(recipe.stepLbs || bpPool['Double Progression']?.stepLbs) || 5;
 
-  // Read unified control parameters from the blueprint/recipe
-  const stepLbs = Number(recipe.stepLbs) || 5;
-  const dpMode = recipe.dpMode || 'all'; // 'all' = Step Loading | 'independent' = Dynamic per-set
-  const backoffStep = recipe.backoffStep || false;
+        // Check most recent logged session for this movement; add +stepLbs only when all sets hit maxRep
+        let workingLoad = fallbackLoad;
+        if (!opts.isPreview && exName) {
+          const hist = getLiftHistory(exName, true, mods);
+          const lastValid = (hist || []).find(h => Array.isArray(h.sets) && h.sets.some(s => s && s.done && Number(s.actualWeight) > 0));
+          if (lastValid) {
+            const doneSets = lastValid.sets.filter(s => s && s.done);
+            const prevTopWeight = Math.max(...doneSets.map(s => Number(s.actualWeight) || 0));
+            const allHitCeiling = doneSets.length > 0 && doneSets.every(s => (Number(s.actualReps) || 0) >= maxRep);
+            workingLoad = allHitCeiling ? (prevTopWeight + stepLbs) : prevTopWeight;
+          }
+        }
 
-  return Array.from({ length: count }, (_, idx) => {
-    const isTop = (idx === 0 && !isGrounding);
-    
-    // Calculate load based on backoff preferences
-    let load = baseLoad;
-    if (idx > 0 && backoffStep) {
-      load = Math.max(0, baseLoad - (idx * stepLbs));
-    } else if (idx > 0 && isGrounding) {
-      load = roundLoad(baseLoad * 0.90);
-    }
+        return Array.from({ length: count }, (_, idx) => {
+          const isTop = (idx === 0 && isGrounding);
+          const load = (idx > 0 && isGrounding) ? roundLoad(workingLoad * 0.90) : roundLoad(workingLoad);
+          const rpe = (idx > 0 && isGrounding) ? 8.0 : targetRpe;
 
-    const rpe = isTop ? targetRpe : (isGrounding ? 8.0 : targetRpe);
-    const repStr = (dpMode === 'independent' && idx > 0) ? `${minRep}` : rangeStr;
-
-    return {
-      label: isTop ? '🔥 Grounding Step (@9.0)' : (isGrounding ? `Back-off ${idx} (-10%)` : `Step ${idx + 1}`),
-      targetLoad: meta.w ? roundLoad(load) : 0,
-      targetReps: repStr,
-      targetTime: 0,
-      targetRpe: rpe,
-      actualWeight: meta.w ? roundLoad(load) : 0,
-      actualReps: minRep,
-      actualTime: 0,
-      actualRpe: rpe,
-      done: false,
-      lapRunning: false
-    };
-  });
-}
+          return {
+            label: isTop ? '🔥 Grounding Step (@9.0)' : (isGrounding ? `Back-off ${idx} (-10%)` : (opts.isPreview ? `Set ${idx + 1} (+${stepLbs}lb step)` : `Set ${idx + 1}`)),
+            targetLoad: meta.w ? load : 0,
+            targetReps: rangeStr,
+            targetTime: 0,
+            targetRpe: rpe,
+            actualWeight: meta.w ? load : 0,
+            actualReps: minRep,
+            actualTime: 0,
+            actualRpe: rpe,
+            done: false,
+            lapRunning: false
+          };
+        });
+      }
 
       // ----------------------------------------------------------------------
       // 3. MYO-REPS (Rest-Pause Density Clusters)
@@ -5778,7 +5825,7 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
   
     exportProgrammingBuilderJson() {
       const chassisData = {
-        version: window.apexCore?.APP_VERSION || 'v4.8.3-PWA',
+        version: window.apexCore?.APP_VERSION || 'v4.8.2-PWA',
         timestamp: new Date().toISOString(),
         phaseRepMatrix: state.phaseRepMatrix,
         schemeRecipes: state.schemeRecipes,
@@ -6514,7 +6561,8 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
   },
 
     // Mesocycle & Blueprint Architecture
-    setActiveBlock(idx) { state.activeBlockIdx = idx; state.activeWeek = 1; persist(); window.pushToCloud(false); safeRender(); },
+    setActiveBlock(idx) { state.activeBlockIdx = Number(idx) || 0; state.activeWeek = 1; persist(); window.pushToCloud(false); safeRender(); },
+    setActiveMacroBlock(idx) { state.activeBlockIdx = Number(idx) || 0; state.activeWeek = 1; persist(); window.pushToCloud(false); safeRender(); },
     setActiveWeek(w) { state.activeWeek = w; persist(); window.pushToCloud(false); safeRender(); },
     addMacroBlock() { state.mesocycle.push({ id: Date.now(), phase: state.newBlockPhase, weeks: Number(state.newBlockWeeks), progressionMode: (['Accumulation', 'Hypertrophy', 'Deload', 'Resensitization'].includes(state.newBlockPhase) ? 'load' : 'intensity') }); syncMesocycleProgression(); persist(); window.pushToCloud(false); safeRender(); },
     
@@ -6794,7 +6842,7 @@ updateSplitSlotTier(splitName, slotIdx, newTier) {
     // Data Backup, Migration & CSV Export
     exportBackup() {
       const backupData = {
-        version: window.apexCore?.APP_VERSION || 'v4.8.3-PWA',
+        version: window.apexCore?.APP_VERSION || 'v4.8.2-PWA',
         timestamp: new Date().toISOString(),
         settings: state.settings,
         profile: state.profile,
@@ -8157,6 +8205,18 @@ function renderBottomNav() {
             <option value="9.0" ${(Number(bp.fatigueStopRpe) === 9.0) ? 'selected' : ''}>Stop Set Ladder at @9.0 RPE</option>
             <option value="9.5" ${(Number(bp.fatigueStopRpe) === 9.5) ? 'selected' : ''}>Stop Set Ladder at @9.5 RPE</option>
             <option value="10.0" ${(Number(bp.fatigueStopRpe) === 10.0) ? 'selected' : ''}>Stop at @10.0 (Failure)</option>
+          </select>
+        </div>
+      `;
+    } else if (curScheme === 'Double Progression') {
+      const curStepLbs = Number(bp.stepLbs || recipe?.stepLbs) || 5;
+      patternFieldsHtml = `
+        <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
+          <label class="text-[9px] text-slate-400 font-bold uppercase">Load Step Increment (lbs)</label>
+          <select onchange="appActions.updateSchemeBlueprint('${curScheme}', 'stepLbs', Number(this.value)); if (appActions.updateSchemeRecipe) appActions.updateSchemeRecipe('${curScheme}', 'stepLbs', Number(this.value));" class="w-full bg-card-sub border border-sub rounded-xl p-1.5 text-accent font-bold text-xs focus:outline-none">
+            ${[2.5, 5, 10, 15, 20].map(st => `
+              <option value="${st}" ${curStepLbs === st ? 'selected' : ''}>+${st} lbs when ceiling cleared</option>
+            `).join('')}
           </select>
         </div>
       `;
