@@ -4686,15 +4686,9 @@ const COACH_DOCTRINES = {
 };
 
 const FALLBACK_GEMINI_MODELS = [
-  { id: 'gemini-4-argon', name: 'Gemini 4 Argon (Flagship Frontier)' },
-  { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash (High-Speed Workhorse)' },
-  { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash (Balanced Production)' },
-  { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash-Lite (Ultra-Low Latency)' },
   { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro (Deep Reasoning & Math)' },
-  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Stable Standard)' },
-  { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite (Lightweight)' },
-  { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (High Context)' },
-  { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (Legacy Fast)' }
+  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Fast Production Default)' },
+  { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite (Ultra-Low Latency)' }
 ];
 
 function getApexCoachConfig() {
@@ -4703,9 +4697,12 @@ function getApexCoachConfig() {
     cachedModels = JSON.parse(localStorage.getItem('apex_gemini_models_cache'));
   } catch (e) {}
 
+  const modelsList = (Array.isArray(cachedModels) && cachedModels.length) ? cachedModels : FALLBACK_GEMINI_MODELS;
   let savedModel = localStorage.getItem('apex_gemini_model');
-  if (!savedModel || savedModel === 'gemini-2.5-flash') {
-    savedModel = 'gemini-3.8-flash';
+  const legacyOrInvalid = !savedModel || /gemini-1\.|gemini-2\.0|gemini-3\.8|gemini-4-argon/i.test(savedModel);
+
+  if (legacyOrInvalid) {
+    savedModel = modelsList[0]?.id || 'gemini-2.5-flash';
     localStorage.setItem('apex_gemini_model', savedModel);
   }
 
@@ -4713,7 +4710,7 @@ function getApexCoachConfig() {
     apiKey: localStorage.getItem('apex_gemini_key') || state.profile?.geminiApiKey || '',
     model: savedModel,
     doctrine: localStorage.getItem('apex_coach_doctrine') || 'adaptive',
-    modelsList: Array.isArray(cachedModels) && cachedModels.length ? cachedModels : FALLBACK_GEMINI_MODELS
+    modelsList
   };
 }
 
@@ -4726,15 +4723,25 @@ async function fetchDynamicGeminiModels() {
     const data = await res.json();
     if (!res.ok || !data.models) throw new Error(data.error?.message || 'Failed to fetch live model list');
 
+    const excludedPattern = /(embedding|imagen|veo|tts|aqa|bison|gecko|vision|learnlm|gemma|robotics|computer-use|-\d{3}$|-\d{4}$)/i;
+    const legacyPattern = /^gemini-(1\.0|1\.5|2\.0)/i;
+
     const validModels = data.models
       .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes('generateContent'))
       .map(m => {
         const id = m.name.replace('models/', '');
         return { id, name: `${m.displayName || id} (${id})` };
-      });
+      })
+      .filter(m => /^gemini-/i.test(m.id) && !legacyPattern.test(m.id) && !excludedPattern.test(m.id))
+      .sort((a, b) => b.id.localeCompare(a.id, undefined, { numeric: true }));
 
     if (validModels.length > 0) {
       localStorage.setItem('apex_gemini_models_cache', JSON.stringify(validModels));
+      const curModel = localStorage.getItem('apex_gemini_model');
+      if (!validModels.some(m => m.id === curModel)) {
+        const preferred = validModels.find(m => /2\.5-flash$/i.test(m.id)) || validModels[0];
+        localStorage.setItem('apex_gemini_model', preferred.id);
+      }
       return validModels;
     }
     return FALLBACK_GEMINI_MODELS;
@@ -4754,24 +4761,71 @@ function buildCoachTelemetryContext() {
       const doneSets = (ex.sets || []).filter(s => s && (s.done || s.completed));
       if (!doneSets.length) return null;
       const top = doneSets.reduce((best, cur) => (Number(cur.actualWeight) > Number(best.actualWeight) ? cur : best), doneSets[0]);
-      return `${ex.exercise || ex.name}: ${doneSets.length}s (Top: ${top.actualWeight}lbs x ${top.actualReps} @${top.actualRpe})`;
+      return `${ex.exercise || ex.name}: ${doneSets.length}s (Top: ${top.actualWeight}x${top.actualReps}r @${top.actualRpe})`;
     }).filter(Boolean).join('; ');
     return `${d}: BW=${log.weight || '-'} | Rdy=${log.recovery?.score ? log.recovery.score + '%' : '-'} | sRPE=${wk.srpe || '-'} (${wk.dur || '-'}m) | ${exSummary || 'Rest/No sets'}`;
   }).join('\n');
 
   const pos = window.apexCore?.getMesocyclePosition ? window.apexCore.getMesocyclePosition(new Date()) : { phase: 'Hypertrophy', week: 1, block: { weeks: 3 } };
-  const e1rmSnap = Object.entries(state.e1rms || {}).map(([k, v]) => `${k}: ${v}lbs`).join(', ');
+  const e1rmSnap = Object.entries(state.e1rms || {}).map(([k, v]) => `${k}: ${v} lbs`).join(', ');
+
+  // Active Phase Rep Targets
+  const phaseMatrix = (state.phaseRepMatrix && state.phaseRepMatrix[pos.phase]) || null;
+  const repTargetsStr = phaseMatrix
+    ? `Main: ${phaseMatrix.Main.min}-${phaseMatrix.Main.max}r | Secondary: ${phaseMatrix.Secondary.min}-${phaseMatrix.Secondary.max}r | Assistance: ${phaseMatrix.Assistance.min}-${phaseMatrix.Assistance.max}r`
+    : 'Standard Phase Matrix';
+
+  // 7-Day Bodyweight Trend
+  const bwEntries = recentDates.slice(-7).map(d => Number(state.dayLogs[d]?.weight)).filter(w => w > 0);
+  const bwTrendStr = bwEntries.length >= 2
+    ? `${bwEntries[0]} lbs -> ${bwEntries[bwEntries.length - 1]} lbs (${(bwEntries[bwEntries.length - 1] - bwEntries[0] >= 0 ? '+' : '')}${(bwEntries[bwEntries.length - 1] - bwEntries[0]).toFixed(1)} lbs over ${bwEntries.length} weigh-ins)`
+    : `${window.apexCore?.getLatestBodyweight ? window.apexCore.getLatestBodyweight() : '-'} lbs`;
+
+  // Double Progression Status for Active/Staged Movements
+  const activeList = (state.activeWorkout && state.activeWorkout.length) ? state.activeWorkout : (state.stagedSlots || []);
+  const dpStatusLines = activeList
+    .filter(ex => ex && (ex.scheme === 'Double Progression' || state.schemeBlueprints?.[ex.scheme]?.pattern === 'double_progression'))
+    .map(ex => {
+      const exName = ex.exercise || ex.name;
+      const tier = ex.tier || 'Main';
+      const bracket = phaseMatrix?.[tier] ? `${phaseMatrix[tier].min}-${phaseMatrix[tier].max}` : '8-12';
+      const ev = typeof evaluateDoubleProgression === 'function' ? evaluateDoubleProgression(exName, bracket, 0) : null;
+      return ev ? `- ${exName} (${bracket}r): ${ev.status} -> ${ev.coachingCue}` : null;
+    }).filter(Boolean).join('\n');
 
   return [
-    `LIFTER PROFILE: Age ${state.profile?.age || 40}, Skill: ${state.profile?.skillLevel || 'Advanced'}, Current BW: ${window.apexCore?.getLatestBodyweight ? window.apexCore.getLatestBodyweight() : '-'} lbs`,
+    `LIFTER PROFILE: Age ${state.profile?.age || 40}, Skill: ${state.profile?.skillLevel || 'Advanced'}, 7D BW Trend: ${bwTrendStr}`,
     `ANCHOR e1RMs: ${e1rmSnap || 'None'}`,
-    `ACTIVE MESOCYCLE BLOCK: Phase: ${pos.phase} | Week ${pos.week} of ${pos.block?.weeks || 3} (Progression Mode: ${pos.block?.progressionMode || 'intensity'})`,
+    `ACTIVE BLOCK: Phase: ${pos.phase} | Week ${pos.week} of ${pos.block?.weeks || 3} (Mode: ${pos.block?.progressionMode || 'intensity'})`,
+    `PHASE TARGET REP RANGES (${pos.phase}): ${repTargetsStr}`,
+    dpStatusLines ? `DOUBLE PROGRESSION STATUS:\n${dpStatusLines}` : '',
     window.getHardwareCoachContext ? window.getHardwareCoachContext() : '',
     `RECENT 14-DAY LOGGED WORKOUTS:\n${recentSummary || 'No recent logs found.'}`
   ].filter(Boolean).join('\n');
 }
 
+function formatCoachMarkdown(rawText) {
+  if (!rawText) return '';
+  let safe = String(rawText)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 
+  // Headings (### or ##)
+  safe = safe.replace(/^###\s+(.+)$/gm, '<div class="text-accent font-bold text-xs uppercase tracking-wider mt-2.5 mb-1">$1</div>');
+  safe = safe.replace(/^##\s+(.+)$/gm, '<div class="text-white font-bold text-xs uppercase tracking-wider border-b border-sub/50 pb-0.5 mt-3 mb-1.5">$1</div>');
+  // Bold (**text**)
+  safe = safe.replace(/\*\*(.+?)\*\*/g, '<strong class="text-white font-bold">$1</strong>');
+  // Inline code (`text`)
+  safe = safe.replace(/`([^`]+)`/g, '<code class="px-1 py-0.5 rounded bg-card-sub text-accent border border-sub/60 text-[10px]">$1</code>');
+  // Bullet items (* or -)
+  safe = safe.replace(/^\s*[-*]\s+(.+)$/gm, '<div class="pl-3 relative before:content-[\'•\'] before:absolute before:left-0 before:text-accent my-0.5">$1</div>');
+  // Numbered items (1. )
+  safe = safe.replace(/^\s*(\d+\.)\s+(.+)$/gm, '<div class="pl-4 relative my-0.5"><span class="absolute left-0 text-accent font-bold">$1</span>$2</div>');
+  // Line breaks
+  safe = safe.replace(/\n\n+/g, '<div class="h-2"></div>').replace(/\n/g, '<br>');
+  return safe;
+}
 
 function renderApexCoachSettingsCard() {
   const config = getApexCoachConfig();
@@ -4806,7 +4860,7 @@ function renderApexCoachSettingsCard() {
           <label class="text-[9px] text-slate-400 font-bold uppercase">Active Gemini Model (${models.length} Available)</label>
           <select id="apexModelSelect" class="w-full bg-input border border-sub rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-accent"
             onchange="localStorage.setItem('apex_gemini_model', this.value); showToast('Model set to ' + this.value);">
-            ${!hasCurrentInList ? `<option value="${config.model}" selected>${config.model} (Custom/Active)</option>` : ''}
+            ${!hasCurrentInList ? `<option value="${config.model}" selected>${config.model} (Active)</option>` : ''}
             ${models.map(m => `<option value="${m.id}" ${m.id === config.model ? 'selected' : ''}>${m.name}</option>`).join('')}
           </select>
         </div>
@@ -4840,8 +4894,8 @@ function renderApexCoachSettingsCard() {
 window.appActions = window.appActions || {};
 window.appActions.setCoachDoctrine = (doctrineKey) => {
   localStorage.setItem('apex_coach_doctrine', doctrineKey);
-  showToast(`Doctrine: ${COACH_DOCTRINES[doctrineKey]?.title || doctrineKey}`);
-  if (typeof safeRender === 'function') safeRender();
+  safeCoachToast(`Doctrine: ${COACH_DOCTRINES[doctrineKey]?.title || doctrineKey}`);
+  if (typeof window.render === 'function') window.render();
 };
 
 /* ================================================================= */
@@ -4856,13 +4910,15 @@ const COACH_PIPELINES = [
   {
     id: 'stage_audit',
     label: '⚡ Audit Today\'s Workout',
-    desc: 'Check Readiness & Foster Load vs. today\'s staged sets',
+    desc: 'Check Readiness & Training Load vs. today\'s staged sets',
     buildPrompt: () => {
-      const activeEx = (state.activeWorkout || []).map(ex => {
-        const sets = (ex.sets || []).map(s => `${s.targetLoad || s.actualWeight}x${s.targetReps || s.actualReps} @${s.targetRpe || ''}`).join(', ');
-        return `- ${ex.name} (${ex.tier || 'Main'} / ${ex.scheme || 'Standard'}): [${sets}]`;
+      const sourceList = (state.activeWorkout && state.activeWorkout.length) ? state.activeWorkout : (state.stagedSlots || []);
+      const activeEx = sourceList.map(ex => {
+        const exName = ex.exercise || ex.name || 'Movement';
+        const sets = (ex.sets || []).map(s => `${s.targetLoad || s.actualWeight || 0}x${s.targetReps || s.actualReps || 0}r @${s.targetRpe || ''}`).join(', ');
+        return `- ${exName} (${ex.tier || 'Main'} / ${ex.scheme || 'Straight Sets'}): [${sets || 'Pending set generation'}]`;
       }).join('\n');
-      return `Run a Daily Readiness & Stage Audit for today's session.\nSTAGED WORKOUT:\n${activeEx || 'No exercises staged yet.'}\n\nProvide:\n1. Readiness & Fatigue Verdict (cite my recent sRPE/Foster load & readiness %).\n2. Specific Autoregulation Adjustments for today (exact load/RPE caps or backoff set trims if needed).`;
+      return `Run a Daily Readiness & Stage Audit for today's session.\nSTAGED WORKOUT:\n${activeEx || 'No exercises staged yet.'}\n\nProvide:\n1. **Bottom-Line Action Plan** (exact load/RPE caps or backoff set trims for today).\n2. **Readiness & Fatigue Verdict** (cite my recent sRPE/training load & readiness %).`;
     }
   },
   {
@@ -4871,11 +4927,12 @@ const COACH_PIPELINES = [
     desc: 'Evaluate logged sets & prescribe exact backoff adjustments',
     buildPrompt: () => {
       const liveEx = (state.activeWorkout || []).map(ex => {
-        const done = (ex.sets || []).filter(s => s.done).map((s, i) => `Set ${i+1} DONE: ${s.actualWeight}x${s.actualReps} @RPE ${s.actualRpe} (Target was ${s.targetLoad}x${s.targetReps} @${s.targetRpe})`).join(' | ');
+        const exName = ex.exercise || ex.name || 'Movement';
+        const done = (ex.sets || []).filter(s => s.done).map((s, i) => `Set ${i+1} DONE: ${s.actualWeight}x${s.actualReps}r @${s.actualRpe} (Target: ${s.targetLoad}x${s.targetReps}r @${s.targetRpe})`).join(' | ');
         const rem = (ex.sets || []).filter(s => !s.done).length;
-        return `- ${ex.name}: ${done || 'None logged'} (${rem} sets remaining)`;
+        return `- ${exName}: ${done || 'None logged'} (${rem} sets remaining)`;
       }).join('\n');
-      return `Analyze my live intra-workout performance so far:\n${liveEx || 'No sets completed yet.'}\n\nDid I overshoot target RPE or underperform? Tell me whether to keep current backoff weights, apply a -5% load drop off logged weight, or scrub a remaining backoff set to protect my Time-to-Peak curve.`;
+      return `Analyze my live intra-workout performance so far:\n${liveEx || 'No sets completed yet.'}\n\nGive me an immediate **Action Plan** for my remaining sets: keep current backoff weights, apply a -5% load drop off logged weight, or trim a remaining set to protect recovery.`;
     }
   },
   {
@@ -4883,16 +4940,16 @@ const COACH_PIPELINES = [
     label: '📊 Run Block Diagnostic Report',
     desc: 'Time-to-Peak (TTP), e1RM deltas & Stimulus-to-Fatigue audit',
     buildPrompt: () => {
-      return `Run an End-of-Block Executive Diagnostic Report based on my telemetry.\nAnalyze:\n1. e1RM progression trends and estimated Time-to-Peak (TTP) exposure window.\n2. Stimulus-to-Fatigue efficiency (how session RPE/duration correlated with readiness).\n3. Actionable recommendation: Should I extend the current block, trigger a 1-2 week resensitization Pivot, or transition phases?`;
+      return `Run an End-of-Block Executive Diagnostic Report based on my telemetry.\nStructure with:\n1. **Verdict & Next Move** (extend block, trigger a 1-week deload/pivot, or transition phases).\n2. **e1RM & Progression Audit** (highlight strongest gainers and stalled lifts).\n3. **Fatigue & Readiness Efficiency** (how session RPE/duration correlated with readiness & BW trend).`;
     }
   },
   {
     id: 'architect_block',
     label: '🏗️ Architect Next Mesocycle Block',
-    desc: 'Generate a block blueprint using your active Doctrine & Schemes',
+    desc: 'Generate a block blueprint using your active Doctrine & Protocols',
     buildPrompt: () => {
-      const schemes = typeof SCHEME_MATRIX !== 'undefined' ? Object.keys(SCHEME_MATRIX).join(', ') : 'Top Set + Backoffs, Reverse Pyramid, Straight Sets, Wave Loading, Cluster, Repeats';
-      return `Architect my next 4-week Mesocycle Block strictly following my active Coaching Philosophy Doctrine.\nAVAILABLE GLOBAL REP SCHEMES: ${schemes}\n\nOutput a structured blueprint including:\n1. Recommended Block Phase & Progression Mode (Load vs Intensity).\n2. Primary & Secondary slot exercise selections (tailored to rack, barbell, safety squat bar, trap bar, Swiss bar, EZ bar, dip bar, cables, adjustable dumbbells).\n3. Assigned Global Rep Scheme and target RPE bookends for each slot.`;
+      const schemes = Object.keys(state.schemeBlueprints || DEFAULT_SCHEME_BLUEPRINTS || {}).join(', ');
+      return `Architect my next 4-week Mesocycle Block strictly following my active Coaching Philosophy Doctrine.\nAVAILABLE PROGRESSION PROTOCOLS: ${schemes}\n\nOutput a concise blueprint with:\n1. **Block Phase & Progression Mode** (Load vs Intensity Wave).\n2. **Primary & Secondary Slots** tailored to my home gym hardware constraints.\n3. **Assigned Protocol, Rep Range, and Target RPE** (in 0.5 increments) for each slot.`;
     }
   }
 ];
@@ -4901,11 +4958,17 @@ async function askApexCoach(userPrompt, taskType = 'general') {
   const config = getApexCoachConfig();
   if (!config.apiKey) {
     safeCoachToast('Please add your Gemini API Key in Settings first.');
-    return '⚠️ Missing Gemini API Key. Open Settings → APEX AI Coach Engine and paste your API key.';
+    return '⚠️ Missing Gemini API Key. Open Preferences → APEX AI Coach Engine and paste your API key.';
   }
 
   const doctrineObj = COACH_DOCTRINES[config.doctrine] || COACH_DOCTRINES.adaptive;
-  const systemInstruction = `${doctrineObj.prompt}\n\nRULES:\n- Be ruthlessly direct and actionable.\n- Reference my actual logged numbers.\n- NEVER use LaTeX math mode, backslashes, or symbol tags like $\\rightarrow$. Use plain text like '->'.`;
+  const systemInstruction = `${doctrineObj.prompt}
+
+OUTPUT RULES:
+- Lead immediately with a **Bottom-Line Action Plan** (exact weights, rep targets like \`295x8r @8.0\`, or set trims) before brief rationale.
+- Use clean Markdown headers (## / ###), bold callouts, and concise bullet points.
+- Use "lbs" for weights, "295x8r" format for sets, and strict 0.5 RPE increments.
+- NEVER use LaTeX math mode or backslashes; use plain text arrows (->).`;
   
   let telemetry = '';
   try {
@@ -4916,7 +4979,7 @@ async function askApexCoach(userPrompt, taskType = 'general') {
   }
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 45000); // Bumped to 45 seconds
+  const timeoutId = setTimeout(() => controller.abort(), 45000);
 
   try {
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${config.apiKey}`, {
@@ -4929,7 +4992,7 @@ async function askApexCoach(userPrompt, taskType = 'general') {
           role: 'user',
           parts: [{ text: `LIFTER TELEMETRY:\n${telemetry}\n\nTASK: ${taskType}\nDIRECTIVE:\n${userPrompt}` }]
         }],
-        generationConfig: { temperature: 0.3, maxOutputTokens: 1200 }
+        generationConfig: { temperature: 0.3, maxOutputTokens: 2500 }
       })
     });
 
@@ -4971,7 +5034,7 @@ function syncCoachDrawerDOM() {
     : state.coachHistory.map(item => `
         <div class="space-y-1.5 pb-2 border-b border-sub/50">
           <div class="text-[10px] text-accent font-bold uppercase tracking-wider">${item.title}</div>
-          <div class="p-3 bg-input rounded-2xl border border-sub text-slate-200 text-[11px] leading-relaxed whitespace-pre-wrap font-mono">${item.response}</div>
+          <div class="p-3 bg-input rounded-2xl border border-sub text-slate-200 text-[11px] leading-relaxed font-mono">${formatCoachMarkdown(item.response)}</div>
         </div>
       `).join('');
 
@@ -5055,14 +5118,12 @@ window.appActions.sendCustomCoachPrompt = async () => {
   inputEl.value = '';
   state.coachLoading = true;
   
-  // Immediately push user question to history so it's visible in the feed
   state.coachHistory.unshift({ title: `Q: ${text}`, response: 'Analyzing telemetry & generating response...' });
   syncCoachDrawerDOM();
 
   try {
     const reply = await askApexCoach(text, 'custom_query');
     if (reply) {
-      // Update the top history item with the actual AI response
       state.coachHistory[0] = { title: `Q: ${text}`, response: reply };
     }
   } catch (err) {
@@ -5076,16 +5137,19 @@ window.appActions.sendCustomCoachPrompt = async () => {
 function safeCoachToast(msg) {
   if (typeof showToast === 'function') {
     showToast(msg);
+  } else if (window.apexCore && typeof window.apexCore.showToast === 'function') {
+    window.apexCore.showToast(msg);
   } else {
     console.log('[APEX Coach]:', msg);
   }
 }
 
 window.appActions.refreshCoachModels = async () => {
-  safeCoachToast('Syncing live Gemini models from Google...');
+  safeCoachToast('Syncing current Gemini models...');
   const models = await fetchDynamicGeminiModels();
-  safeCoachToast(`Synced ${models.length} Gemini models`);
-  if (typeof safeRender === 'function') safeRender();
+  safeCoachToast(`Synced ${models.length} current Gemini models`);
+  if (typeof window.render === 'function') window.render();
+  if (state.coachDrawerOpen) syncCoachDrawerDOM();
 };
 
 window.appActions = window.appActions || {};
@@ -5094,7 +5158,7 @@ window.appActions.toggleCoachDrawer = (e) => {
   if (e && e.stopPropagation) e.stopPropagation();
   state.coachDrawerOpen = !state.coachDrawerOpen;
   syncCoachDrawerDOM();
-  if (typeof safeRender === 'function') safeRender();
+  if (typeof window.render === 'function') window.render();
 };
 
 window.appActions.clearCoachHistory = () => {
