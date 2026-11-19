@@ -3,7 +3,10 @@ const CACHE_NAME = 'apex-engine-cache-v4.8.4';
 const CORE_ASSETS = [
   './',
   './index.html',
-  './app.js',
+  './core.js',
+  './engine.js',
+  './actions.js',
+  './views.js',
   './manifest.json',
   'https://cdn.tailwindcss.com',
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'
@@ -46,8 +49,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Network-First for core application bundle and HTML to ensure immediate updates
-  const isCoreCode = url.pathname.endsWith('/app.js') || 
+  // Network-First for core application modules and HTML to ensure immediate updates
+  const isCoreCode = url.pathname.endsWith('/core.js') ||
+                     url.pathname.endsWith('/engine.js') ||
+                     url.pathname.endsWith('/actions.js') ||
+                     url.pathname.endsWith('/views.js') ||
                      url.pathname.endsWith('/index.html') || 
                      url.pathname === '/' || 
                      url.pathname.endsWith('/');
