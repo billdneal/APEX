@@ -6,9 +6,9 @@ const CORE_ASSETS = [
   './core.js',
   './engine.js',
   './actions.js',
+  './nutrition.js',
   './views.js',
   './manifest.json',
-  'https://cdn.tailwindcss.com',
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'
 ];
 
@@ -53,6 +53,7 @@ self.addEventListener('fetch', (event) => {
   const isCoreCode = url.pathname.endsWith('/core.js') ||
                      url.pathname.endsWith('/engine.js') ||
                      url.pathname.endsWith('/actions.js') ||
+                     url.pathname.endsWith('/nutrition.js') ||
                      url.pathname.endsWith('/views.js') ||
                      url.pathname.endsWith('/index.html') || 
                      url.pathname === '/' || 

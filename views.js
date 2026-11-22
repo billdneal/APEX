@@ -741,7 +741,7 @@ function renderBottomNav() {
       const validScreens = [
         'calendar', 'logger', 'staging', 'checkin', 'blocks', 'resources', 
         'profile', 'history_review', 'settings', 'about', 'library', 'splits', 
-        'analytics', 'programming_builder', 'prs', 'guide'
+        'analytics', 'programming_builder', 'prs', 'guide', 'nutrition'
       ];
       if (!validScreens.includes(state.screen)) {
         state.screen = 'calendar';
@@ -788,6 +788,7 @@ function renderBottomNav() {
               { id: 'programming_builder', label: 'Protocols' },
               { id: 'splits', label: 'Splits' },
               { id: 'blocks', label: 'Blocks' },
+              { id: 'nutrition', label: 'Nutrition' },
               { id: 'analytics', label: 'Analytics' },
               { id: 'guide', label: 'Guide' },
               { id: 'settings', label: 'Settings' }
@@ -848,6 +849,9 @@ function renderBottomNav() {
                   </button>
                   <button type="button" onclick="appActions.toggleCoachDrawer(event)" class="w-full text-left p-2.5 rounded-xl border border-sub flex items-center gap-2.5 transition ${state.coachDrawerOpen ? 'bg-accent text-white font-bold' : 'bg-card text-slate-200 hover:bg-card-sub'}">
                     <span class="w-4 h-4 shrink-0 inline-flex items-center justify-center ${state.coachDrawerOpen ? 'text-white' : 'text-accent'}">✦</span><span>AI Performance Coach</span>
+                  </button>
+                  <button type="button" onclick="appActions.navigate('nutrition', event)" class="w-full text-left p-2.5 rounded-xl border border-sub flex items-center space-x-2.5 tactile ${state.screen === 'nutrition' ? 'bg-blue-600 text-white font-bold' : 'bg-card-sub text-slate-300 hover:bg-slate-800'}">
+                    <span>🥗</span><span>Nutrition & Macros</span>
                   </button>
                   <button type="button" onclick="appActions.navigate('analytics', event)" class="w-full text-left p-2.5 rounded-xl border border-sub flex items-center space-x-2.5 tactile ${state.screen === 'analytics' ? 'bg-blue-600 text-white font-bold' : 'bg-card-sub text-slate-300 hover:bg-slate-800'}">
                     <span><svg class="w-4 h-4 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></svg></span><span>Performance Analytics</span>
@@ -3918,6 +3922,7 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                   </div>
                 `}
               </div>
+              ${typeof window.renderAdaptiveTdeeCard === 'function' ? window.renderAdaptiveTdeeCard() : ''}
             ` : ''}
 
             ${activeTab === 'fatigue' ? `
@@ -4092,6 +4097,13 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
           </main>
         `;
       }
+      // 16. NUTRITION & MACROS SCREEN (Rendered by nutrition.js)
+      else if (state.screen === 'nutrition') {
+        html += (typeof window.renderNutritionScreen === 'function')
+          ? window.renderNutritionScreen()
+          : `<main class="flex-1 p-6 text-center font-mono text-xs text-slate-400">Nutrition module (nutrition.js) not loaded in index.html.</main>`;
+      }
+
       // ======================================================================
       // MODAL PORTALS (Always Mounted Outside Main Scroller)
       // ======================================================================
@@ -4305,6 +4317,20 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                       </div>
                     </div>
                   `)}
+                </div>
+
+                <div class="bg-input p-3 rounded-2xl border border-sub space-y-1.5">
+                  <div class="flex justify-between items-center text-[10px]">
+                    <span class="text-emerald-300 font-bold uppercase flex items-center space-x-1.5">
+                      <span class="w-4 h-4 rounded bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-[9px]">🥗</span>
+                      <span>Nutrition & Macros</span>
+                    </span>
+                    <span class="text-slate-300 font-bold text-[10px]">${log.nutrition?.totals?.kcal ? log.nutrition.totals.kcal + ' kcal (' + (log.nutrition.totals.p || 0) + 'g P)' : 'Not Logged'}</span>
+                  </div>
+                  <button type="button" onclick="appActions.openNutritionForDate('${k}')" class="w-full py-2 bg-card-sub hover:bg-slate-900 border border-sub text-emerald-300 rounded-xl font-bold text-[10px] flex items-center justify-center space-x-1.5 tactile">
+                    <span>${log.nutrition?.totals?.kcal ? 'View / Add Foods' : 'Log Meals & Macros'}</span>
+                    <span>&rarr;</span>
+                  </button>
                 </div>
               </div>
             </div>
