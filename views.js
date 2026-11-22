@@ -561,8 +561,14 @@ window.appActions.removeRpeMatrixSet = function(idx) {
       }
     });
 
+    const latestPt = cleanPoints[cleanPoints.length - 1];
     return `
-      <svg class="w-full h-40 overflow-visible font-mono select-none" viewBox="0 0 ${svgW} ${svgH}">
+      <div class="apex-chart-wrap w-full space-y-1">
+        <div class="flex justify-between items-center px-1 text-[9px] font-mono">
+          <span class="text-slate-500">Tap/hover point to inspect</span>
+          <span class="apex-chart-readout text-accent font-bold">${latestPt.date || latestPt.label}: ${latestPt.val}${unit}</span>
+        </div>
+        <svg class="w-full h-40 overflow-visible font-mono select-none" viewBox="0 0 ${svgW} ${svgH}">
         <line x1="${padL}" y1="${padT}" x2="${svgW - padR}" y2="${padT}" stroke="#334155" stroke-dasharray="3,3" stroke-width="1" />
         <line x1="${padL}" y1="${padT + plotH / 2}" x2="${svgW - padR}" y2="${padT + plotH / 2}" stroke="#334155" stroke-dasharray="3,3" stroke-width="1" />
         <line x1="${padL}" y1="${padT + plotH}" x2="${svgW - padR}" y2="${padT + plotH}" stroke="#475569" stroke-width="1.5" />
@@ -573,8 +579,16 @@ window.appActions.removeRpeMatrixSet = function(idx) {
         <text x="${padL - 6}" y="${padT + plotH + 3}" fill="#94a3b8" font-size="8" text-anchor="end">${Math.round(minV)}${unit}</text>
 
         <polyline fill="none" stroke="${strokeColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" points="${ptsStr}" />
+        ${coords.map(c => `
+          <circle cx="${c.x}" cy="${c.y}" r="3.5" fill="var(--card-bg, #0e1524)" stroke="${strokeColor}" stroke-width="2" class="cursor-pointer"
+            onclick="const r=this.closest('.apex-chart-wrap')?.querySelector('.apex-chart-readout'); if(r) r.innerText='${c.p.date || c.p.label}: ${c.p.val}${unit}';"
+            onmouseenter="const r=this.closest('.apex-chart-wrap')?.querySelector('.apex-chart-readout'); if(r) r.innerText='${c.p.date || c.p.label}: ${c.p.val}${unit}';">
+            <title>${c.p.date || c.p.label}: ${c.p.val}${unit}</title>
+          </circle>
+        `).join('')}
         ${xTicks}
-      </svg>
+        </svg>
+      </div>
     `;
   }
 
@@ -702,11 +716,11 @@ function renderBottomNav() {
       icon: `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="20" x2="6" y2="16"></line><line x1="12" y1="20" x2="12" y2="10"></line><line x1="18" y1="20" x2="18" y2="4"></line></svg>`
     },
     {
-        id: 'settings',
-        label: 'Settings',
-        action: "appActions.navigate('settings', event)",
-        active: cur === 'settings',
-        icon: `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>`
+        id: 'nutrition',
+        label: 'Nutrition',
+        action: "appActions.navigate('nutrition', event)",
+        active: cur === 'nutrition',
+        icon: `<svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></svg>`
       },
       {
         id: 'coach',
@@ -946,6 +960,15 @@ function renderBottomNav() {
                 </span>
               `;
             }
+            if (log?.nutrition?.totals?.kcal > 0) {
+              backBadges += `
+                <span class="w-[19px] h-[19px] sm:w-[22px] sm:h-[22px] rounded-md bg-slate-800/95 border border-slate-700/80 flex items-center justify-center text-slate-400 shrink-0" title="Nutrition: ${log.nutrition.totals.kcal} kcal (${log.nutrition.totals.p || 0}g P)">
+                  <svg class="w-3 h-3 sm:w-3.5 sm:h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>
+                  </svg>
+                </span>
+              `;
+            }
 
             let frontBadge = '';
             if (hasWorkoutEntry) {
@@ -1026,6 +1049,14 @@ function renderBottomNav() {
               </svg>
             </span>
             <span>Workout</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <span class="w-4 h-4 rounded-md bg-slate-800/95 border border-slate-700/80 flex items-center justify-center text-slate-400">
+              <svg class="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>
+              </svg>
+            </span>
+            <span>Nutrition</span>
           </div>
               </div>
             </div>
@@ -1969,7 +2000,7 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
     }
 
           return `
-            <div class="bg-card-sub rounded-2xl border ${isDensity ? 'border-blue-700/80 shadow-lg' : 'border-sub'} p-3 space-y-2 relative shadow-md">
+            <div id="active-ex-card-${exIdx}" class="bg-card-sub rounded-2xl border ${isDensity ? 'border-blue-700/80 shadow-lg' : 'border-sub'} p-3 space-y-2 relative shadow-md scroll-mt-24">
               <div class="flex justify-between items-start border-b border-sub pb-1.5 cursor-pointer" onclick="appActions.toggleCardCollapse(${exIdx})">
                 <div class="flex items-center space-x-2">
                   <span class="text-xs text-slate-400">${isCollapsed ? '▶' : '▼'}</span>
@@ -2154,15 +2185,42 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
 
         html += `
           <main class="flex-1 min-h-0 overflow-y-auto space-y-3 max-w-6xl mx-auto w-full pr-0.5" onclick="appActions.closeCardMenu()">
-            <div class="sticky top-0 z-30 bg-card/95 backdrop-blur-md border border-sub p-2.5 rounded-2xl flex justify-between items-center text-[10px] md:text-xs font-mono shadow-xl w-full">
-              <div class="flex items-center space-x-2">
-                <span class="text-slate-400 font-semibold">⏱ Session:</span>
-                <span id="workout-elapsed-time" class="text-slate-200 font-bold">${fmtTime(state.sessionSecs)}</span>
+            <div class="sticky top-0 z-30 bg-card/95 backdrop-blur-md border border-sub p-2.5 rounded-2xl space-y-2 text-[10px] md:text-xs font-mono shadow-xl w-full">
+              <div class="flex flex-wrap justify-between items-center gap-2">
+                <div class="flex items-center space-x-2">
+                  <span class="text-slate-400 font-semibold">Session:</span>
+                  <span id="workout-elapsed-time" class="text-slate-200 font-bold">${fmtTime(state.sessionSecs)}</span>
+                </div>
+                <div class="flex items-center space-x-2.5">
+                  ${state.restCountdownTarget > 0 ? `
+                    <div class="flex items-center space-x-1 bg-input px-2 py-0.5 rounded-xl border border-accent/50">
+                      <span class="text-[9px] text-slate-400 uppercase">Target:</span>
+                      <span id="workout-rest-countdown" class="font-black text-xs ${state.restCountdownSecs > 0 ? 'text-accent' : 'text-emerald-400 animate-pulse'}">${state.restCountdownSecs > 0 ? fmtTime(state.restCountdownSecs) : 'GO!'}</span>
+                      <button type="button" onclick="appActions.adjustRestCountdown(-15)" class="px-1 text-[9px] text-slate-400 hover:text-white">-15</button>
+                      <button type="button" onclick="appActions.adjustRestCountdown(15)" class="px-1 text-[9px] text-slate-400 hover:text-white">+15</button>
+                      <button type="button" onclick="appActions.clearRestCountdown()" class="px-1 text-[9px] text-slate-500 hover:text-rose-400">✕</button>
+                    </div>
+                  ` : ''}
+                  <div class="flex items-center space-x-1.5">
+                    <span class="text-slate-400 font-semibold">Rest:</span>
+                    <span id="workout-rest-display" class="text-amber-400 font-bold text-sm">${fmtTime(state.restStopwatchSecs)}</span>
+                  </div>
+                </div>
               </div>
-              <div class="flex items-center space-x-2">
-                <span class="text-slate-400 font-semibold">Rest:</span>
-                <span id="workout-rest-display" class="text-amber-400 font-bold text-sm">${fmtTime(state.restStopwatchSecs)}</span>
-              </div>
+
+              ${(state.activeWorkout || []).length > 1 ? `
+                <div class="flex items-center gap-1.5 overflow-x-auto pb-0.5 border-t border-sub/50 pt-1.5" style="scrollbar-width: none;">
+                  ${(state.activeWorkout || []).map((ex, idx) => {
+                    const allDone = (ex.sets || []).length > 0 && (ex.sets || []).every(s => s && s.done);
+                    return `
+                      <button type="button" onclick="document.getElementById('active-ex-card-${idx}')?.scrollIntoView({ behavior: 'smooth', block: 'start' })"
+                        class="px-2 py-0.5 rounded-lg border text-[9.5px] font-bold whitespace-nowrap shrink-0 tactile ${allDone ? 'bg-emerald-950/60 border-emerald-700/70 text-emerald-300' : 'bg-input border-sub text-slate-300 hover:border-accent hover:text-white'}">
+                        ${allDone ? '✓ ' : ''}${ex.exercise}
+                      </button>
+                    `;
+                  }).join('')}
+                </div>
+              ` : ''}
             </div>
 
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 w-full items-start">${exercisesHtml}</div>
@@ -4983,8 +5041,20 @@ function buildCoachTelemetryContext() {
       return ev ? `- ${exName} (${bracket}r): ${ev.status} -> ${ev.coachingCue}` : null;
     }).filter(Boolean).join('\n');
 
+  // 7-Day Nutrition & Adaptive TDEE Summary
+  const nut7 = recentDates.slice(-7)
+    .map(d => state.dayLogs[d]?.nutrition?.totals)
+    .filter(t => t && Number(t.kcal) >= 500);
+  const avg7Kcal = nut7.length ? Math.round(nut7.reduce((s, t) => s + Number(t.kcal), 0) / nut7.length) : 0;
+  const avg7P = nut7.length ? Math.round(nut7.reduce((s, t) => s + Number(t.p || 0), 0) / nut7.length) : 0;
+  const tdeeSnap = window.apexCore?.computeAdaptiveTdee ? window.apexCore.computeAdaptiveTdee(21) : null;
+  const nutLine = (avg7Kcal > 0 || tdeeSnap?.ready)
+    ? `NUTRITION & ENERGY BALANCE (7D): Avg Intake=${avg7Kcal || '-'} kcal/day, Avg Protein=${avg7P || '-'}g/day${tdeeSnap?.ready ? ` | Adaptive TDEE=${tdeeSnap.estimatedTdee} kcal/day (BW ${tdeeSnap.weeklyBwDelta >= 0 ? '+' : ''}${tdeeSnap.weeklyBwDelta} lbs/wk)` : ''}`
+    : '';
+
   return [
     `LIFTER PROFILE: Age ${state.profile?.age || 40}, Skill: ${state.profile?.skillLevel || 'Advanced'}, 7D BW Trend: ${bwTrendStr}`,
+    nutLine,
     `ANCHOR e1RMs: ${e1rmSnap || 'None'}`,
     `ACTIVE BLOCK: Phase: ${pos.phase} | Week ${pos.week} of ${pos.block?.weeks || 3} (Mode: ${pos.block?.progressionMode || 'intensity'})`,
     `PHASE TARGET REP RANGES (${pos.phase}): ${repTargetsStr}`,

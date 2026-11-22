@@ -252,6 +252,41 @@
       if (typeof window.render === 'function') window.render();
     },
 
+    stepNutritionDate(deltaDays) {
+      const cur = getSelectedDateKey();
+      const [y, m, d] = cur.split('-').map(Number);
+      const dt = new Date(y, (m || 1) - 1, (d || 1) + Number(deltaDays));
+      const nextKey = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+      state.nutritionDateKey = nextKey;
+      if (typeof window.render === 'function') window.render();
+    },
+
+    copyYesterdayMeal(slot) {
+      const curKey = getSelectedDateKey();
+      const [y, m, d] = curKey.split('-').map(Number);
+      const prevDt = new Date(y, (m || 1) - 1, (d || 1) - 1);
+      const prevKey = `${prevDt.getFullYear()}-${String(prevDt.getMonth() + 1).padStart(2, '0')}-${String(prevDt.getDate()).padStart(2, '0')}`;
+      const prevEntries = (state.dayLogs?.[prevKey]?.nutrition?.entries || [])
+        .filter(e => normalizeMealSlot(e.meal) === slot);
+
+      if (!prevEntries.length) {
+        toast(`No ${slot.toLowerCase()} entries found on ${prevKey}.`);
+        return;
+      }
+
+      const curNut = getDayNutrition(curKey);
+      prevEntries.forEach((e, idx) => {
+        curNut.entries.push({
+          ...e,
+          id: 'copy_' + Date.now() + '_' + idx + '_' + Math.floor(Math.random() * 1000),
+          ts: Date.now()
+        });
+      });
+      recalcDayTotals(curKey);
+      toast(`Copied ${prevEntries.length} ${slot.toLowerCase()} item(s) from ${prevKey}`);
+      saveAndSync();
+    },
+
     setNutritionView(viewName, mealSlot = null) {
       stopBarcodeScanner();
       state.nutritionUi.view = viewName;
@@ -673,9 +708,14 @@
                 <b class="text-accent">${Math.round(sub.kcal)} kcal</b> • <span class="text-blue-300">${Math.round(sub.p)}P</span> / <span class="text-emerald-300">${Math.round(sub.c)}C</span> / <span class="text-amber-300">${Math.round(sub.f)}F</span>
               </div>
             </div>
-            <button type="button" onclick="appActions.setNutritionView('add', '${slot}')" class="px-3 py-1 bg-input hover:bg-blue-600 hover:text-white border border-sub text-accent font-bold rounded-xl text-[10px] tactile">
-              + Add
-            </button>
+            <div class="flex items-center space-x-1.5">
+              <button type="button" onclick="appActions.copyYesterdayMeal('${slot}')" title="Copy yesterday's ${slot}" class="px-2 py-1 bg-input hover:bg-slate-800 border border-sub text-slate-400 hover:text-white font-bold rounded-xl text-[9.5px] tactile">
+                ↺ Prev
+              </button>
+              <button type="button" onclick="appActions.setNutritionView('add', '${slot}')" class="px-3 py-1 bg-input hover:bg-blue-600 hover:text-white border border-sub text-accent font-bold rounded-xl text-[10px] tactile">
+                + Add
+              </button>
+            </div>
           </div>
           ${items.length ? `
             <div class="space-y-1.5">
@@ -708,45 +748,64 @@
             <span>Nutrition</span>
           </span>
           <div class="flex items-center space-x-1.5">
-            <input type="date" value="${dKey}" onchange="appActions.setNutritionDate(this.value)" class="bg-input border border-sub rounded-xl px-2 py-1 text-[10px] text-white font-mono">
+            <div class="flex items-center space-x-1">
+              <button type="button" onclick="appActions.stepNutritionDate(-1)" class="w-6 h-6 bg-input border border-sub rounded-lg text-slate-300 hover:text-white flex items-center justify-center text-xs tactile">&lsaquo;</button>
+              <input type="date" value="${dKey}" onchange="appActions.setNutritionDate(this.value)" class="bg-input border border-sub rounded-xl px-2 py-1 text-[10px] text-white font-mono">
+              <button type="button" onclick="appActions.stepNutritionDate(1)" class="w-6 h-6 bg-input border border-sub rounded-lg text-slate-300 hover:text-white flex items-center justify-center text-xs tactile">&rsaquo;</button>
+            </div>
             <button type="button" onclick="appActions.setNutritionView('${ui.view === 'targets' ? 'diary' : 'targets'}')" class="px-2.5 py-1 rounded-xl border text-[10px] font-bold tactile ${ui.view === 'targets' ? 'bg-accent text-black border-accent' : 'bg-input border-sub text-slate-200 hover:border-accent'}">
               ${ui.view === 'targets' ? '← Diary' : 'Targets'}
             </button>
           </div>
         </div>
 
-        <!-- Compact Daily Macro Summary Card -->
-        <div class="bg-card-sub p-3.5 rounded-3xl border border-sub space-y-2.5 font-mono text-xs shadow-xl">
-          <div class="flex justify-between items-end">
-            <div>
-              <div class="text-[9px] text-slate-400 uppercase font-bold">Calories (${NUTRITION_GOALS[targets.mode]?.label || 'Maintain'})</div>
-              <div class="text-xl font-black text-white">${nut.totals.kcal} <span class="text-xs font-normal text-slate-400">/ ${targets.kcal}</span></div>
-            </div>
-            <div class="text-right">
-              <div class="text-[9px] text-slate-400 uppercase font-bold">${remKcal >= 0 ? 'Remaining' : 'Over'}</div>
-              <div class="text-sm font-black ${remKcal >= 0 ? 'text-emerald-400' : 'text-rose-400'}">${Math.abs(remKcal)} kcal</div>
-            </div>
-          </div>
+        <!-- Compact Daily Macro Summary Card with SVG Progress Ring -->
+        ${(() => {
+          const kcalPct = pct(nut.totals.kcal, targets.kcal);
+          const ringR = 36;
+          const ringC = Math.round(2 * Math.PI * ringR * 10) / 10;
+          const ringOff = Math.round(ringC * (1 - (kcalPct / 100)) * 10) / 10;
+          const ringStroke = remKcal < 0 ? '#f43f5e' : 'var(--accent-primary, #38bdf8)';
+          return `
+            <div class="bg-card-sub p-3.5 rounded-3xl border border-sub font-mono text-xs shadow-xl">
+              <div class="flex items-center gap-3.5">
+                <!-- SVG Calorie Ring -->
+                <div class="relative w-24 h-24 shrink-0 flex items-center justify-center">
+                  <svg class="w-24 h-24 -rotate-90" viewBox="0 0 88 88">
+                    <circle cx="44" cy="44" r="${ringR}" fill="none" stroke="rgba(148,163,184,0.18)" stroke-width="7" />
+                    <circle cx="44" cy="44" r="${ringR}" fill="none" stroke="${ringStroke}" stroke-width="7" stroke-linecap="round" stroke-dasharray="${ringC}" stroke-dashoffset="${ringOff}" />
+                  </svg>
+                  <div class="absolute inset-0 flex flex-col items-center justify-center text-center leading-tight">
+                    <span class="text-sm font-black ${remKcal >= 0 ? 'text-white' : 'text-rose-400'}">${Math.abs(remKcal)}</span>
+                    <span class="text-[8px] uppercase text-slate-400 font-bold">${remKcal >= 0 ? 'kcal left' : 'over'}</span>
+                  </div>
+                </div>
 
-          <div class="w-full h-2 bg-input rounded-full overflow-hidden border border-sub">
-            <div class="h-full bg-accent rounded-full transition-all" style="width: ${pct(nut.totals.kcal, targets.kcal)}%"></div>
-          </div>
-
-          <div class="grid grid-cols-3 gap-2">
-            <div class="bg-input p-2 rounded-2xl border border-sub space-y-1">
-              <div class="flex justify-between text-[9px]"><span class="text-blue-300 font-bold">Protein</span><span>${nut.totals.p}/${targets.p}g</span></div>
-              <div class="w-full h-1.5 bg-card-sub rounded-full overflow-hidden"><div class="h-full bg-blue-500" style="width: ${pct(nut.totals.p, targets.p)}%"></div></div>
+                <!-- Right Side: Totals + P/C/F Bars -->
+                <div class="flex-1 min-w-0 space-y-2">
+                  <div class="flex justify-between items-baseline">
+                    <span class="text-[9px] text-slate-400 uppercase font-bold">${NUTRITION_GOALS[targets.mode]?.label || 'Maintain'}</span>
+                    <span class="text-[11px] font-bold text-white">${nut.totals.kcal} <span class="text-slate-400 font-normal">/ ${targets.kcal}</span></span>
+                  </div>
+                  <div class="space-y-1.5">
+                    <div class="space-y-0.5">
+                      <div class="flex justify-between text-[9px]"><span class="text-blue-300 font-bold">Protein</span><span class="text-slate-200">${nut.totals.p} / ${targets.p}g</span></div>
+                      <div class="w-full h-1.5 bg-input rounded-full overflow-hidden"><div class="h-full bg-blue-500 rounded-full" style="width: ${pct(nut.totals.p, targets.p)}%"></div></div>
+                    </div>
+                    <div class="space-y-0.5">
+                      <div class="flex justify-between text-[9px]"><span class="text-emerald-300 font-bold">Carbs</span><span class="text-slate-200">${nut.totals.c} / ${targets.c}g</span></div>
+                      <div class="w-full h-1.5 bg-input rounded-full overflow-hidden"><div class="h-full bg-emerald-500 rounded-full" style="width: ${pct(nut.totals.c, targets.c)}%"></div></div>
+                    </div>
+                    <div class="space-y-0.5">
+                      <div class="flex justify-between text-[9px]"><span class="text-amber-300 font-bold">Fat</span><span class="text-slate-200">${nut.totals.f} / ${targets.f}g</span></div>
+                      <div class="w-full h-1.5 bg-input rounded-full overflow-hidden"><div class="h-full bg-amber-500 rounded-full" style="width: ${pct(nut.totals.f, targets.f)}%"></div></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div class="bg-input p-2 rounded-2xl border border-sub space-y-1">
-              <div class="flex justify-between text-[9px]"><span class="text-emerald-300 font-bold">Carbs</span><span>${nut.totals.c}/${targets.c}g</span></div>
-              <div class="w-full h-1.5 bg-card-sub rounded-full overflow-hidden"><div class="h-full bg-emerald-500" style="width: ${pct(nut.totals.c, targets.c)}%"></div></div>
-            </div>
-            <div class="bg-input p-2 rounded-2xl border border-sub space-y-1">
-              <div class="flex justify-between text-[9px]"><span class="text-amber-300 font-bold">Fat</span><span>${nut.totals.f}/${targets.f}g</span></div>
-              <div class="w-full h-1.5 bg-card-sub rounded-full overflow-hidden"><div class="h-full bg-amber-500" style="width: ${pct(nut.totals.f, targets.f)}%"></div></div>
-            </div>
-          </div>
-        </div>
+          `;
+        })()}
 
         ${ui.view === 'diary' ? `
           <!-- Single-Line AI Quick-Log Bar -->

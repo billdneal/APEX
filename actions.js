@@ -286,6 +286,24 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
         state.restStopwatchSecs = Math.max(0, Math.floor((Date.now() - state.restStart) / 1000));
         const rEl = document.getElementById('workout-rest-display');
         if (rEl) rEl.innerText = fmtTime(state.restStopwatchSecs);
+
+        if (state.restCountdownTarget && state.restCountdownTarget > 0) {
+          const rem = Math.max(0, Math.ceil((state.restCountdownTarget - Date.now()) / 1000));
+          state.restCountdownSecs = rem;
+          const cEl = document.getElementById('workout-rest-countdown');
+          if (cEl) {
+            cEl.innerText = rem > 0 ? fmtTime(rem) : 'GO!';
+            if (rem === 0) {
+              cEl.classList.remove('text-accent');
+              cEl.classList.add('text-emerald-400', 'animate-pulse');
+            }
+          }
+          if (rem === 0 && !state.restCountdownChimed) {
+            state.restCountdownChimed = true;
+            playAudioBeep(880, 0.25);
+            triggerHaptic([60, 40, 60]);
+          }
+        }
       }, 1000);
     }
   }
@@ -1333,6 +1351,14 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
       if (rEl) rEl.innerText = '0:00';
 
       if (s.done) {
+        // Protocol-Driven Rest Countdown
+        const bpObj = state.schemeBlueprints?.[ex.scheme] || DEFAULT_SCHEME_BLUEPRINTS?.[ex.scheme] || {};
+        const protoRest = Number(s.targetTime) > 0
+          ? Number(s.targetTime)
+          : (Number(bpObj.restSeconds) || (ex.tier === 'Assistance' ? 90 : 120));
+        state.restCountdownSecs = protoRest;
+        state.restCountdownTarget = Date.now() + (protoRest * 1000);
+        state.restCountdownChimed = false;
         triggerHaptic(40);
         if (s.lapRunning) {
           clearInterval(s.lapTimerObj);
@@ -1456,6 +1482,29 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
     showToast("Applied -5% load drop off logged weight");
     safeRender();
   },
+
+    adjustRestCountdown(deltaSecs) {
+      const now = Date.now();
+      const base = (state.restCountdownTarget && state.restCountdownTarget > now) ? state.restCountdownTarget : now;
+      const nextTarget = Math.max(now, base + (Number(deltaSecs) * 1000));
+      state.restCountdownTarget = nextTarget;
+      state.restCountdownSecs = Math.max(0, Math.ceil((nextTarget - now) / 1000));
+      state.restCountdownChimed = state.restCountdownSecs === 0;
+      const cEl = document.getElementById('workout-rest-countdown');
+      if (cEl) {
+        cEl.innerText = state.restCountdownSecs > 0 ? fmtTime(state.restCountdownSecs) : 'GO!';
+        cEl.classList.remove('text-emerald-400', 'animate-pulse');
+        cEl.classList.add('text-accent');
+      }
+      safeRender();
+    },
+
+    clearRestCountdown() {
+      state.restCountdownTarget = 0;
+      state.restCountdownSecs = 0;
+      state.restCountdownChimed = true;
+      safeRender();
+    },
 
     dismissFatigueWarning(exIdx) {
       if (state.activeWorkout[exIdx]) {
