@@ -1400,6 +1400,271 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
   const rawSets = _rawBuildSets(scheme, e1rm, factor, tier, exName, mods, opts);
   return enforceHardwareConstraints(rawSets, exName, mods, (Number(e1rm) || 135) * (Number(factor) || 1.0));
 }
+
+    // =========================================================================
+    // PASS 1 ANALYTICS: SFR LEADERBOARD, TIME-TO-PEAK, CALORIE-AWARE VOLUME & GHOST PACER
+    // =========================================================================
+    function getMovementSorenessDomain(exName = '', category = '') {
+      const text = `${exName} ${category}`.toLowerCase();
+      if (/(squat|deadlift|rdl|sldl|lunge|leg|calf|glute|hip|knee)/.test(text)) return 'legSoreness';
+      if (/(bench|press|dip|push|tricep|fly|delt|raise|chest)/.test(text)) return 'pushSoreness';
+      if (/(row|pull|curl|lat|shrug|trap|face pull|chin)/.test(text)) return 'pullSoreness';
+      return 'avg';
+    }
+
+    function computePersonalSfrLeaderboard(cutoffEpoch = 0) {
+      const dates = Object.keys(state.dayLogs || {}).sort();
+      const map = {};
+
+      dates.forEach(dKey => {
+        const parts = dKey.split('-').map(Number);
+        if (parts.length < 3) return;
+        const ep = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0).getTime();
+        if (ep < cutoffEpoch) return;
+
+        const dLog = state.dayLogs[dKey];
+        const wk = dLog?.workout;
+        if (!wk || !wk.done || !Array.isArray(wk.exercises)) return;
+
+        // Look up next calendar day's localized soreness
+        const nextDate = new Date(parts[0], parts[1] - 1, parts[2] + 1);
+        const nextKey = window.apexCore?.formatIsoDate
+          ? window.apexCore.formatIsoDate(nextDate.getFullYear(), nextDate.getMonth(), nextDate.getDate())
+          : '';
+        const nextMetrics = state.dayLogs?.[nextKey]?.recovery?.metrics || null;
+        const srpe = Number(wk.srpe) || 7.5;
+
+        wk.exercises.forEach(exObj => {
+          if (!exObj || !exObj.exercise) return;
+          const doneSets = (exObj.sets || []).filter(s => s && s.done && Number(s.actualWeight) > 0 && Number(s.actualReps) > 0);
+          if (!doneSets.length) return;
+
+          const cleanMods = window.apexCore?.sanitizeModifiers ? window.apexCore.sanitizeModifiers(exObj.modifiers || []) : (exObj.modifiers || []);
+          const vKey = window.apexCore?.getVariantKey ? window.apexCore.getVariantKey(exObj.exercise, cleanMods) : exObj.exercise;
+
+          let topE1 = 0;
+          doneSets.forEach(s => {
+            const c = Math.round(Number(s.actualWeight) / (getPct(s.actualReps, s.actualRpe || 8.0) / 100));
+            if (c > topE1) topE1 = c;
+          });
+          if (topE1 <= 0) return;
+
+          const domain = getMovementSorenessDomain(exObj.exercise, exObj.category);
+          let nextSoreness = 3.8; // neutral default if next-day check-in wasn't logged
+          if (nextMetrics) {
+            if (domain === 'avg') {
+              nextSoreness = ((Number(nextMetrics.pushSoreness) || 4) + (Number(nextMetrics.pullSoreness) || 4) + (Number(nextMetrics.legSoreness) || 4)) / 3;
+            } else {
+              nextSoreness = Number(nextMetrics[domain]) || 3.8;
+            }
+          }
+
+          if (!map[vKey]) {
+            map[vKey] = {
+              variant: vKey,
+              sessions: 0,
+              startE1: topE1,
+              latestE1: topE1,
+              peakE1: topE1,
+              sorenessSum: 0,
+              srpeSum: 0
+            };
+          }
+          const rec = map[vKey];
+          rec.sessions += 1;
+          rec.latestE1 = topE1;
+          if (topE1 > rec.peakE1) rec.peakE1 = topE1;
+          rec.sorenessSum += nextSoreness;
+          rec.srpeSum += srpe;
+        });
+      });
+
+      return Object.values(map)
+        .filter(r => r.sessions >= 2)
+        .map(r => {
+          const avgSoreness = Math.round((r.sorenessSum / r.sessions) * 10) / 10;
+          const avgSrpe = Math.round((r.srpeSum / r.sessions) * 10) / 10;
+          const gainLbs = r.peakE1 - r.startE1;
+          const gainPct = r.startE1 > 0 ? (gainLbs / r.startE1) * 100 : 0;
+          // Higher soreness rating (5 = zero DOMS) = lower fatigue cost
+          const fatigueCost = Math.max(1.5, ((6.0 - avgSoreness) * 1.4) + (avgSrpe * 0.45));
+          const rawScore = ((gainPct + 4.0) * (1 + Math.min(r.sessions, 8) * 0.05)) / fatigueCost;
+          const sfrScore = Math.max(10, Math.min(99, Math.round(rawScore * 22)));
+
+          let grade = 'B';
+          let badge = 'bg-blue-500/20 text-blue-300 border-blue-500/50';
+          if (sfrScore >= 80) { grade = 'S'; badge = 'bg-emerald-500/20 text-emerald-300 border-emerald-500/60'; }
+          else if (sfrScore >= 65) { grade = 'A'; badge = 'bg-teal-500/20 text-teal-300 border-teal-500/50'; }
+          else if (sfrScore < 45) { grade = 'C'; badge = 'bg-rose-500/20 text-rose-300 border-rose-500/50'; }
+
+          return {
+            variant: r.variant,
+            sessions: r.sessions,
+            startE1: r.startE1,
+            peakE1: r.peakE1,
+            gainLbs,
+            avgNextDaySoreness: avgSoreness,
+            avgSrpe,
+            sfrScore,
+            grade,
+            badge
+          };
+        })
+        .sort((a, b) => b.sfrScore - a.sfrScore);
+    }
+
+    function computeLiftTimeToPeak(exName, mods = []) {
+      const hist = getLiftHistory(exName, true, mods, true) || [];
+      const valid = hist.filter(h => h && h.topE1 > 0);
+      if (valid.length < 3) {
+        return {
+          peakWeek: null,
+          sampleSessions: valid.length,
+          weekProfile: [],
+          recommendation: `Log at least 3 non-deload sessions of ${exName} to calibrate your personal Time-to-Peak window.`
+        };
+      }
+
+      const byWeek = {};
+      valid.forEach(h => {
+        const w = Math.min(6, Math.max(1, Number(h.week) || 1));
+        if (!byWeek[w]) byWeek[w] = { week: w, sumE1: 0, maxE1: 0, count: 0 };
+        byWeek[w].sumE1 += h.topE1;
+        if (h.topE1 > byWeek[w].maxE1) byWeek[w].maxE1 = h.topE1;
+        byWeek[w].count += 1;
+      });
+
+      const weekProfile = Object.values(byWeek)
+        .sort((a, b) => a.week - b.week)
+        .map(w => ({
+          week: w.week,
+          avgE1: Math.round(w.sumE1 / w.count),
+          maxE1: w.maxE1,
+          count: w.count
+        }));
+
+      let best = weekProfile[0];
+      weekProfile.forEach(wp => {
+        if (wp.avgE1 > best.avgE1) best = wp;
+      });
+
+      return {
+        peakWeek: best.week,
+        sampleSessions: valid.length,
+        weekProfile,
+        recommendation: `${exName} historically peaks in Week ${best.week} (avg ${best.avgE1} lbs e1RM). Plan your deload or pivot after Week ${best.week}.`
+      };
+    }
+
+    function getCalorieAwareVolumeMultiplier() {
+      const allBwDates = Object.keys(state.dayLogs || {})
+        .filter(k => state.dayLogs[k]?.weight && Number(state.dayLogs[k].weight) > 0)
+        .sort();
+
+      if (allBwDates.length < 2) {
+        return {
+          factor: 1.0,
+          state: 'Maintenance',
+          label: 'Maintenance Baseline',
+          badge: 'bg-blue-500/20 text-blue-300 border-blue-500/50',
+          bwVelocity: 0
+        };
+      }
+
+      // Measure bodyweight velocity across the last 21 days
+      const nowMs = Date.now();
+      const recent = allBwDates.filter(k => {
+        const [y, m, d] = k.split('-').map(Number);
+        return (nowMs - new Date(y, m - 1, d).getTime()) <= (21 * 86400000);
+      });
+      const sample = recent.length >= 2 ? recent : allBwDates.slice(-7);
+      const firstKey = sample[0];
+      const lastKey = sample[sample.length - 1];
+      const [y1, m1, d1] = firstKey.split('-').map(Number);
+      const [y2, m2, d2] = lastKey.split('-').map(Number);
+      const weeksSpan = Math.max(0.5, (new Date(y2, m2 - 1, d2) - new Date(y1, m1 - 1, d1)) / (7 * 86400000));
+      const bwDelta = Number(state.dayLogs[lastKey].weight) - Number(state.dayLogs[firstKey].weight);
+      const bwVelocity = Math.round((bwDelta / weeksSpan) * 10) / 10;
+
+      if (bwVelocity <= -0.5) {
+        return {
+          factor: 0.85,
+          state: 'Deficit',
+          label: `Deficit Adjusted (-15% MRV • ${bwVelocity} lbs/wk)`,
+          badge: 'bg-amber-500/20 text-amber-300 border-amber-500/50',
+          bwVelocity
+        };
+      }
+      if (bwVelocity >= 0.4) {
+        return {
+          factor: 1.08,
+          state: 'Surplus',
+          label: `Surplus Boost (+8% MRV • +${bwVelocity} lbs/wk)`,
+          badge: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50',
+          bwVelocity
+        };
+      }
+      return {
+        factor: 1.0,
+        state: 'Maintenance',
+        label: `Maintenance Baseline (${bwVelocity >= 0 ? '+' : ''}${bwVelocity} lbs/wk)`,
+        badge: 'bg-blue-500/20 text-blue-300 border-blue-500/50',
+        bwVelocity
+      };
+    }
+
+    function getGhostPacerForLift(exName, mods = [], nextSetLoad = 0, nextSetRpe = 8.5, livePeakE1 = 0) {
+      const hist = getLiftHistory(exName, true, mods, true) || [];
+      const cutoff90 = Date.now() - (90 * 86400000);
+      const recent90 = hist.filter(h => {
+        if (!h || !h.topE1 || h.topE1 <= 0) return false;
+        const [y, m, d] = (h.date || '').split('-').map(Number);
+        return new Date(y, m - 1, d).getTime() >= cutoff90;
+      });
+
+      const avg90E1 = recent90.length
+        ? Math.round(recent90.reduce((sum, h) => sum + h.topE1, 0) / recent90.length)
+        : 0;
+      const cleanMods = window.apexCore?.sanitizeModifiers ? window.apexCore.sanitizeModifiers(mods) : mods;
+      const vKey = window.apexCore?.getVariantKey ? window.apexCore.getVariantKey(exName, cleanMods) : exName;
+      const prE1 = Number(state.e1rms?.[vKey] || state.e1rms?.[exName] || 0);
+
+      if (avg90E1 <= 0 && prE1 <= 0) return null;
+
+      const targetBenchmark = (livePeakE1 > 0 && livePeakE1 >= avg90E1 && prE1 > livePeakE1) ? prE1 : (avg90E1 || prE1);
+      const isChasingPr = (targetBenchmark === prE1 && livePeakE1 >= avg90E1);
+      const load = Number(nextSetLoad) || 0;
+      const rpe = roundRpe(nextSetRpe || 8.5);
+
+      let repsNeeded = null;
+      if (load > 0 && targetBenchmark > 0) {
+        for (let r = 1; r <= 20; r++) {
+          const est = Math.round(load / (getPct(r, rpe) / 100));
+          if (est > targetBenchmark) {
+            repsNeeded = r;
+            break;
+          }
+        }
+      }
+
+      const deltaVs90 = (livePeakE1 > 0 && avg90E1 > 0) ? (livePeakE1 - avg90E1) : null;
+      let cue = '';
+      if (deltaVs90 !== null && deltaVs90 > 0) {
+        cue = `Ahead of 90D Avg (+${deltaVs90} lbs)` + (repsNeeded && isChasingPr ? ` • PR: ${load}x${repsNeeded}r @${rpe.toFixed(1)}` : '');
+      } else if (repsNeeded) {
+        cue = `Beat ${isChasingPr ? 'PR' : '90D Avg'} (${targetBenchmark} lbs): ${load}x${repsNeeded}r @${rpe.toFixed(1)}`;
+      } else {
+        cue = `90D Avg: ${avg90E1 || '—'} lbs • PR: ${prE1 || '—'} lbs`;
+      }
+
+      return { avg90E1, prE1, deltaVs90, repsNeeded, cue };
+    }
+
+    window.apexCore.computePersonalSfrLeaderboard = computePersonalSfrLeaderboard;
+    window.apexCore.computeLiftTimeToPeak = computeLiftTimeToPeak;
+    window.apexCore.getCalorieAwareVolumeMultiplier = getCalorieAwareVolumeMultiplier;
+    window.apexCore.getGhostPacerForLift = getGhostPacerForLift;
+
     window.apexCore.buildSets = buildSets;
     window.apexCore.getActiveBlock = getActiveBlock;
     window.buildSets = buildSets;

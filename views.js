@@ -1,3 +1,8 @@
+
+
+
+JS icon
+views
 // ============================================================================
 // APEX TRAINING ENGINE - PART 4 OF 4: VIEW LAYER, RENDER PIPELINE & BOOTSTRAP
 // Complete Unabridged Production Release v4.6.5-PWA (Full View Architecture)
@@ -1642,6 +1647,11 @@ function renderBottomNav() {
             ? Math.max(0, Math.round(((livePeakE1 - liveLastE1) / livePeakE1) * 100))
             : 0;
 
+          const nextOpenSet = (ex.sets || []).find(s => s && !s.done) || (ex.sets || [])[0] || {};
+          const ghostPacer = (meta.w && meta.r && core.getGhostPacerForLift)
+            ? core.getGhostPacerForLift(ex.exercise, cleanMods, nextOpenSet.actualWeight || nextOpenSet.targetLoad || 0, nextOpenSet.targetRpe || 8.5, livePeakE1)
+            : null;
+
           const setRows = (ex.sets || []).map((s, sIdx) => {
          const isLapActive = s.lapRunning;
 const targetRpenum = roundRpe(s.targetRpe);
@@ -2119,6 +2129,13 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                   ${setRows}
                 </div>
                     
+                    ${ghostPacer ? `
+                      <div class="px-2.5 py-1.5 mt-1 rounded-xl bg-input/70 border border-sub/70 flex items-center justify-between text-[9.5px] font-mono">
+                        <span class="text-slate-400 font-bold uppercase tracking-wider shrink-0">👻 Ghost Pacer</span>
+                        <span class="${ghostPacer.deltaVs90 !== null && ghostPacer.deltaVs90 > 0 ? 'text-emerald-400 font-bold' : 'text-accent font-semibold'} text-right truncate ml-2">${ghostPacer.cue}</span>
+                      </div>
+                    ` : ''}
+
                     <div class="flex justify-between items-center pt-2 mt-1 border-t border-sub/40 font-mono text-[10px]">
                       <button type="button" onclick="appActions.addSet(${exIdx})" class="text-[9px] md:text-xs font-mono text-slate-300 bg-input px-2.5 py-1 rounded-xl border border-sub font-semibold hover:text-white tactile">+ Add Set</button>
                       <div class="flex items-center space-x-2 text-[10px] text-slate-400">
@@ -3553,10 +3570,17 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
 
         const lifterType = state.profile?.lifterType || 'Natural';
         const thresholds = landmarkThresholds[lifterType] || landmarkThresholds.Natural || {};
+        const calMod = core.getCalorieAwareVolumeMultiplier
+          ? core.getCalorieAwareVolumeMultiplier()
+          : { factor: 1.0, state: 'Maintenance', label: 'Maintenance Baseline', badge: 'bg-blue-500/20 text-blue-300 border-blue-500/50', bwVelocity: 0 };
 
         const volumeBarsHtml = muscleGroupTaxonomy.map(m => {
           const sets = Math.round((volScores[m] || 0) * 10) / 10;
-          const { mv = 4, mev = 8, mav = 16, mrv = 22 } = thresholds[m] || {};
+          const baseT = thresholds[m] || { mv: 4, mev: 8, mav: 16, mrv: 22 };
+          const mv = baseT.mv;
+          const mev = baseT.mev;
+          const mav = Math.max(mev + 2, Math.round(baseT.mav * calMod.factor));
+          const mrv = Math.max(mav + 2, Math.round(baseT.mrv * calMod.factor));
           
           let statusBadge = '';
           let barColor = 'bg-blue-500';
@@ -3699,6 +3723,74 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                   </div>
                 </div>
               </div>
+
+              <!-- Lift-Specific Time-to-Peak (TTP) Tracker -->
+              ${(() => {
+                const ttp = core.computeLiftTimeToPeak ? core.computeLiftTimeToPeak(baseName, mods) : null;
+                if (!ttp) return '';
+                return `
+                  <div class="bg-card-sub p-4 rounded-3xl border border-sub space-y-2.5 font-mono text-xs shadow-xl">
+                    <div class="flex justify-between items-center border-b border-sub pb-2">
+                      <div>
+                        <span class="text-[10px] text-accent font-bold uppercase">Lift-Specific Time-to-Peak (TTP)</span>
+                        <div class="text-[9px] text-slate-400">Average e1RM by block week for ${selectedVariant} (${ttp.sampleSessions} sessions)</div>
+                      </div>
+                      ${ttp.peakWeek ? `<span class="px-2.5 py-1 rounded-xl bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 text-[10px] font-bold">Peaks W${ttp.peakWeek}</span>` : ''}
+                    </div>
+                    ${ttp.weekProfile.length ? `
+                      <div class="grid grid-cols-${Math.min(6, Math.max(2, ttp.weekProfile.length))} gap-1.5 text-center">
+                        ${ttp.weekProfile.map(wp => `
+                          <div class="bg-input p-2 rounded-xl border ${wp.week === ttp.peakWeek ? 'border-emerald-500/70 ring-1 ring-emerald-500/40' : 'border-sub'}">
+                            <div class="text-[8.5px] text-slate-400 uppercase font-bold">Week ${wp.week}</div>
+                            <div class="text-xs font-black ${wp.week === ttp.peakWeek ? 'text-emerald-300' : 'text-white'} mt-0.5">${wp.avgE1} lbs</div>
+                            <div class="text-[8px] text-slate-500">${wp.count}x logged</div>
+                          </div>
+                        `).join('')}
+                      </div>
+                    ` : ''}
+                    <div class="text-[10px] text-slate-300 bg-input/60 px-3 py-2 rounded-xl border border-sub/60">
+                      ${ttp.recommendation}
+                    </div>
+                  </div>
+                `;
+              })()}
+
+              <!-- Personal Stimulus-to-Fatigue (SFR) Leaderboard -->
+              ${(() => {
+                const sfrList = core.computePersonalSfrLeaderboard ? core.computePersonalSfrLeaderboard(cutoffEpoch) : [];
+                return `
+                  <div class="bg-card-sub p-4 rounded-3xl border border-sub space-y-2.5 font-mono text-xs shadow-xl">
+                    <div class="flex justify-between items-center border-b border-sub pb-2">
+                      <div>
+                        <span class="text-[10px] text-accent font-bold uppercase">Personal Stimulus-to-Fatigue (SFR) Leaderboard</span>
+                        <div class="text-[9px] text-slate-400">Ranks movement ROI: e1RM progression vs. next-day localized soreness & sRPE</div>
+                      </div>
+                      <span class="text-[9px] text-slate-400 font-bold">${sfrList.length} Ranked</span>
+                    </div>
+                    ${sfrList.length ? `
+                      <div class="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+                        ${sfrList.slice(0, 10).map((item, idx) => `
+                          <div class="bg-input p-2.5 rounded-xl border border-sub flex justify-between items-center text-[10px]">
+                            <div class="min-w-0 pr-2">
+                              <div class="flex items-center space-x-1.5">
+                                <span class="text-slate-500 font-bold">#${idx + 1}</span>
+                                <span class="font-bold text-white truncate">${item.variant}</span>
+                              </div>
+                              <div class="text-[9px] text-slate-400 mt-0.5">
+                                ${item.sessions} sessions • e1RM: <b class="${item.gainLbs >= 0 ? 'text-emerald-400' : 'text-rose-400'}">${item.gainLbs >= 0 ? '+' : ''}${item.gainLbs} lbs</b> • Next-Day Recovery: <b>${item.avgNextDaySoreness}/5</b>
+                              </div>
+                            </div>
+                            <div class="flex items-center space-x-2 shrink-0">
+                              <span class="text-xs font-black text-white">${item.sfrScore}</span>
+                              <span class="px-2 py-0.5 rounded-lg border text-[10px] font-black ${item.badge}">${item.grade}</span>
+                            </div>
+                          </div>
+                        `).join('')}
+                      </div>
+                    ` : `<div class="text-center py-4 text-slate-500 text-[10px]">Log at least 2 sessions of a movement within ${activeTf} to generate your personal SFR rankings.</div>`}
+                  </div>
+                `;
+              })()}
 
               <!-- Interactive 1RM Prediction Engine Section -->
               <div class="bg-card-sub p-4 rounded-3xl border border-sub space-y-3 font-mono text-xs shadow-xl w-full">
@@ -3886,8 +3978,11 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
               <div class="bg-card-sub p-4 rounded-3xl border border-sub space-y-3 font-mono text-xs shadow-xl w-full">
                 <div class="flex justify-between items-center border-b border-sub pb-2">
                   <div>
-                    <span class="text-[10px] text-accent font-bold uppercase">Microcycle Volume Landmarks</span>
-                    <div class="text-[9px] text-slate-400">Calendar week (Mon-Sun) aggregated sets vs. thresholds (${lifterType})</div>
+                    <div class="flex flex-wrap items-center gap-1.5">
+                      <span class="text-[10px] text-accent font-bold uppercase">Microcycle Volume Landmarks</span>
+                      <span class="text-[8.5px] px-2 py-0.5 rounded-md border font-bold ${calMod.badge}">${calMod.label}</span>
+                    </div>
+                    <div class="text-[9px] text-slate-400 mt-0.5">Calendar week (Mon-Sun) aggregated sets vs. calorie-adjusted thresholds (${lifterType})</div>
                   </div>
                   <select onchange="appActions.setVolumeMicrocycle(this.value)" class="bg-input border border-sub rounded-xl px-2.5 py-1 text-slate-200 text-xs focus:outline-none font-bold">
                     <option value="cur_cal_week" ${activeVolumeMode === 'cur_cal_week' ? 'selected' : ''}>Current Microcycle (${curCalBounds.rangeLabel})</option>
