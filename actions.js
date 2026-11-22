@@ -32,6 +32,8 @@ const DEFAULT_SCHEME_BLUEPRINTS = window.DEFAULT_SCHEME_BLUEPRINTS || {};
   if (!state.schemeRecipes) state.schemeRecipes = JSON.parse(JSON.stringify(core.defaultSchemeRecipes || {}));
   if (!state.activeRecipeScheme) state.activeRecipeScheme = 'Reverse Pyramid';
   if (!state.wizardModal) state.wizardModal = { open: false, data: null };
+  if (!state.stagingContext) state.stagingContext = { mode: 'plan', phaseOverride: null, splitOverride: null, isDetour: false };
+  if (state.activeWorkoutContext === undefined) state.activeWorkoutContext = null;
 if (!state.rpeProfiles) {
   state.rpeProfiles = {
     high_capacity: {
@@ -331,6 +333,83 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
       }
     }
   });
+
+  // Detects earlier scheduled training splits in the same Mon-Sun week that were missed or bypassed by a detour
+  function getMissedSplitsForWeek(targetDateKey) {
+    try {
+      const normKey = normalizeDateKey(targetDateKey);
+      const [y, m, d] = normKey.split('-').map(Number);
+      const targetDate = new Date(y, m - 1, d);
+      targetDate.setHours(0, 0, 0, 0);
+
+      const dow = targetDate.getDay();
+      const diffToMon = (dow === 0 ? -6 : 1) - dow;
+      const monDate = new Date(targetDate);
+      monDate.setDate(targetDate.getDate() + diffToMon);
+
+      // Collect all completed non-detour splits already logged this week (Mon..targetDate-1)
+      const completedSplits = new Set();
+      const completedDates = new Set();
+      const cursor = new Date(monDate);
+      while (cursor < targetDate) {
+        const ck = formatIsoDate(cursor.getFullYear(), cursor.getMonth(), cursor.getDate());
+        const wk = state.dayLogs?.[ck]?.workout;
+        if (wk && wk.done && !wk.isDetour) {
+          completedDates.add(ck);
+          if (wk.splitName) completedSplits.add(wk.splitName);
+        }
+        cursor.setDate(cursor.getDate() + 1);
+      }
+
+      const dayShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const missed = [];
+      const scan = new Date(monDate);
+      while (scan < targetDate) {
+        const sk = formatIsoDate(scan.getFullYear(), scan.getMonth(), scan.getDate());
+        const scheduledSplit = state.weekdaySplit?.[scan.getDay()] || '';
+        const isRest = !scheduledSplit || /rest|recovery/i.test(scheduledSplit);
+        if (!isRest && !completedDates.has(sk) && !completedSplits.has(scheduledSplit)) {
+          missed.push({
+            dateKey: sk,
+            dayName: dayShort[scan.getDay()],
+            splitName: scheduledSplit
+          });
+        }
+        scan.setDate(scan.getDate() + 1);
+      }
+      return missed;
+    } catch (e) {
+      return [];
+    }
+  }
+  core.getMissedSplitsForWeek = getMissedSplitsForWeek;
+  if (window.apexCore) window.apexCore.getMissedSplitsForWeek = getMissedSplitsForWeek;
+
+  function rebuildStagedSlotSets(slots, targetDateKey, phaseOverride = null) {
+    const r = getRollingReadiness(targetDateKey, 3);
+    const readyBand = getReadinessBand(r);
+    return (slots || []).map(s => {
+      const cleanMods = sanitizeModifiers(s.modifiers);
+      const normScheme = normalizeSchemeName(s.scheme);
+      const anchorE1 = getBaseAnchorE1rm(s.exercise, cleanMods);
+      const opts = {
+        dateKey: targetDateKey,
+        isGrounding: Boolean(s.isGrounding),
+        skipBackoffs: Boolean(s.skipBackoffs)
+      };
+      if (phaseOverride) opts.phase = phaseOverride;
+      return {
+        ...s,
+        tier: s.tier || 'Main',
+        category: s.category || 'Logged',
+        modifiers: cleanMods,
+        scheme: normScheme,
+        isGrounding: Boolean(s.isGrounding),
+        skipBackoffs: Boolean(s.skipBackoffs),
+        sets: dispatchBuildSets(normScheme, anchorE1, readyBand.factor, s.tier || 'Main', s.exercise, cleanMods, opts)
+      };
+    });
+  }
 
   Object.assign(window.appActions, {
     // Equipment & Plate Inventory Controllers
@@ -707,31 +786,81 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
       safeRender();
     },
 
-    // Workout Staging & Templates
-    initStaging() {
-      if (state.activeWorkout && state.activeWorkout.length && Number(state.activeWorkoutDay) === Number(state.selectedDay)) {
+    // Workout Staging & Templates (Supports Plan, Catch-Up, Custom Detour, and Blank Slate)
+    initStaging(opts = {}) {
+      if (state.activeWorkout && state.activeWorkout.length && Number(state.activeWorkoutDay) === Number(state.selectedDay) && !opts.forceNew) {
         state.screen = 'logger';
         safeRender();
         return;
       }
       const k = formatIsoDate(state.year, state.month, state.selectedDay);
-      if (state.savedStaged && state.savedStaged[k] && state.savedStaged[k].length > 0) {
-        state.stagedSlots = JSON.parse(JSON.stringify(state.savedStaged[k]));
+      const mode = opts.mode || 'plan';
+      const splitOverride = opts.splitName || (mode === 'blank' ? '__BLANK__' : null);
+      const phaseOverride = opts.phase || null;
+      const isDetour = (mode === 'custom' || mode === 'blank' || Boolean(phaseOverride));
+
+      state.stagingContext = {
+        mode,
+        phaseOverride,
+        splitOverride,
+        isDetour
+      };
+
+      let rawSlots = [];
+      if (mode === 'blank') {
+        rawSlots = [];
+      } else if (splitOverride && state.customSplitBlueprints?.[splitOverride]) {
+        rawSlots = JSON.parse(JSON.stringify(state.customSplitBlueprints[splitOverride]));
+      } else if (mode === 'plan' && state.savedStaged && state.savedStaged[k] && state.savedStaged[k].length > 0) {
+        rawSlots = JSON.parse(JSON.stringify(state.savedStaged[k]));
       } else {
-        state.stagedSlots = generateBlueprint(state.selectedDay);
+        rawSlots = generateBlueprint(state.selectedDay);
       }
-      state.stagedSlots.forEach(s => {
-        s.tier = s.tier || 'Main';
-        s.category = s.category || 'Logged';
-        s.modifiers = sanitizeModifiers(s.modifiers);
-        s.scheme = normalizeSchemeName(s.scheme);
-        if (s.isGrounding === undefined) s.isGrounding = false;
-        if (s.skipBackoffs === undefined) s.skipBackoffs = false;
-      });
+
+      state.stagedSlots = rebuildStagedSlotSets(rawSlots, k, phaseOverride);
       persist();
       state.dateActionModal.open = false;
       state.screen = 'staging';
       state.drawerOpen = false;
+      safeRender();
+    },
+
+    setStagingPhase(phaseVal) {
+      const k = formatIsoDate(state.year, state.month, state.selectedDay);
+      const activePos = getMesocyclePosition(k);
+      if (!state.stagingContext) state.stagingContext = { mode: 'plan', phaseOverride: null, splitOverride: null, isDetour: false };
+
+      const nextPhase = (!phaseVal || phaseVal === '__ACTIVE__') ? null : phaseVal;
+      state.stagingContext.phaseOverride = nextPhase;
+      state.stagingContext.isDetour = Boolean(nextPhase && nextPhase !== activePos.phase) || state.stagingContext.mode === 'custom' || state.stagingContext.mode === 'blank';
+
+      state.stagedSlots = rebuildStagedSlotSets(state.stagedSlots, k, nextPhase);
+      persist();
+      showToast(nextPhase ? `Phase switched to ${nextPhase} (Active Block unchanged)` : `Restored Active Block phase (${activePos.phase})`);
+      safeRender();
+    },
+
+    setStagingSplit(splitName) {
+      const k = formatIsoDate(state.year, state.month, state.selectedDay);
+      if (!state.stagingContext) state.stagingContext = { mode: 'plan', phaseOverride: null, splitOverride: null, isDetour: false };
+
+      const phaseOverride = state.stagingContext.phaseOverride || null;
+      if (splitName === '__BLANK__') {
+        state.stagingContext.splitOverride = '__BLANK__';
+        state.stagingContext.mode = 'blank';
+        state.stagingContext.isDetour = true;
+        state.stagedSlots = [];
+      } else {
+        state.stagingContext.splitOverride = splitName;
+        const calendarFocus = getDayFocus(state.selectedDay);
+        if (splitName !== calendarFocus && state.stagingContext.mode === 'plan') {
+          state.stagingContext.mode = 'custom';
+        }
+        const tpl = state.customSplitBlueprints?.[splitName] ? JSON.parse(JSON.stringify(state.customSplitBlueprints[splitName])) : [];
+        state.stagedSlots = rebuildStagedSlotSets(tpl, k, phaseOverride);
+      }
+      persist();
+      showToast(splitName === '__BLANK__' ? 'Cleared to Blank Slate' : `Loaded split: ${splitName}`);
       safeRender();
     },
 
@@ -744,14 +873,19 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
       });
       state.savedStaged[k] = JSON.parse(JSON.stringify(state.stagedSlots));
 
-      // Persist to recurring split blueprint so future weeks inherit these slots
-      const focus = getDayFocus(state.selectedDay);
-      if (!state.customSplitBlueprints) state.customSplitBlueprints = {};
-      state.customSplitBlueprints[focus] = JSON.parse(JSON.stringify(state.stagedSlots));
+      const isDetour = Boolean(state.stagingContext?.isDetour);
+      const focus = (state.stagingContext?.splitOverride && state.stagingContext.splitOverride !== '__BLANK__')
+        ? state.stagingContext.splitOverride
+        : getDayFocus(state.selectedDay);
+
+      if (!isDetour && focus) {
+        if (!state.customSplitBlueprints) state.customSplitBlueprints = {};
+        state.customSplitBlueprints[focus] = JSON.parse(JSON.stringify(state.stagedSlots));
+      }
 
       persist();
       window.pushToCloud(false);
-      showToast(`Saved plan and updated template for ${focus}!`);
+      showToast(isDetour ? `Saved custom session for ${k}` : `Saved plan and updated template for ${focus}!`);
       triggerHaptic(40);
       safeRender();
     },
@@ -818,11 +952,13 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
 
       const anchorE1 = getBaseAnchorE1rm(slot.exercise, slot.modifiers);
       const targetDateKey = formatIsoDate(state.year, state.month, state.selectedDay);
-      slot.sets = dispatchBuildSets(cleanVal, anchorE1, 1.0, slot.tier, slot.exercise, slot.modifiers, {
+      const buildOpts = {
         dateKey: targetDateKey,
         isGrounding: slot.isGrounding,
         skipBackoffs: slot.skipBackoffs
-      });
+      };
+      if (state.stagingContext?.phaseOverride) buildOpts.phase = state.stagingContext.phaseOverride;
+      slot.sets = dispatchBuildSets(cleanVal, anchorE1, 1.0, slot.tier, slot.exercise, slot.modifiers, buildOpts);
       persist(); 
       triggerCloudSync(2000); 
       safeRender(); 
@@ -1083,6 +1219,19 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
       const readyBand = getReadinessBand(r);
       const pos = getMesocyclePosition(targetDateKey);
       const w = pos.week || 1;
+      const ctx = state.stagingContext || { mode: 'plan', phaseOverride: null, splitOverride: null, isDetour: false };
+      const effectivePhase = ctx.phaseOverride || pos.phase || 'Hypertrophy';
+      const effectiveSplit = (ctx.splitOverride && ctx.splitOverride !== '__BLANK__')
+        ? ctx.splitOverride
+        : (ctx.mode === 'blank' ? 'Blank Slate' : getDayFocus(state.selectedDay));
+
+      state.activeWorkoutContext = {
+        mode: ctx.mode || 'plan',
+        phase: effectivePhase,
+        week: w,
+        splitName: effectiveSplit,
+        isDetour: Boolean(ctx.isDetour)
+      };
 
       state.sStart = Date.now();
       state.restStart = Date.now();
@@ -1094,7 +1243,7 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
       state.historicalDateKey = null;
       resumeStopwatch();
 
-      state.activeWorkout = state.stagedSlots.map(slot => {
+      state.activeWorkout = (state.stagedSlots || []).map(slot => {
         const cleanMods = sanitizeModifiers(slot.modifiers);
         const anchorE1 = getBaseAnchorE1rm(slot.exercise, cleanMods);
         const normScheme = normalizeSchemeName(slot.scheme);
@@ -1120,6 +1269,7 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
           densityReps: 0,
           sets: dispatchBuildSets(normScheme, anchorE1, readyBand.factor, slot.tier, slot.exercise, cleanMods, {
             dateKey: targetDateKey,
+            phase: effectivePhase,
             isGrounding: slot.isGrounding,
             skipBackoffs: slot.skipBackoffs
           })
@@ -1463,13 +1613,26 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
       if (!state.dayLogs[targetKey]) state.dayLogs[targetKey] = {};
       const sessionPos = getMesocyclePosition(state.isEditingHistorical ? null : targetKey);
       const existingWorkout = state.dayLogs[targetKey].workout || {};
-      const stampedPhase = (state.isEditingHistorical && existingWorkout.phase) ? existingWorkout.phase : (sessionPos.phase || 'Hypertrophy');
-      const stampedWeek = (state.isEditingHistorical && existingWorkout.week) ? existingWorkout.week : (sessionPos.week || 1);
+      const activeCtx = state.activeWorkoutContext || {};
+      const stampedPhase = (state.isEditingHistorical && existingWorkout.phase)
+        ? existingWorkout.phase
+        : (activeCtx.phase || sessionPos.phase || 'Hypertrophy');
+      const stampedWeek = (state.isEditingHistorical && existingWorkout.week)
+        ? existingWorkout.week
+        : (activeCtx.week || sessionPos.week || 1);
+      const stampedSplit = (state.isEditingHistorical && existingWorkout.splitName)
+        ? existingWorkout.splitName
+        : (activeCtx.splitName || getDayFocus(state.activeWorkoutDay || state.selectedDay));
+      const stampedDetour = (state.isEditingHistorical && existingWorkout.isDetour !== undefined)
+        ? Boolean(existingWorkout.isDetour)
+        : Boolean(activeCtx.isDetour);
 
       state.dayLogs[targetKey].workout = {
         done: true,
         phase: stampedPhase,
         week: stampedWeek,
+        splitName: stampedSplit,
+        isDetour: stampedDetour,
         isDeload: stampedPhase === 'Deload',
         dur: state.finishModal.dur,
         srpe: roundRpe(state.finishModal.srpe),
@@ -1500,6 +1663,7 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
 
       state.activeWorkout = [];
       state.activeWorkoutDay = null;
+      state.activeWorkoutContext = null;
       state.activeWorkoutDateKey = null;
       state.sessionSecs = 0;
       state.restStopwatchSecs = 0;
@@ -1746,7 +1910,13 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
           obj.densityTimerObj = null;
           obj.densityReps = 0;
           state.activeWorkout.push(obj);
-        } else state.stagedSlots.push(obj);
+        } else {
+          const anchorE1 = getBaseAnchorE1rm(obj.exercise, obj.modifiers);
+          const buildOpts = { dateKey: targetDateKey };
+          if (state.stagingContext?.phaseOverride) buildOpts.phase = state.stagingContext.phaseOverride;
+          obj.sets = dispatchBuildSets(scheme, anchorE1, 1.0, tier, obj.exercise, obj.modifiers, buildOpts);
+          state.stagedSlots.push(obj);
+        }
       } else {
         const t = state.modal.isMid ? state.activeWorkout[state.modal.idx] : state.stagedSlots[state.modal.idx];
         const oldScheme = t.scheme;

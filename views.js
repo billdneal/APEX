@@ -2180,9 +2180,15 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
         const strainPct = Math.min(100, Math.round((totalPlannedStrain / ceiling.max) * 100));
         const isOverCeiling = totalPlannedStrain > ceiling.max;
         const stagedPos = getMesocyclePosition(targetDateKey);
-        const curPhase = stagedPos.phase;
+        const stagingCtx = state.stagingContext || { mode: 'plan', phaseOverride: null, splitOverride: null, isDetour: false };
+        const curPhase = stagingCtx.phaseOverride || stagedPos.phase;
         const curWeek = stagedPos.week;
         const curBlockWeeks = stagedPos.block.weeks || 3;
+        const calendarFocus = getDayFocus(state.selectedDay);
+        const activeSplitLabel = stagingCtx.splitOverride === '__BLANK__'
+          ? 'Blank Slate'
+          : (stagingCtx.splitOverride || calendarFocus);
+        const splitTemplateNames = Object.keys(state.customSplitBlueprints || {});
 
         const rollingReady = core.getRollingReadiness ? core.getRollingReadiness(targetDateKey, 3) : 85;
         const readyBand = getReadinessBand(rollingReady);
@@ -2244,12 +2250,43 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
             <div class="space-y-3 w-full">
               <div class="flex justify-between items-center">
                 <div>
-                  <h2 class="text-base font-bold text-white font-mono">Stage Workout (Day ${state.selectedDay})</h2>
-                  <p class="text-[10px] text-slate-400 font-mono">${getDayFocus(state.selectedDay)} • ${curPhase} (W${curWeek}/${curBlockWeeks})</p>
+                  <div class="flex items-center space-x-2">
+                    <h2 class="text-base font-bold text-white font-mono">Stage Workout (Day ${state.selectedDay})</h2>
+                    ${stagingCtx.isDetour ? `<span class="text-[8.5px] font-mono uppercase px-1.5 py-0.5 rounded bg-indigo-950/80 border border-indigo-600/70 text-indigo-300 font-bold">Detour</span>` : (stagingCtx.mode === 'catchup' ? `<span class="text-[8.5px] font-mono uppercase px-1.5 py-0.5 rounded bg-emerald-950/80 border border-emerald-600/70 text-emerald-300 font-bold">Catch-Up</span>` : '')}
+                  </div>
+                  <p class="text-[10px] text-slate-400 font-mono">${activeSplitLabel} • ${curPhase} ${stagingCtx.phaseOverride ? '(Custom Phase)' : `(W${curWeek}/${curBlockWeeks})`}</p>
                 </div>
                 <div class="flex items-center space-x-2">
                   <span class="text-[10px] font-mono text-slate-400">3D Ready: <b class="text-accent">${rollingReady}%</b></span>
                   <button type="button" onclick="appActions.navigate('calendar', event)" class="text-xs text-slate-400 underline font-mono">Calendar</button>
+                </div>
+              </div>
+
+              <!-- Session Context Bar (Phase & Split Building Blocks) -->
+              <div class="p-3 bg-card-sub rounded-2xl border border-sub space-y-2 font-mono text-xs shadow-sm">
+                <div class="flex justify-between items-center">
+                  <span class="text-[9.5px] text-accent font-bold uppercase">Session Building Blocks</span>
+                  <span class="text-[9px] text-slate-400">${stagingCtx.isDetour ? 'Active training block stays untouched' : 'Synced to active training block'}</span>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div class="space-y-0.5">
+                    <label class="text-[8.5px] text-slate-400 uppercase font-bold">Phase (Rep & RPE Targets)</label>
+                    <select onchange="appActions.setStagingPhase(this.value)" class="w-full bg-input border border-sub rounded-xl px-2.5 py-1.5 text-white font-bold text-[11px] focus:outline-none focus:border-accent">
+                      <option value="__ACTIVE__" ${!stagingCtx.phaseOverride ? 'selected' : ''}>Active Block: ${stagedPos.phase} (W${curWeek})</option>
+                      <optgroup label="Detour / Override Phase">
+                        ${(availablePhases || []).map(ph => `<option value="${ph}" ${stagingCtx.phaseOverride === ph ? 'selected' : ''}>${ph}</option>`).join('')}
+                      </optgroup>
+                    </select>
+                  </div>
+                  <div class="space-y-0.5">
+                    <label class="text-[8.5px] text-slate-400 uppercase font-bold">Split Template</label>
+                    <select onchange="appActions.setStagingSplit(this.value)" class="w-full bg-input border border-sub rounded-xl px-2.5 py-1.5 text-white font-bold text-[11px] focus:outline-none focus:border-accent">
+                      <option value="__BLANK__" ${stagingCtx.splitOverride === '__BLANK__' ? 'selected' : ''}>Blank Slate (Empty Session)</option>
+                      <optgroup label="Weekly Split Templates">
+                        ${splitTemplateNames.map(sp => `<option value="${sp}" ${activeSplitLabel === sp ? 'selected' : ''}>${sp}${sp === calendarFocus ? ' (Scheduled)' : ''}</option>`).join('')}
+                      </optgroup>
+                    </select>
+                  </div>
                 </div>
               </div>
             <div class="bg-card-sub p-3 rounded-2xl border ${isOverCeiling ? 'border-rose-500/80' : 'border-sub'} font-mono space-y-1.5 shadow-sm">
@@ -2281,7 +2318,17 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                 </button>
               </div>
 
-              <div class="space-y-2.5">${slotsHtml}</div>
+              <div class="space-y-2.5">
+                ${(state.stagedSlots && state.stagedSlots.length > 0) ? slotsHtml : `
+                  <div class="p-6 bg-card-sub/70 rounded-2xl border border-dashed border-sub text-center space-y-2.5 font-mono">
+                    <div class="text-xs font-bold text-slate-200">Blank Slate Session Ready</div>
+                    <div class="text-[10px] text-slate-400">Add movements below, or pick a Split Template above to pre-populate.</div>
+                    <button type="button" onclick="appActions.openAdd(false)" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow tactile">
+                      + Add First Movement
+                    </button>
+                  </div>
+                `}
+              </div>
               
               <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs font-mono">
                 <button type="button" onclick="appActions.openAdd(false)" class="py-2.5 bg-card-sub rounded-2xl text-slate-300 font-semibold border border-sub hover:text-white tactile">+ Movement</button>
@@ -4062,6 +4109,10 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
         const curWeightVal = hasExplicitBw ? log.weight : '';
         const hasLoggedWorkout = Boolean(log.workout?.done);
         const isCurrentActiveDay = (isWorkoutActive && state.activeWorkoutDateKey === k);
+        const missedSplits = (!isCurrentActiveDay && !hasLoggedWorkout && core.getMissedSplitsForWeek)
+          ? core.getMissedSplitsForWeek(k)
+          : [];
+        const firstMissed = missedSplits.length > 0 ? missedSplits[0] : null;
 
         html += `
           <div class="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center p-3 z-50 overflow-y-auto" onclick="event.stopPropagation()">
@@ -4136,10 +4187,33 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                       </button>
                     </div>
                   ` : `
-                    <button type="button" onclick="state.selectedDay=${d}; appActions.initStaging()" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-[10px] flex items-center justify-center space-x-1.5 tactile shadow">
-                      <span>Stage & Build Session</span>
-                      <span>&rarr;</span>
-                    </button>
+                    <div class="space-y-1.5 pt-0.5">
+                      ${firstMissed ? `
+                        <div class="grid grid-cols-2 gap-1.5">
+                          <button type="button" onclick="state.selectedDay=${d}; appActions.initStaging({ mode: 'catchup', splitName: '${firstMissed.splitName.replace(/'/g, "\\'")}' })" class="py-2 px-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-[9.5px] leading-tight text-center tactile shadow">
+                            <div class="text-[8px] uppercase opacity-80">Catch Up (${firstMissed.dayName})</div>
+                            <div class="truncate">${firstMissed.splitName}</div>
+                          </button>
+                          <button type="button" onclick="state.selectedDay=${d}; appActions.initStaging({ mode: 'plan' })" class="py-2 px-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-[9.5px] leading-tight text-center tactile shadow">
+                            <div class="text-[8px] uppercase opacity-80">Today's Split</div>
+                            <div class="truncate">${focus}</div>
+                          </button>
+                        </div>
+                      ` : `
+                        <button type="button" onclick="state.selectedDay=${d}; appActions.initStaging({ mode: 'plan' })" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-[10px] flex items-center justify-center space-x-1.5 tactile shadow">
+                          <span>Continue Plan</span>
+                          <span>&rarr;</span>
+                        </button>
+                      `}
+                      <div class="grid grid-cols-2 gap-1.5">
+                        <button type="button" onclick="state.selectedDay=${d}; appActions.initStaging({ mode: 'custom' })" class="py-1.5 bg-card-sub hover:bg-slate-800 border border-sub text-slate-200 rounded-xl font-bold text-[9.5px] tactile">
+                          Custom Session
+                        </button>
+                        <button type="button" onclick="state.selectedDay=${d}; appActions.initStaging({ mode: 'blank' })" class="py-1.5 bg-card-sub hover:bg-slate-800 border border-sub text-slate-300 rounded-xl font-bold text-[9.5px] tactile">
+                          Blank Slate
+                        </button>
+                      </div>
+                    </div>
                   `)}
                 </div>
               </div>
