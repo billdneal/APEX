@@ -851,7 +851,7 @@ function renderBottomNav() {
                     <span class="w-4 h-4 shrink-0 inline-flex items-center justify-center ${state.coachDrawerOpen ? 'text-white' : 'text-accent'}">✦</span><span>AI Performance Coach</span>
                   </button>
                   <button type="button" onclick="appActions.navigate('nutrition', event)" class="w-full text-left p-2.5 rounded-xl border border-sub flex items-center space-x-2.5 tactile ${state.screen === 'nutrition' ? 'bg-blue-600 text-white font-bold' : 'bg-card-sub text-slate-300 hover:bg-slate-800'}">
-                    <span>🥗</span><span>Nutrition & Macros</span>
+                    <span><svg class="w-4 h-4 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></svg></span><span>Nutrition & Macros</span>
                   </button>
                   <button type="button" onclick="appActions.navigate('analytics', event)" class="w-full text-left p-2.5 rounded-xl border border-sub flex items-center space-x-2.5 tactile ${state.screen === 'analytics' ? 'bg-blue-600 text-white font-bold' : 'bg-card-sub text-slate-300 hover:bg-slate-800'}">
                     <span><svg class="w-4 h-4 shrink-0 inline-block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></svg></span><span>Performance Analytics</span>
@@ -4322,7 +4322,7 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                 <div class="bg-input p-3 rounded-2xl border border-sub space-y-1.5">
                   <div class="flex justify-between items-center text-[10px]">
                     <span class="text-emerald-300 font-bold uppercase flex items-center space-x-1.5">
-                      <span class="w-4 h-4 rounded bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-[9px]">🥗</span>
+                      <span class="w-4 h-4 rounded bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-300"><svg class="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></svg></span>
                       <span>Nutrition & Macros</span>
                     </span>
                     <span class="text-slate-300 font-bold text-[10px]">${log.nutrition?.totals?.kcal ? log.nutrition.totals.kcal + ' kcal (' + (log.nutrition.totals.p || 0) + 'g P)' : 'Not Logged'}</span>
