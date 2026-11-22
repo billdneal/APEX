@@ -35,13 +35,57 @@
     if (typeof window.render === 'function') window.render();
   }
 
+  const NUTRITION_GOALS = {
+    cut:      { label: 'Cut',        sub: '-400 kcal (~0.8 lb/wk)', kcalDelta: -400, pPerLb: 1.05, fPerLb: 0.32 },
+    recomp:   { label: 'Recomp',     sub: '-150 kcal (Body Recomp)', kcalDelta: -150, pPerLb: 1.00, fPerLb: 0.35 },
+    maintain: { label: 'Maintain',   sub: '0 kcal (Maintenance)',    kcalDelta: 0,    pPerLb: 0.95, fPerLb: 0.35 },
+    bulk:     { label: 'Lean Bulk',  sub: '+250 kcal (~0.5 lb/wk)',  kcalDelta: 250,  pPerLb: 0.90, fPerLb: 0.35 }
+  };
+
+  function getLatestBwForNutrition() {
+    if (typeof core.getLatestBodyweight === 'function') {
+      const bw = Number(core.getLatestBodyweight());
+      if (bw > 0) return bw;
+    }
+    return Number(state.profile?.bodyweight) || 195;
+  }
+
+  function calculateAutoMacroTargets(goalMode = null) {
+    const mode = goalMode || state.settings?.nutritionGoal?.mode || 'maintain';
+    const g = NUTRITION_GOALS[mode] || NUTRITION_GOALS.maintain;
+    const bw = getLatestBwForNutrition();
+    const tdee = computeAdaptiveTdee(21);
+
+    const baseTdee = tdee.ready ? tdee.estimatedTdee : Math.round(bw * 14.5);
+    const sourceLabel = tdee.ready
+      ? `Adaptive TDEE (${tdee.estimatedTdee} kcal • ${tdee.confidence})`
+      : `Initial Estimate (${bw} lbs × 14.5 = ${baseTdee} kcal)`;
+
+    const kcal = Math.max(1400, Math.round((baseTdee + g.kcalDelta) / 25) * 25);
+    const p = Math.round((bw * g.pPerLb) / 5) * 5;
+    const f = Math.max(45, Math.round((bw * g.fPerLb) / 5) * 5);
+    const remKcal = Math.max(0, kcal - (p * 4) - (f * 9));
+    const c = Math.max(50, Math.round((remKcal / 4) / 5) * 5);
+
+    return { kcal, p, c, f, mode, sourceLabel, baseTdee, bw };
+  }
+
   function getNutritionTargets() {
+    const goalCfg = state.settings?.nutritionGoal || { mode: 'maintain', autoSync: true };
+    if (goalCfg.autoSync !== false) {
+      return calculateAutoMacroTargets(goalCfg.mode);
+    }
     const t = state.settings?.nutritionTargets || {};
+    const autoFb = calculateAutoMacroTargets(goalCfg.mode);
     return {
-      kcal: Number(t.kcal) || 2600,
-      p: Number(t.p) || 200,
-      c: Number(t.c) || 275,
-      f: Number(t.f) || 75
+      kcal: Number(t.kcal) || autoFb.kcal,
+      p: Number(t.p) || autoFb.p,
+      c: Number(t.c) || autoFb.c,
+      f: Number(t.f) || autoFb.f,
+      mode: goalCfg.mode || 'maintain',
+      sourceLabel: 'Manual Override',
+      baseTdee: autoFb.baseTdee,
+      bw: autoFb.bw
     };
   }
 
@@ -239,9 +283,32 @@
       saveAndSync();
     },
 
+    setNutritionGoalMode(modeKey) {
+      if (!state.settings) state.settings = {};
+      if (!state.settings.nutritionGoal) state.settings.nutritionGoal = { mode: 'maintain', autoSync: true };
+      state.settings.nutritionGoal.mode = modeKey;
+      state.settings.nutritionGoal.autoSync = true;
+      const auto = calculateAutoMacroTargets(modeKey);
+      state.settings.nutritionTargets = { kcal: auto.kcal, p: auto.p, c: auto.c, f: auto.f };
+      toast(`Goal set to ${NUTRITION_GOALS[modeKey]?.label || modeKey}: ${auto.kcal} kcal (${auto.p}P/${auto.c}C/${auto.f}F)`);
+      saveAndSync();
+    },
+
+    enableAutoMacroTargets() {
+      if (!state.settings) state.settings = {};
+      const mode = state.settings.nutritionGoal?.mode || 'maintain';
+      state.settings.nutritionGoal = { mode, autoSync: true };
+      const auto = calculateAutoMacroTargets(mode);
+      state.settings.nutritionTargets = { kcal: auto.kcal, p: auto.p, c: auto.c, f: auto.f };
+      toast(`Auto-calculated macros: ${auto.kcal} kcal`);
+      saveAndSync();
+    },
+
     updateNutritionTarget(field, val) {
       if (!state.settings) state.settings = {};
-      if (!state.settings.nutritionTargets) state.settings.nutritionTargets = getNutritionTargets();
+      const cur = getNutritionTargets();
+      state.settings.nutritionGoal = { mode: cur.mode || 'maintain', autoSync: false };
+      state.settings.nutritionTargets = { kcal: cur.kcal, p: cur.p, c: cur.c, f: cur.f };
       state.settings.nutritionTargets[field] = Math.max(0, Math.round(Number(val) || 0));
       saveAndSync();
     },
@@ -657,9 +724,40 @@
         ` : ''}
 
         ${ui.tab === 'targets' ? `
-          <!-- Daily Macro Targets & USDA Key -->
+          <!-- Goal Mode & Auto-Macro Engine -->
           <div class="bg-card-sub p-4 rounded-3xl border border-sub space-y-3 font-mono text-xs shadow-md">
-            <span class="text-[10px] text-accent font-bold uppercase">Daily Macro Targets</span>
+            <div class="flex justify-between items-center border-b border-sub pb-2">
+              <div>
+                <span class="text-[10px] text-accent font-bold uppercase">Auto-Macro Goal Engine</span>
+                <div class="text-[9px] text-slate-400 mt-0.5">${targets.sourceLabel}</div>
+              </div>
+              ${state.settings?.nutritionGoal?.autoSync === false ? `
+                <button type="button" onclick="appActions.enableAutoMacroTargets()" class="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[9.5px] font-bold tactile shadow">
+                  ↻ Re-Sync Auto
+                </button>
+              ` : `
+                <span class="px-2 py-0.5 rounded-lg bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 text-[9px] font-bold">● AUTO-SYNCED</span>
+              `}
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              ${Object.entries(NUTRITION_GOALS).map(([gKey, gObj]) => {
+                const isActive = (targets.mode || 'maintain') === gKey && state.settings?.nutritionGoal?.autoSync !== false;
+                return `
+                  <button type="button" onclick="appActions.setNutritionGoalMode('${gKey}')"
+                    class="text-left p-2.5 rounded-2xl border transition tactile ${isActive ? 'bg-accent/15 border-accent text-white shadow-sm' : 'bg-input border-sub text-slate-300 hover:border-slate-500'}">
+                    <div class="font-bold text-xs flex justify-between items-center">
+                      <span>${gObj.label}</span>${isActive ? '<span class="text-accent text-[9px]">✓</span>' : ''}
+                    </div>
+                    <div class="text-[8.5px] text-slate-400 mt-0.5">${gObj.sub}</div>
+                  </button>
+                `;
+              }).join('')}
+            </div>
+
+            <div class="flex justify-between items-center pt-1">
+              <span class="text-[9.5px] text-slate-400 font-bold uppercase">Daily Targets (Edit any box to override)</span>
+            </div>
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
                 <label class="text-[9px] text-slate-400 uppercase font-bold">Calories</label>
