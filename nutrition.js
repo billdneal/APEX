@@ -1,13 +1,15 @@
 // ============================================================================
 // APEX TRAINING ENGINE - MODULE 5: NUTRITION TRACKER & ADAPTIVE TDEE ENGINE
-// Features: Gemini AI Natural-Language Quick-Log, USDA FoodData Central Search,
-//           Open Food Facts Barcode Lookup (+ Optional Camera Scanner),
-//           Saved Meals / Batch-Cook Library, & Adaptive TDEE Calculator
+// Features: Meal-Grouped Diary, Serving Size × Qty Multiplier (Manual, USDA,
+//           Saved Meals), Gemini AI Quick-Log, Open Food Facts Barcode Lookup,
+//           Goal-Aware Auto-Macro Engine, & 21-Day Adaptive TDEE Calculator
 // ============================================================================
 
 (function() {
   const state = window.state || {};
   const core = window.apexCore || {};
+
+  const MEAL_SLOTS = ['Breakfast', 'Lunch', 'Dinner', 'Snacks'];
 
   function getTodayKey() {
     if (typeof core.getTodayDateString === 'function') return core.getTodayDateString();
@@ -36,10 +38,10 @@
   }
 
   const NUTRITION_GOALS = {
-    cut:      { label: 'Cut',        sub: '-400 kcal (~0.8 lb/wk)', kcalDelta: -400, pPerLb: 1.05, fPerLb: 0.32 },
-    recomp:   { label: 'Recomp',     sub: '-150 kcal (Body Recomp)', kcalDelta: -150, pPerLb: 1.00, fPerLb: 0.35 },
-    maintain: { label: 'Maintain',   sub: '0 kcal (Maintenance)',    kcalDelta: 0,    pPerLb: 0.95, fPerLb: 0.35 },
-    bulk:     { label: 'Lean Bulk',  sub: '+250 kcal (~0.5 lb/wk)',  kcalDelta: 250,  pPerLb: 0.90, fPerLb: 0.35 }
+    cut:      { label: 'Cut',       sub: '-400 kcal (~0.8 lb/wk)', kcalDelta: -400, pPerLb: 1.05, fPerLb: 0.32 },
+    recomp:   { label: 'Recomp',    sub: '-150 kcal (Body Recomp)', kcalDelta: -150, pPerLb: 1.00, fPerLb: 0.35 },
+    maintain: { label: 'Maintain',  sub: '0 kcal (Maintenance)',    kcalDelta: 0,    pPerLb: 0.95, fPerLb: 0.35 },
+    bulk:     { label: 'Lean Bulk', sub: '+250 kcal (~0.5 lb/wk)',  kcalDelta: 250,  pPerLb: 0.90, fPerLb: 0.35 }
   };
 
   function getLatestBwForNutrition() {
@@ -95,6 +97,15 @@
       state.settings.savedMeals = [];
     }
     return state.settings.savedMeals;
+  }
+
+  function normalizeMealSlot(meal) {
+    if (!meal) return 'Snacks';
+    const m = String(meal).toLowerCase();
+    if (m.includes('break')) return 'Breakfast';
+    if (m.includes('lunch')) return 'Lunch';
+    if (m.includes('din')) return 'Dinner';
+    return 'Snacks';
   }
 
   function getDayNutrition(dateKey) {
@@ -160,7 +171,6 @@
     const weeksSpan = Math.max(0.5, (new Date(y2, m2 - 1, d2) - new Date(y1, m1 - 1, d1)) / (7 * 86400000));
     const weeklyBwDelta = Math.round(((lastBw.w - firstBw.w) / weeksSpan) * 100) / 100;
 
-    // 1 lb bodyweight ~= 3,500 kcal -> 500 kcal/day per lb/week
     const estimatedTdee = Math.max(1200, Math.round(avgKcal - (weeklyBwDelta * 500)));
     const confidence = (kcalPts.length >= 10 && bwPts.length >= 5) ? 'High' : ((kcalPts.length >= 6 && bwPts.length >= 3) ? 'Moderate' : 'Early');
 
@@ -177,7 +187,8 @@
 
   // Ephemeral UI state for Nutrition screen
   state.nutritionUi = state.nutritionUi || {
-    tab: 'log', // 'log' | 'search' | 'saved' | 'targets'
+    view: 'diary',     // 'diary' | 'add' | 'targets'
+    addTab: 'manual',  // 'manual' | 'search' | 'saved'
     aiLoading: false,
     searchLoading: false,
     searchQuery: '',
@@ -199,11 +210,37 @@
     state.nutritionUi.scannerActive = false;
   }
 
+  function readManualForm() {
+    const name = document.getElementById('nut-manual-name')?.value?.trim() || '';
+    const serving = document.getElementById('nut-manual-serving')?.value?.trim() || '1 serving';
+    const qty = Math.max(0.1, Number(document.getElementById('nut-manual-qty')?.value) || 1);
+    const rawKcal = Number(document.getElementById('nut-manual-kcal')?.value) || 0;
+    const pPer = Math.max(0, Number(document.getElementById('nut-manual-p')?.value) || 0);
+    const cPer = Math.max(0, Number(document.getElementById('nut-manual-c')?.value) || 0);
+    const fPer = Math.max(0, Number(document.getElementById('nut-manual-f')?.value) || 0);
+    const kcalPer = rawKcal > 0 ? rawKcal : Math.round((pPer * 4) + (cPer * 4) + (fPer * 9));
+
+    return {
+      name,
+      serving,
+      qty,
+      kcalPer,
+      pPer,
+      cPer,
+      fPer,
+      kcalTotal: Math.round(kcalPer * qty),
+      pTotal: Math.round(pPer * qty),
+      cTotal: Math.round(cPer * qty),
+      fTotal: Math.round(fPer * qty)
+    };
+  }
+
   // Controller Actions
   window.appActions = window.appActions || {};
   Object.assign(window.appActions, {
     openNutritionForDate(dateKey) {
       state.nutritionDateKey = core.normalizeDateKey ? core.normalizeDateKey(dateKey) : dateKey;
+      state.nutritionUi.view = 'diary';
       state.dateActionModal.open = false;
       state.drawerOpen = false;
       state.screen = 'nutrition';
@@ -215,9 +252,16 @@
       if (typeof window.render === 'function') window.render();
     },
 
-    setNutritionTab(tab) {
+    setNutritionView(viewName, mealSlot = null) {
       stopBarcodeScanner();
-      state.nutritionUi.tab = tab;
+      state.nutritionUi.view = viewName;
+      if (mealSlot) state.nutritionUi.mealSlot = mealSlot;
+      if (typeof window.render === 'function') window.render();
+    },
+
+    setNutritionAddTab(tab) {
+      stopBarcodeScanner();
+      state.nutritionUi.addTab = tab;
       if (typeof window.render === 'function') window.render();
     },
 
@@ -226,22 +270,41 @@
       if (typeof window.render === 'function') window.render();
     },
 
-    addNutritionEntry(entry) {
+    updateManualMacroPreview() {
+      const el = document.getElementById('nut-manual-preview');
+      if (!el) return;
+      const f = readManualForm();
+      el.innerHTML = `<span class="text-slate-400">${f.qty} × ${f.serving} =</span> <b class="text-white">${f.kcalTotal} kcal</b> • <span class="text-blue-300">${f.pTotal}P</span> / <span class="text-emerald-300">${f.cTotal}C</span> / <span class="text-amber-300">${f.fTotal}F</span>`;
+    },
+
+    addNutritionEntry(entry, qtyOverride = null) {
       const k = getSelectedDateKey();
       const nut = getDayNutrition(k);
+      const qty = Math.max(0.1, Number(qtyOverride !== null ? qtyOverride : (entry.qty || 1)) || 1);
+      const servingText = entry.serving ? `${qty} × ${entry.serving}` : (qty !== 1 ? `${qty}×` : '');
+
+      const baseKcal = Number(entry.kcal) || 0;
+      const baseP = Number(entry.p) || 0;
+      const baseC = Number(entry.c) || 0;
+      const baseF = Number(entry.f) || 0;
+
+      // If qtyOverride is passed, multiply per-serving macros by qty
+      const mult = qtyOverride !== null ? qty : 1;
+
       nut.entries.push({
         id: 'food_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
         name: String(entry.name || 'Food Item').trim(),
-        meal: entry.meal || state.nutritionUi.mealSlot || 'Meal',
-        kcal: Math.max(0, Math.round(Number(entry.kcal) || 0)),
-        p: Math.max(0, Math.round(Number(entry.p) || 0)),
-        c: Math.max(0, Math.round(Number(entry.c) || 0)),
-        f: Math.max(0, Math.round(Number(entry.f) || 0)),
+        servingInfo: servingText,
+        meal: normalizeMealSlot(entry.meal || state.nutritionUi.mealSlot || 'Lunch'),
+        kcal: Math.max(0, Math.round(baseKcal * mult)),
+        p: Math.max(0, Math.round(baseP * mult)),
+        c: Math.max(0, Math.round(baseC * mult)),
+        f: Math.max(0, Math.round(baseF * mult)),
         source: entry.source || 'manual',
         ts: Date.now()
       });
       recalcDayTotals(k);
-      toast(`Logged ${entry.name} (${Math.round(Number(entry.kcal) || 0)} kcal)`);
+      toast(`Logged ${entry.name} (${Math.round(baseKcal * mult)} kcal)`);
       saveAndSync();
     },
 
@@ -253,19 +316,58 @@
       saveAndSync();
     },
 
-    addManualFoodFromForm() {
-      const name = document.getElementById('nut-manual-name')?.value?.trim();
-      const kcal = Number(document.getElementById('nut-manual-kcal')?.value) || 0;
-      const p = Number(document.getElementById('nut-manual-p')?.value) || 0;
-      const c = Number(document.getElementById('nut-manual-c')?.value) || 0;
-      const f = Number(document.getElementById('nut-manual-f')?.value) || 0;
-      if (!name) { toast('Enter a food or meal name.'); return; }
-      const calcKcal = kcal > 0 ? kcal : Math.round((p * 4) + (c * 4) + (f * 9));
-      window.appActions.addNutritionEntry({ name, kcal: calcKcal, p, c, f, source: 'manual' });
+    addManualFoodFromForm(saveToLibrary = false) {
+      const f = readManualForm();
+      if (!f.name) { toast('Enter a food or meal name.'); return; }
+
+      if (saveToLibrary) {
+        const meals = getSavedMeals();
+        meals.unshift({
+          id: 'meal_' + Date.now(),
+          name: f.name,
+          serving: f.serving,
+          kcal: Math.round(f.kcalPer),
+          p: Math.round(f.pPer),
+          c: Math.round(f.cPer),
+          f: Math.round(f.fPer)
+        });
+      }
+
+      window.appActions.addNutritionEntry({
+        name: f.name,
+        serving: f.serving,
+        qty: f.qty,
+        kcal: f.kcalTotal,
+        p: f.pTotal,
+        c: f.cTotal,
+        f: f.fTotal,
+        source: 'manual'
+      });
+      state.nutritionUi.view = 'diary';
+      if (typeof window.render === 'function') window.render();
+    },
+
+    logUsdaResult(idx) {
+      const item = state.nutritionUi.searchResults?.[idx];
+      if (!item) return;
+      const qty = Math.max(0.1, Number(document.getElementById(`nut-usda-qty-${idx}`)?.value) || 1);
+      window.appActions.addNutritionEntry(item, qty);
+      state.nutritionUi.view = 'diary';
+      if (typeof window.render === 'function') window.render();
+    },
+
+    logSavedMeal(idx) {
+      const item = getSavedMeals()[idx];
+      if (!item) return;
+      const qty = Math.max(0.1, Number(document.getElementById(`nut-saved-qty-${idx}`)?.value) || 1);
+      window.appActions.addNutritionEntry(item, qty);
+      state.nutritionUi.view = 'diary';
+      if (typeof window.render === 'function') window.render();
     },
 
     saveMealToLibraryFromForm() {
       const name = document.getElementById('nut-saved-name')?.value?.trim();
+      const serving = document.getElementById('nut-saved-serving')?.value?.trim() || '1 serving';
       const kcal = Number(document.getElementById('nut-saved-kcal')?.value) || 0;
       const p = Number(document.getElementById('nut-saved-p')?.value) || 0;
       const c = Number(document.getElementById('nut-saved-c')?.value) || 0;
@@ -273,7 +375,7 @@
       if (!name) { toast('Enter a meal name to save.'); return; }
       const calcKcal = kcal > 0 ? kcal : Math.round((p * 4) + (c * 4) + (f * 9));
       const meals = getSavedMeals();
-      meals.unshift({ id: 'meal_' + Date.now(), name, kcal: calcKcal, p: Math.round(p), c: Math.round(c), f: Math.round(f) });
+      meals.unshift({ id: 'meal_' + Date.now(), name, serving, kcal: calcKcal, p: Math.round(p), c: Math.round(c), f: Math.round(f) });
       toast(`Saved "${name}" to Meal Library`);
       saveAndSync();
     },
@@ -341,7 +443,7 @@
             contents: [{
               role: 'user',
               parts: [{
-                text: `Parse this meal description into accurate USDA-aligned nutrition macros. Return ONLY valid JSON with no markdown fences in this exact schema: {"items":[{"name":"string","kcal":number,"p":number,"c":number,"f":number}]}.\nMeal: ${text}`
+                text: `Parse this meal description into accurate USDA-aligned nutrition macros. Return ONLY valid JSON with no markdown fences in this exact schema: {"items":[{"name":"string","serving":"string","kcal":number,"p":number,"c":number,"f":number}]}.\nMeal: ${text}`
               }]
             }],
             generationConfig: { temperature: 0.1, maxOutputTokens: 800 }
@@ -362,7 +464,8 @@
           nut.entries.push({
             id: 'ai_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
             name: String(it.name || 'Food'),
-            meal: state.nutritionUi.mealSlot || 'Meal',
+            servingInfo: it.serving ? String(it.serving) : '',
+            meal: normalizeMealSlot(state.nutritionUi.mealSlot || 'Lunch'),
             kcal: Math.max(0, Math.round(Number(it.kcal) || 0)),
             p: Math.max(0, Math.round(Number(it.p) || 0)),
             c: Math.max(0, Math.round(Number(it.c) || 0)),
@@ -372,7 +475,7 @@
           });
         });
         recalcDayTotals(k);
-        toast(`AI logged ${items.length} item(s)!`);
+        toast(`AI logged ${items.length} item(s) to ${state.nutritionUi.mealSlot}`);
       } catch (err) {
         console.error('AI Quick-Log Error:', err);
         toast(`AI Parse Error: ${err.message}`);
@@ -425,6 +528,7 @@
     async lookupBarcode(upcOverride = null) {
       const upc = (upcOverride || document.getElementById('nut-barcode-input')?.value || '').replace(/\D/g, '');
       if (!upc) { toast('Enter or scan a UPC barcode.'); return; }
+      const qty = Math.max(0.1, Number(document.getElementById('nut-barcode-qty')?.value) || 1);
       state.nutritionUi.barcodeLoading = true;
       if (typeof window.render === 'function') window.render();
 
@@ -437,16 +541,19 @@
         const prod = data.product;
         const n = prod.nutriments || {};
         const name = prod.product_name || `UPC ${upc}`;
+        const serving = prod.serving_size || '100g';
         const kcal = Math.round(Number(n['energy-kcal_serving'] || n['energy-kcal_100g'] || 0));
         const p = Math.round(Number(n.proteins_serving || n.proteins_100g || 0));
         const c = Math.round(Number(n.carbohydrates_serving || n.carbohydrates_100g || 0));
         const f = Math.round(Number(n.fat_serving || n.fat_100g || 0));
         window.appActions.addNutritionEntry({
-          name: `${name} (${prod.serving_size || '100g'})`,
+          name,
+          serving,
           kcal: kcal || Math.round((p * 4) + (c * 4) + (f * 9)),
           p, c, f,
           source: 'barcode'
-        });
+        }, qty);
+        state.nutritionUi.view = 'diary';
       } catch (err) {
         toast(err.message || 'Barcode lookup failed.');
       } finally {
@@ -489,7 +596,7 @@
     }
   });
 
-  // Adaptive TDEE Card Renderer (Mounted inside Analytics -> BW & Nutrition)
+  // Adaptive TDEE Card Renderer (Mounted inside Analytics -> BW & Nutrition -> Targets)
   window.renderAdaptiveTdeeCard = function() {
     const tdee = computeAdaptiveTdee(21);
     if (!tdee.ready) {
@@ -534,7 +641,7 @@
     `;
   };
 
-  // Full Nutrition Screen Renderer
+  // Full Nutrition Screen Renderer (Meal-Grouped Diary + Add Food Panel + Targets)
   window.renderNutritionScreen = function() {
     const dKey = getSelectedDateKey();
     const nut = getDayNutrition(dKey);
@@ -546,184 +653,261 @@
     const pct = (val, max) => Math.min(100, Math.round(((Number(val) || 0) / Math.max(1, Number(max) || 1)) * 100));
     const remKcal = targets.kcal - nut.totals.kcal;
 
-    return `
-      <main class="flex-1 min-h-0 overflow-y-auto space-y-3.5 w-full pr-0.5" onclick="appActions.closeCardMenu()">
-        <div class="flex justify-between items-center border-b border-sub pb-2 text-xs font-bold text-white font-mono w-full">
-          <span class="flex items-center gap-1.5">
-            <svg class="w-4 h-4 text-accent shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></svg>
-            <span>Nutrition & Macros</span>
-          </span>
-          <div class="flex items-center space-x-2">
-            <input type="date" value="${dKey}" onchange="appActions.setNutritionDate(this.value)" class="bg-input border border-sub rounded-xl px-2 py-1 text-[10px] text-white font-mono">
-            <button type="button" onclick="appActions.navigate('calendar', event)" class="text-slate-400 hover:text-white underline">Schedule</button>
-          </div>
-        </div>
+    // Group entries by Meal Slot
+    const mealCardsHtml = MEAL_SLOTS.map(slot => {
+      const items = (nut.entries || []).filter(e => normalizeMealSlot(e.meal) === slot);
+      const sub = items.reduce((acc, it) => {
+        acc.kcal += Number(it.kcal) || 0;
+        acc.p += Number(it.p) || 0;
+        acc.c += Number(it.c) || 0;
+        acc.f += Number(it.f) || 0;
+        return acc;
+      }, { kcal: 0, p: 0, c: 0, f: 0 });
 
-        <!-- Daily Macro Dashboard -->
-        <div class="bg-card-sub p-4 rounded-3xl border border-sub space-y-3 font-mono text-xs shadow-xl">
-          <div class="flex justify-between items-end">
+      return `
+        <div class="bg-card-sub p-3.5 rounded-3xl border border-sub space-y-2 font-mono text-xs shadow-md">
+          <div class="flex justify-between items-center border-b border-sub/60 pb-2">
             <div>
-              <div class="text-[9px] text-slate-400 uppercase font-bold">Daily Calories (${dKey})</div>
-              <div class="text-xl font-black text-white">${nut.totals.kcal} <span class="text-xs font-normal text-slate-400">/ ${targets.kcal} kcal</span></div>
+              <div class="font-bold text-white text-xs">${slot}</div>
+              <div class="text-[9px] text-slate-400 mt-0.5">
+                <b class="text-accent">${Math.round(sub.kcal)} kcal</b> • <span class="text-blue-300">${Math.round(sub.p)}P</span> / <span class="text-emerald-300">${Math.round(sub.c)}C</span> / <span class="text-amber-300">${Math.round(sub.f)}F</span>
+              </div>
             </div>
-            <div class="text-right">
-              <div class="text-[9px] text-slate-400 uppercase font-bold">${remKcal >= 0 ? 'Remaining' : 'Over Target'}</div>
-              <div class="text-sm font-black ${remKcal >= 0 ? 'text-emerald-400' : 'text-rose-400'}">${Math.abs(remKcal)} kcal</div>
-            </div>
+            <button type="button" onclick="appActions.setNutritionView('add', '${slot}')" class="px-3 py-1 bg-input hover:bg-blue-600 hover:text-white border border-sub text-accent font-bold rounded-xl text-[10px] tactile">
+              + Add
+            </button>
           </div>
-
-          <div class="w-full h-2.5 bg-input rounded-full overflow-hidden border border-sub">
-            <div class="h-full bg-accent rounded-full transition-all" style="width: ${pct(nut.totals.kcal, targets.kcal)}%"></div>
-          </div>
-
-          <div class="grid grid-cols-3 gap-2 pt-1">
-            <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
-              <div class="flex justify-between text-[9px]"><span class="text-blue-300 font-bold">Protein</span><span>${nut.totals.p}/${targets.p}g</span></div>
-              <div class="w-full h-1.5 bg-card-sub rounded-full overflow-hidden"><div class="h-full bg-blue-500" style="width: ${pct(nut.totals.p, targets.p)}%"></div></div>
-            </div>
-            <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
-              <div class="flex justify-between text-[9px]"><span class="text-emerald-300 font-bold">Carbs</span><span>${nut.totals.c}/${targets.c}g</span></div>
-              <div class="w-full h-1.5 bg-card-sub rounded-full overflow-hidden"><div class="h-full bg-emerald-500" style="width: ${pct(nut.totals.c, targets.c)}%"></div></div>
-            </div>
-            <div class="bg-input p-2.5 rounded-2xl border border-sub space-y-1">
-              <div class="flex justify-between text-[9px]"><span class="text-amber-300 font-bold">Fat</span><span>${nut.totals.f}/${targets.f}g</span></div>
-              <div class="w-full h-1.5 bg-card-sub rounded-full overflow-hidden"><div class="h-full bg-amber-500" style="width: ${pct(nut.totals.f, targets.f)}%"></div></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Sub-Tab Switcher -->
-        <div class="grid grid-cols-4 gap-1 p-1 bg-input rounded-2xl border border-sub font-mono text-[10.5px]">
-          <button type="button" onclick="appActions.setNutritionTab('log')" class="py-1.5 rounded-xl font-bold transition ${ui.tab === 'log' ? 'bg-accent text-black shadow' : 'text-slate-400'}">Quick Log</button>
-          <button type="button" onclick="appActions.setNutritionTab('search')" class="py-1.5 rounded-xl font-bold transition ${ui.tab === 'search' ? 'bg-accent text-black shadow' : 'text-slate-400'}">USDA / UPC</button>
-          <button type="button" onclick="appActions.setNutritionTab('saved')" class="py-1.5 rounded-xl font-bold transition ${ui.tab === 'saved' ? 'bg-accent text-black shadow' : 'text-slate-400'}">Saved Meals</button>
-          <button type="button" onclick="appActions.setNutritionTab('targets')" class="py-1.5 rounded-xl font-bold transition ${ui.tab === 'targets' ? 'bg-accent text-black shadow' : 'text-slate-400'}">Targets</button>
-        </div>
-
-        ${ui.tab === 'log' ? `
-          <!-- AI Natural Language Quick-Log -->
-          <div class="bg-card-sub p-4 rounded-3xl border border-sub space-y-2.5 font-mono text-xs shadow-md">
-            <div class="flex justify-between items-center">
-              <span class="text-[10px] text-accent font-bold uppercase">✦ AI Meal Quick-Log</span>
-              <select onchange="appActions.setNutritionMealSlot(this.value)" class="bg-input border border-sub rounded-lg px-2 py-0.5 text-[10px] text-white font-bold">
-                ${['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Post-Workout'].map(m => `<option value="${m}" ${ui.mealSlot === m ? 'selected' : ''}>${m}</option>`).join('')}
-              </select>
-            </div>
-            <div class="flex gap-2">
-              <input type="text" id="nut-ai-input" placeholder="e.g. 8 oz 93/7 ground turkey, 1 cup rice, 1 tbsp olive oil" class="flex-1 bg-input border border-sub rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-accent" onkeydown="if(event.key==='Enter') appActions.aiQuickLogFood()">
-              <button type="button" onclick="appActions.aiQuickLogFood()" ${ui.aiLoading ? 'disabled' : ''} class="px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs tactile shrink-0">
-                ${ui.aiLoading ? '...' : 'Log'}
-              </button>
-            </div>
-          </div>
-
-          <!-- Manual Macro Quick-Add -->
-          <div class="bg-card-sub p-4 rounded-3xl border border-sub space-y-2.5 font-mono text-xs shadow-md">
-            <span class="text-[10px] text-slate-400 font-bold uppercase">Manual Entry</span>
-            <div class="grid grid-cols-12 gap-1.5">
-              <input type="text" id="nut-manual-name" placeholder="Food name..." class="col-span-12 sm:col-span-4 bg-input border border-sub rounded-xl px-2.5 py-1.5 text-white text-xs">
-              <input type="number" id="nut-manual-kcal" placeholder="kcal" class="col-span-3 sm:col-span-2 bg-input border border-sub rounded-xl px-2 py-1.5 text-center text-white text-xs">
-              <input type="number" id="nut-manual-p" placeholder="P(g)" class="col-span-3 sm:col-span-2 bg-input border border-sub rounded-xl px-2 py-1.5 text-center text-blue-300 text-xs">
-              <input type="number" id="nut-manual-c" placeholder="C(g)" class="col-span-3 sm:col-span-2 bg-input border border-sub rounded-xl px-2 py-1.5 text-center text-emerald-300 text-xs">
-              <input type="number" id="nut-manual-f" placeholder="F(g)" class="col-span-3 sm:col-span-2 bg-input border border-sub rounded-xl px-2 py-1.5 text-center text-amber-300 text-xs">
-            </div>
-            <button type="button" onclick="appActions.addManualFoodFromForm()" class="w-full py-2 bg-input hover:bg-slate-800 border border-sub text-white font-bold rounded-xl text-xs tactile">+ Add Food Entry</button>
-          </div>
-
-          <!-- Today's Logged Foods -->
-          <div class="bg-card-sub p-4 rounded-3xl border border-sub space-y-2 font-mono text-xs shadow-md">
-            <div class="flex justify-between items-center border-b border-sub pb-1.5">
-              <span class="text-[10px] text-accent font-bold uppercase">Logged Entries (${nut.entries.length})</span>
-            </div>
-            <div class="space-y-1.5 max-h-64 overflow-y-auto pr-1">
-              ${nut.entries.length ? nut.entries.slice().reverse().map(e => `
+          ${items.length ? `
+            <div class="space-y-1.5">
+              ${items.map(e => `
                 <div class="bg-input p-2.5 rounded-xl border border-sub flex justify-between items-center text-[10.5px]">
                   <div class="min-w-0 pr-2">
                     <div class="font-bold text-white truncate">${e.name}</div>
-                    <div class="text-[9px] text-slate-400 mt-0.5">${e.meal} • <span class="text-blue-300">${e.p}P</span> / <span class="text-emerald-300">${e.c}C</span> / <span class="text-amber-300">${e.f}F</span></div>
+                    <div class="text-[9px] text-slate-400 mt-0.5">
+                      ${e.servingInfo ? `<span class="text-slate-300">${e.servingInfo}</span> • ` : ''}<span class="text-blue-300">${e.p}P</span> / <span class="text-emerald-300">${e.c}C</span> / <span class="text-amber-300">${e.f}F</span>
+                    </div>
                   </div>
                   <div class="flex items-center space-x-2 shrink-0">
                     <span class="font-black text-accent">${e.kcal}</span>
                     <button type="button" onclick="appActions.deleteNutritionEntry('${e.id}')" class="text-slate-500 hover:text-rose-400 px-1 font-bold">✕</button>
                   </div>
                 </div>
-              `).join('') : `<div class="text-center py-5 text-slate-500 text-[10px]">No foods logged for ${dKey} yet.</div>`}
-            </div>
-          </div>
-        ` : ''}
-
-        ${ui.tab === 'search' ? `
-          <!-- Barcode / UPC Lookup -->
-          <div class="bg-card-sub p-4 rounded-3xl border border-sub space-y-2.5 font-mono text-xs shadow-md">
-            <div class="flex justify-between items-center">
-              <span class="text-[10px] text-accent font-bold uppercase">Barcode Lookup (Open Food Facts)</span>
-              <button type="button" onclick="appActions.toggleBarcodeScanner()" class="px-2.5 py-1 bg-input border border-sub rounded-xl text-[10px] text-white font-bold tactile">
-                ${ui.scannerActive ? '✕ Close Camera' : '📷 Scan Barcode'}
-              </button>
-            </div>
-            ${ui.scannerActive ? `<div id="apex-barcode-reader" class="w-full rounded-2xl overflow-hidden border border-sub"></div>` : ''}
-            <div class="flex gap-2">
-              <input type="text" id="nut-barcode-input" inputmode="numeric" placeholder="Enter UPC barcode digits..." class="flex-1 bg-input border border-sub rounded-xl px-3 py-2 text-white text-xs" onkeydown="if(event.key==='Enter') appActions.lookupBarcode()">
-              <button type="button" onclick="appActions.lookupBarcode()" ${ui.barcodeLoading ? 'disabled' : ''} class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs tactile">
-                ${ui.barcodeLoading ? '...' : 'Lookup'}
-              </button>
-            </div>
-          </div>
-
-          <!-- USDA FoodData Central Search -->
-          <div class="bg-card-sub p-4 rounded-3xl border border-sub space-y-2.5 font-mono text-xs shadow-md">
-            <span class="text-[10px] text-accent font-bold uppercase">USDA FoodData Central (400,000+ Foods)</span>
-            <div class="flex gap-2">
-              <input type="text" id="nut-usda-query" value="${ui.searchQuery || ''}" placeholder="Search whole foods or US brands..." class="flex-1 bg-input border border-sub rounded-xl px-3 py-2 text-white text-xs" onkeydown="if(event.key==='Enter') appActions.searchUsdaFoods()">
-              <button type="button" onclick="appActions.searchUsdaFoods()" ${ui.searchLoading ? 'disabled' : ''} class="px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs tactile">
-                ${ui.searchLoading ? '...' : 'Search'}
-              </button>
-            </div>
-            <div class="space-y-1.5 max-h-72 overflow-y-auto pr-1">
-              ${(ui.searchResults || []).map((r, idx) => `
-                <div class="bg-input p-2.5 rounded-xl border border-sub flex justify-between items-center text-[10px]">
-                  <div class="min-w-0 pr-2">
-                    <div class="font-bold text-white truncate">${r.name}</div>
-                    <div class="text-[9px] text-slate-400">${r.serving} • ${r.kcal} kcal • ${r.p}P / ${r.c}C / ${r.f}F</div>
-                  </div>
-                  <button type="button" onclick="appActions.addNutritionEntry(state.nutritionUi.searchResults[${idx}])" class="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold text-[10px] tactile shrink-0">+ Log</button>
-                </div>
               `).join('')}
             </div>
+          ` : `<div class="text-[9.5px] text-slate-500 py-1 px-1">Nothing logged for ${slot.toLowerCase()} yet.</div>`}
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <main class="flex-1 min-h-0 overflow-y-auto space-y-3.5 w-full pr-0.5" onclick="appActions.closeCardMenu()">
+        <!-- Header Bar -->
+        <div class="flex justify-between items-center border-b border-sub pb-2 text-xs font-bold text-white font-mono w-full">
+          <span class="flex items-center gap-1.5">
+            <svg class="w-4 h-4 text-accent shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></svg>
+            <span>Nutrition</span>
+          </span>
+          <div class="flex items-center space-x-1.5">
+            <input type="date" value="${dKey}" onchange="appActions.setNutritionDate(this.value)" class="bg-input border border-sub rounded-xl px-2 py-1 text-[10px] text-white font-mono">
+            <button type="button" onclick="appActions.setNutritionView('${ui.view === 'targets' ? 'diary' : 'targets'}')" class="px-2.5 py-1 rounded-xl border text-[10px] font-bold tactile ${ui.view === 'targets' ? 'bg-accent text-black border-accent' : 'bg-input border-sub text-slate-200 hover:border-accent'}">
+              ${ui.view === 'targets' ? '← Diary' : 'Targets'}
+            </button>
           </div>
+        </div>
+
+        <!-- Compact Daily Macro Summary Card -->
+        <div class="bg-card-sub p-3.5 rounded-3xl border border-sub space-y-2.5 font-mono text-xs shadow-xl">
+          <div class="flex justify-between items-end">
+            <div>
+              <div class="text-[9px] text-slate-400 uppercase font-bold">Calories (${NUTRITION_GOALS[targets.mode]?.label || 'Maintain'})</div>
+              <div class="text-xl font-black text-white">${nut.totals.kcal} <span class="text-xs font-normal text-slate-400">/ ${targets.kcal}</span></div>
+            </div>
+            <div class="text-right">
+              <div class="text-[9px] text-slate-400 uppercase font-bold">${remKcal >= 0 ? 'Remaining' : 'Over'}</div>
+              <div class="text-sm font-black ${remKcal >= 0 ? 'text-emerald-400' : 'text-rose-400'}">${Math.abs(remKcal)} kcal</div>
+            </div>
+          </div>
+
+          <div class="w-full h-2 bg-input rounded-full overflow-hidden border border-sub">
+            <div class="h-full bg-accent rounded-full transition-all" style="width: ${pct(nut.totals.kcal, targets.kcal)}%"></div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-2">
+            <div class="bg-input p-2 rounded-2xl border border-sub space-y-1">
+              <div class="flex justify-between text-[9px]"><span class="text-blue-300 font-bold">Protein</span><span>${nut.totals.p}/${targets.p}g</span></div>
+              <div class="w-full h-1.5 bg-card-sub rounded-full overflow-hidden"><div class="h-full bg-blue-500" style="width: ${pct(nut.totals.p, targets.p)}%"></div></div>
+            </div>
+            <div class="bg-input p-2 rounded-2xl border border-sub space-y-1">
+              <div class="flex justify-between text-[9px]"><span class="text-emerald-300 font-bold">Carbs</span><span>${nut.totals.c}/${targets.c}g</span></div>
+              <div class="w-full h-1.5 bg-card-sub rounded-full overflow-hidden"><div class="h-full bg-emerald-500" style="width: ${pct(nut.totals.c, targets.c)}%"></div></div>
+            </div>
+            <div class="bg-input p-2 rounded-2xl border border-sub space-y-1">
+              <div class="flex justify-between text-[9px]"><span class="text-amber-300 font-bold">Fat</span><span>${nut.totals.f}/${targets.f}g</span></div>
+              <div class="w-full h-1.5 bg-card-sub rounded-full overflow-hidden"><div class="h-full bg-amber-500" style="width: ${pct(nut.totals.f, targets.f)}%"></div></div>
+            </div>
+          </div>
+        </div>
+
+        ${ui.view === 'diary' ? `
+          <!-- Single-Line AI Quick-Log Bar -->
+          <div class="bg-card-sub p-3 rounded-3xl border border-sub space-y-2 font-mono text-xs shadow-md">
+            <div class="flex justify-between items-center">
+              <span class="text-[9.5px] text-accent font-bold uppercase">✦ AI Quick-Log</span>
+              <select onchange="appActions.setNutritionMealSlot(this.value)" class="bg-input border border-sub rounded-lg px-2 py-0.5 text-[10px] text-white font-bold">
+                ${MEAL_SLOTS.map(m => `<option value="${m}" ${ui.mealSlot === m ? 'selected' : ''}>${m}</option>`).join('')}
+              </select>
+            </div>
+            <div class="flex gap-2">
+              <input type="text" id="nut-ai-input" placeholder="e.g. 8 oz 93/7 ground turkey, 1 cup rice, 1 tbsp oil" class="flex-1 bg-input border border-sub rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-accent" onkeydown="if(event.key==='Enter') appActions.aiQuickLogFood()">
+              <button type="button" onclick="appActions.aiQuickLogFood()" ${ui.aiLoading ? 'disabled' : ''} class="px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs tactile shrink-0">
+                ${ui.aiLoading ? '...' : 'Log'}
+              </button>
+            </div>
+          </div>
+
+          <!-- Meal-Grouped Diary Cards -->
+          <div class="space-y-2.5">${mealCardsHtml}</div>
         ` : ''}
 
-        ${ui.tab === 'saved' ? `
-          <!-- Saved Meals & Batch-Cook Library -->
-          <div class="bg-card-sub p-4 rounded-3xl border border-sub space-y-3 font-mono text-xs shadow-md">
-            <span class="text-[10px] text-accent font-bold uppercase">Save Go-To Meal / Batch-Cook Portion</span>
-            <div class="grid grid-cols-12 gap-1.5">
-              <input type="text" id="nut-saved-name" placeholder="e.g. Ground Turkey Taco Bowl" class="col-span-12 sm:col-span-4 bg-input border border-sub rounded-xl px-2.5 py-1.5 text-white text-xs">
-              <input type="number" id="nut-saved-kcal" placeholder="kcal" class="col-span-3 sm:col-span-2 bg-input border border-sub rounded-xl px-2 py-1.5 text-center text-white text-xs">
-              <input type="number" id="nut-saved-p" placeholder="P(g)" class="col-span-3 sm:col-span-2 bg-input border border-sub rounded-xl px-2 py-1.5 text-center text-blue-300 text-xs">
-              <input type="number" id="nut-saved-c" placeholder="C(g)" class="col-span-3 sm:col-span-2 bg-input border border-sub rounded-xl px-2 py-1.5 text-center text-emerald-300 text-xs">
-              <input type="number" id="nut-saved-f" placeholder="F(g)" class="col-span-3 sm:col-span-2 bg-input border border-sub rounded-xl px-2 py-1.5 text-center text-amber-300 text-xs">
+        ${ui.view === 'add' ? `
+          <!-- Add Food Panel Header -->
+          <div class="flex justify-between items-center bg-card-sub px-3.5 py-2.5 rounded-2xl border border-sub font-mono text-xs">
+            <div class="flex items-center space-x-2">
+              <span class="text-[10px] text-slate-400 uppercase font-bold">Adding to:</span>
+              <select onchange="appActions.setNutritionMealSlot(this.value)" class="bg-input border border-sub rounded-xl px-2.5 py-1 text-accent font-bold text-xs">
+                ${MEAL_SLOTS.map(m => `<option value="${m}" ${ui.mealSlot === m ? 'selected' : ''}>${m}</option>`).join('')}
+              </select>
             </div>
-            <button type="button" onclick="appActions.saveMealToLibraryFromForm()" class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs tactile">Save to Meal Library</button>
+            <button type="button" onclick="appActions.setNutritionView('diary')" class="text-[10.5px] text-slate-300 hover:text-white font-bold underline">
+              ← Back to Diary
+            </button>
+          </div>
 
-            <div class="space-y-1.5 pt-2 border-t border-sub/50">
-              ${savedMeals.length ? savedMeals.map((m, idx) => `
-                <div class="bg-input p-2.5 rounded-xl border border-sub flex justify-between items-center text-[10.5px]">
-                  <div class="min-w-0 pr-2">
-                    <div class="font-bold text-white truncate">${m.name}</div>
-                    <div class="text-[9px] text-slate-400">${m.kcal} kcal • ${m.p}P / ${m.c}C / ${m.f}F</div>
-                  </div>
-                  <div class="flex items-center space-x-1.5 shrink-0">
-                    <button type="button" onclick="appActions.addNutritionEntry(state.settings.savedMeals[${idx}])" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-[10px] tactile">+ Log</button>
-                    <button type="button" onclick="appActions.deleteSavedMeal('${m.id}')" class="text-slate-500 hover:text-rose-400 px-1 font-bold">✕</button>
-                  </div>
+          <!-- 3-Tab Add Food Switcher -->
+          <div class="grid grid-cols-3 gap-1 p-1 bg-input rounded-2xl border border-sub font-mono text-[10.5px]">
+            <button type="button" onclick="appActions.setNutritionAddTab('manual')" class="py-1.5 rounded-xl font-bold transition ${ui.addTab === 'manual' ? 'bg-accent text-black shadow' : 'text-slate-400'}">Manual</button>
+            <button type="button" onclick="appActions.setNutritionAddTab('search')" class="py-1.5 rounded-xl font-bold transition ${ui.addTab === 'search' ? 'bg-accent text-black shadow' : 'text-slate-400'}">USDA / UPC</button>
+            <button type="button" onclick="appActions.setNutritionAddTab('saved')" class="py-1.5 rounded-xl font-bold transition ${ui.addTab === 'saved' ? 'bg-accent text-black shadow' : 'text-slate-400'}">Saved Meals</button>
+          </div>
+
+          ${ui.addTab === 'manual' ? `
+            <!-- Manual Entry with Serving Size × Qty Multiplier -->
+            <div class="bg-card-sub p-4 rounded-3xl border border-sub space-y-3 font-mono text-xs shadow-md">
+              <span class="text-[10px] text-accent font-bold uppercase">Label Entry (Per Serving × Quantity)</span>
+              <div class="grid grid-cols-12 gap-2">
+                <div class="col-span-12 space-y-1">
+                  <label class="text-[8.5px] text-slate-400 uppercase font-bold">Food / Meal Name</label>
+                  <input type="text" id="nut-manual-name" placeholder="e.g. 93/7 Ground Turkey" oninput="appActions.updateManualMacroPreview()" class="w-full bg-input border border-sub rounded-xl px-3 py-2 text-white text-xs">
                 </div>
-              `).join('') : `<div class="text-center py-4 text-slate-500 text-[10px]">No saved meals yet. Add your recurring meals above for 1-tap logging.</div>`}
+                <div class="col-span-8 space-y-1">
+                  <label class="text-[8.5px] text-slate-400 uppercase font-bold">Serving Size</label>
+                  <input type="text" id="nut-manual-serving" placeholder="e.g. 4 oz, 1 scoop, 1 cup" value="1 serving" oninput="appActions.updateManualMacroPreview()" class="w-full bg-input border border-sub rounded-xl px-3 py-1.5 text-white text-xs">
+                </div>
+                <div class="col-span-4 space-y-1">
+                  <label class="text-[8.5px] text-accent uppercase font-bold">Servings (Qty)</label>
+                  <input type="number" id="nut-manual-qty" step="0.25" min="0.25" value="1" oninput="appActions.updateManualMacroPreview()" class="w-full bg-input border border-sub rounded-xl px-2 py-1.5 text-center text-accent font-bold text-xs">
+                </div>
+              </div>
+
+              <div class="grid grid-cols-4 gap-1.5 pt-1">
+                <div class="space-y-1">
+                  <label class="text-[8.5px] text-slate-400 uppercase font-bold block text-center">Kcal / Srv</label>
+                  <input type="number" id="nut-manual-kcal" placeholder="auto" oninput="appActions.updateManualMacroPreview()" class="w-full bg-input border border-sub rounded-xl py-1.5 text-center text-white text-xs">
+                </div>
+                <div class="space-y-1">
+                  <label class="text-[8.5px] text-blue-300 uppercase font-bold block text-center">P (g) / Srv</label>
+                  <input type="number" id="nut-manual-p" placeholder="0" oninput="appActions.updateManualMacroPreview()" class="w-full bg-input border border-sub rounded-xl py-1.5 text-center text-blue-300 text-xs">
+                </div>
+                <div class="space-y-1">
+                  <label class="text-[8.5px] text-emerald-300 uppercase font-bold block text-center">C (g) / Srv</label>
+                  <input type="number" id="nut-manual-c" placeholder="0" oninput="appActions.updateManualMacroPreview()" class="w-full bg-input border border-sub rounded-xl py-1.5 text-center text-emerald-300 text-xs">
+                </div>
+                <div class="space-y-1">
+                  <label class="text-[8.5px] text-amber-300 uppercase font-bold block text-center">F (g) / Srv</label>
+                  <input type="number" id="nut-manual-f" placeholder="0" oninput="appActions.updateManualMacroPreview()" class="w-full bg-input border border-sub rounded-xl py-1.5 text-center text-amber-300 text-xs">
+                </div>
+              </div>
+
+              <div id="nut-manual-preview" class="p-2.5 bg-input/80 rounded-xl border border-sub/70 text-center text-[10.5px]">
+                <span class="text-slate-400">1 × 1 serving =</span> <b class="text-white">0 kcal</b> • <span class="text-blue-300">0P</span> / <span class="text-emerald-300">0C</span> / <span class="text-amber-300">0F</span>
+              </div>
+
+              <div class="grid grid-cols-2 gap-2">
+                <button type="button" onclick="appActions.addManualFoodFromForm(false)" class="py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs tactile shadow">+ Log to ${ui.mealSlot}</button>
+                <button type="button" onclick="appActions.addManualFoodFromForm(true)" class="py-2.5 bg-input hover:bg-slate-800 border border-sub text-emerald-300 font-bold rounded-xl text-xs tactile">★ Save & Log</button>
+              </div>
             </div>
-          </div>
+          ` : ''}
+
+          ${ui.addTab === 'search' ? `
+            <!-- Barcode / UPC Lookup -->
+            <div class="bg-card-sub p-4 rounded-3xl border border-sub space-y-2.5 font-mono text-xs shadow-md">
+              <div class="flex justify-between items-center">
+                <span class="text-[10px] text-accent font-bold uppercase">Barcode Lookup (Open Food Facts)</span>
+                <button type="button" onclick="appActions.toggleBarcodeScanner()" class="px-2.5 py-1 bg-input border border-sub rounded-xl text-[10px] text-white font-bold tactile">
+                  ${ui.scannerActive ? '✕ Close Camera' : '📷 Scan'}
+                </button>
+              </div>
+              ${ui.scannerActive ? `<div id="apex-barcode-reader" class="w-full rounded-2xl overflow-hidden border border-sub"></div>` : ''}
+              <div class="flex gap-1.5">
+                <input type="text" id="nut-barcode-input" inputmode="numeric" placeholder="UPC barcode..." class="flex-1 bg-input border border-sub rounded-xl px-3 py-2 text-white text-xs" onkeydown="if(event.key==='Enter') appActions.lookupBarcode()">
+                <input type="number" id="nut-barcode-qty" step="0.25" min="0.25" value="1" title="Servings" class="w-14 bg-input border border-sub rounded-xl px-1.5 py-2 text-center text-accent font-bold text-xs">
+                <button type="button" onclick="appActions.lookupBarcode()" ${ui.barcodeLoading ? 'disabled' : ''} class="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs tactile">
+                  ${ui.barcodeLoading ? '...' : 'Log'}
+                </button>
+              </div>
+            </div>
+
+            <!-- USDA FoodData Central Search -->
+            <div class="bg-card-sub p-4 rounded-3xl border border-sub space-y-2.5 font-mono text-xs shadow-md">
+              <span class="text-[10px] text-accent font-bold uppercase">USDA FoodData Central (400,000+ Foods)</span>
+              <div class="flex gap-2">
+                <input type="text" id="nut-usda-query" value="${ui.searchQuery || ''}" placeholder="Search whole foods or US brands..." class="flex-1 bg-input border border-sub rounded-xl px-3 py-2 text-white text-xs" onkeydown="if(event.key==='Enter') appActions.searchUsdaFoods()">
+                <button type="button" onclick="appActions.searchUsdaFoods()" ${ui.searchLoading ? 'disabled' : ''} class="px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs tactile">
+                  ${ui.searchLoading ? '...' : 'Search'}
+                </button>
+              </div>
+              <div class="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+                ${(ui.searchResults || []).map((r, idx) => `
+                  <div class="bg-input p-2.5 rounded-xl border border-sub flex justify-between items-center gap-2 text-[10px]">
+                    <div class="min-w-0 flex-1">
+                      <div class="font-bold text-white truncate">${r.name}</div>
+                      <div class="text-[9px] text-slate-400">${r.serving} • ${r.kcal} kcal • ${r.p}P / ${r.c}C / ${r.f}F</div>
+                    </div>
+                    <div class="flex items-center space-x-1 shrink-0">
+                      <input type="number" id="nut-usda-qty-${idx}" step="0.25" min="0.25" value="1" class="w-12 bg-card-sub border border-sub rounded-lg py-1 text-center text-accent font-bold text-[10px]">
+                      <button type="button" onclick="appActions.logUsdaResult(${idx})" class="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold text-[10px] tactile">+ Log</button>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
+
+          ${ui.addTab === 'saved' ? `
+            <!-- Saved Meals & Batch-Cook Library -->
+            <div class="bg-card-sub p-4 rounded-3xl border border-sub space-y-3 font-mono text-xs shadow-md">
+              <span class="text-[10px] text-accent font-bold uppercase">Saved Meals & Batch-Cook Portions</span>
+              <div class="space-y-1.5">
+                ${savedMeals.length ? savedMeals.map((m, idx) => `
+                  <div class="bg-input p-2.5 rounded-xl border border-sub flex justify-between items-center gap-2 text-[10.5px]">
+                    <div class="min-w-0 flex-1">
+                      <div class="font-bold text-white truncate">${m.name}</div>
+                      <div class="text-[9px] text-slate-400">${m.serving ? m.serving + ' • ' : ''}${m.kcal} kcal • ${m.p}P / ${m.c}C / ${m.f}F</div>
+                    </div>
+                    <div class="flex items-center space-x-1 shrink-0">
+                      <input type="number" id="nut-saved-qty-${idx}" step="0.25" min="0.25" value="1" class="w-12 bg-card-sub border border-sub rounded-lg py-1 text-center text-accent font-bold text-[10px]">
+                      <button type="button" onclick="appActions.logSavedMeal(${idx})" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-[10px] tactile">+ Log</button>
+                      <button type="button" onclick="appActions.deleteSavedMeal('${m.id}')" class="text-slate-500 hover:text-rose-400 px-1 font-bold">✕</button>
+                    </div>
+                  </div>
+                `).join('') : `<div class="text-center py-4 text-slate-500 text-[10px]">No saved meals yet. Use "★ Save & Log" on the Manual tab to build your library.</div>`}
+              </div>
+            </div>
+          ` : ''}
         ` : ''}
 
-        ${ui.tab === 'targets' ? `
+        ${ui.view === 'targets' ? `
           <!-- Goal Mode & Auto-Macro Engine -->
           <div class="bg-card-sub p-4 rounded-3xl border border-sub space-y-3 font-mono text-xs shadow-md">
             <div class="flex justify-between items-center border-b border-sub pb-2">
@@ -778,8 +962,8 @@
             </div>
 
             <div class="pt-2 border-t border-sub/50 space-y-1">
-              <label class="text-[9px] text-slate-400 uppercase font-bold">USDA FoodData Central API Key (Optional — Free at api.data.gov)</label>
-              <input type="password" value="${usdaKey}" placeholder="Leave blank to use DEMO_KEY (rate-limited)" onchange="appActions.saveUsdaApiKey(this.value)" class="w-full bg-input border border-sub rounded-xl px-3 py-2 text-white text-xs">
+              <label class="text-[9px] text-slate-400 uppercase font-bold">USDA FoodData Central API Key (Free at api.data.gov)</label>
+              <input type="password" value="${usdaKey}" placeholder="Paste your api.data.gov key..." onchange="appActions.saveUsdaApiKey(this.value)" class="w-full bg-input border border-sub rounded-xl px-3 py-2 text-white text-xs">
             </div>
           </div>
 
