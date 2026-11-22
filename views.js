@@ -940,52 +940,50 @@ function renderBottomNav() {
           const hasWorkoutEntry = Boolean(log?.workout?.done || hasSavedStaged || (isWorkoutActive && state.activeWorkoutDateKey === k));
 
           let badges = '';
-            let backBadges = '';
+            const badgeItems = [];
             if (log?.weight !== undefined && log?.weight !== null && log?.weight !== '') {
-              backBadges += `
-                <span class="w-[19px] h-[19px] sm:w-[22px] sm:h-[22px] rounded-md bg-slate-800/95 border border-slate-700/80 flex items-center justify-center text-slate-400 shrink-0" title="Bodyweight: ${log.weight}">
-                  <svg class="w-3 h-3 sm:w-3.5 sm:h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              badgeItems.push(`
+                <span class="w-4 h-4 sm:w-5 sm:h-5 rounded bg-slate-800/95 border border-slate-700/80 flex items-center justify-center text-slate-400 shrink-0" title="Bodyweight: ${log.weight}">
+                  <svg class="w-2.5 h-2.5 sm:w-3 sm:h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
                     <rect x="3" y="3" width="18" height="18" rx="4" />
                     <rect x="8" y="6" width="8" height="3" rx="1" fill="currentColor" />
                   </svg>
                 </span>
-              `;
+              `);
             }
             if (log?.recovery?.score) {
-              backBadges += `
-                <span class="w-[19px] h-[19px] sm:w-[22px] sm:h-[22px] rounded-md bg-slate-800/95 border border-slate-700/80 flex items-center justify-center text-slate-400 shrink-0" title="Readiness: ${log.recovery.score}%">
-                  <svg class="w-3 h-3 sm:w-3.5 sm:h-3.5" viewBox="0 0 24 24" fill="currentColor">
+              badgeItems.push(`
+                <span class="w-4 h-4 sm:w-5 sm:h-5 rounded bg-slate-800/95 border border-slate-700/80 flex items-center justify-center text-slate-400 shrink-0" title="Readiness: ${log.recovery.score}%">
+                  <svg class="w-2.5 h-2.5 sm:w-3 sm:h-3" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
                   </svg>
                 </span>
-              `;
+              `);
             }
-            if (log?.nutrition?.totals?.kcal > 0) {
-              backBadges += `
-                <span class="w-[19px] h-[19px] sm:w-[22px] sm:h-[22px] rounded-md bg-slate-800/95 border border-slate-700/80 flex items-center justify-center text-slate-400 shrink-0" title="Nutrition: ${log.nutrition.totals.kcal} kcal (${log.nutrition.totals.p || 0}g P)">
-                  <svg class="w-3 h-3 sm:w-3.5 sm:h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>
-                  </svg>
-                </span>
-              `;
-            }
-
-            let frontBadge = '';
             if (hasWorkoutEntry) {
-              frontBadge = `
-                <span class="relative z-10 ${backBadges ? '-mt-2' : ''} w-[19px] h-[19px] sm:w-[22px] sm:h-[22px] rounded-md flex items-center justify-center shrink-0 ring-2 ring-[#0b0d12] shadow-sm" style="background-color: var(--accent-primary); color: #000000;" title="Workout Session">
-                  <svg class="w-3 h-3 sm:w-3.5 sm:h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+              badgeItems.push(`
+                <span class="w-4 h-4 sm:w-5 sm:h-5 rounded flex items-center justify-center shrink-0 shadow-sm" style="background-color: var(--accent-primary); color: #000000;" title="Workout Session">
+                  <svg class="w-2.5 h-2.5 sm:w-3 sm:h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M2 12h20M6 8v8M18 8v8M4 10v4M20 10v4"/>
                   </svg>
                 </span>
-              `;
+              `);
+            }
+            if (log?.nutrition?.totals?.kcal > 0) {
+              badgeItems.push(`
+                <span class="w-4 h-4 sm:w-5 sm:h-5 rounded bg-slate-800/95 border border-slate-700/80 flex items-center justify-center text-slate-400 shrink-0" title="Nutrition: ${log.nutrition.totals.kcal} kcal (${log.nutrition.totals.p || 0}g P)">
+                  <svg class="w-2.5 h-2.5 sm:w-3 sm:h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>
+                  </svg>
+                </span>
+              `);
             }
 
-            if (backBadges || frontBadge) {
+            if (badgeItems.length > 0) {
+              const gridCols = badgeItems.length === 1 ? 'grid-cols-1' : 'grid-cols-2';
               badges = `
-                <div class="flex flex-col items-center justify-center w-full my-auto pt-0.5">
-                  ${backBadges ? `<div class="relative z-0 flex items-center justify-center gap-1">${backBadges}</div>` : ''}
-                  ${frontBadge}
+                <div class="grid ${gridCols} gap-0.5 place-items-center mx-auto my-auto">
+                  ${badgeItems.join('')}
                 </div>
               `;
             }
