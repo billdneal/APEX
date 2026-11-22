@@ -1,4 +1,4 @@
-const CACHE_NAME = 'apex-engine-cache-v4.8.7';
+const CACHE_NAME = 'apex-engine-cache-v4.8.8';
 
 const CORE_ASSETS = [
   './',
