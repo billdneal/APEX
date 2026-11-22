@@ -1,8 +1,3 @@
-
-
-
-JS icon
-views
 // ============================================================================
 // APEX TRAINING ENGINE - PART 4 OF 4: VIEW LAYER, RENDER PIPELINE & BOOTSTRAP
 // Complete Unabridged Production Release v4.6.5-PWA (Full View Architecture)
