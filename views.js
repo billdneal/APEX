@@ -16,6 +16,39 @@
 
 (function() {
   const state = window.state || {};
+  const APEX_SVGS = {
+    bolt:      '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+    flame:     '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>',
+    cloud:     '<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>',
+    more:      '<circle cx="12" cy="5" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="19" r="1.5" fill="currentColor" stroke="none"/>',
+    edit:      '<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>',
+    arrowUp:   '<path d="m18 15-6-6-6 6"/>',
+    arrowDown: '<path d="m6 9 6 6 6-6"/>',
+    chart:     '<line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/>',
+    trash:     '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>',
+    copy:      '<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+    save:      '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>',
+    alert:     '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/>',
+    flag:      '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/>',
+    wand:      '<path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72Z"/><path d="m14 7 3 3"/>',
+    camera:    '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>',
+    star:      '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+    lock:      '<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+    refresh:   '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
+    activity:  '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
+    dumbbell:  '<path d="M2 12h20M6 8v8M18 8v8M4 10v4M20 10v4"/>',
+    download:  '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>',
+    target:    '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
+    layers:    '<path d="m12 2 10 5-10 5-10-5Z"/><path d="m2 12 10 5 10-5"/><path d="m2 17 10 5 10-5"/>',
+    trendUp:   '<polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>',
+    sliders:   '<line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/><line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/><line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/><line x1="2" x2="6" y1="14" y2="14"/><line x1="10" x2="14" y1="8" y2="8"/><line x1="18" x2="22" y1="16" y2="16"/>'
+  };
+  function ic(name, cls = 'w-3.5 h-3.5') {
+    const inner = APEX_SVGS[name] || '';
+    return `<svg class="${cls} inline-block shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
+  }
+  window.apexIcon = ic;
+
   const core = window.apexCore || {};
   const renderCustomRpeTool = window.renderCustomRpeTool || function() { return ''; };
 const extendRpeMatrix = window.extendRpeMatrix;
@@ -597,10 +630,10 @@ window.appActions.removeRpeMatrixSet = function(idx) {
     if (!btn) return;
     if (state.user) {
       btn.innerHTML = state.syncStatus === 'synced'
-        ? '☁️ <span class="text-emerald-400 font-bold">Synced</span>'
-        : (state.syncStatus === 'syncing' ? '☁️ <span class="text-amber-400">Syncing...</span>' : '☁️ <span class="text-red-400">Sync Err</span>');
+        ? `${ic('cloud','w-3.5 h-3.5 text-emerald-400')} <span class="text-emerald-400 font-bold">Synced</span>`
+        : (state.syncStatus === 'syncing' ? `${ic('cloud','w-3.5 h-3.5 text-accent animate-pulse')} <span class="text-accent">Syncing...</span>` : `${ic('cloud','w-3.5 h-3.5 text-red-400')} <span class="text-red-400">Sync Err</span>`);
     } else {
-      btn.innerHTML = '☁️ <span class="text-blue-400 font-bold">Cloud Sync</span>';
+      btn.innerHTML = `${ic('cloud','w-3.5 h-3.5 text-slate-300')} <span class="text-slate-200 font-bold">Cloud Sync</span>`;
     }
   };
   function generateRpeMatrix(performances, roundTo = 5) {
@@ -773,8 +806,8 @@ function renderBottomNav() {
       const isWorkoutActive = state.activeWorkout && state.activeWorkout.length > 0;
 
       let syncBtnContent = state.user 
-        ? (state.syncStatus === 'synced' ? '☁️ <span class="text-emerald-400 font-bold">Synced</span>' : (state.syncStatus === 'syncing' ? '☁️ <span class="text-amber-400">Syncing...</span>' : '☁️ <span class="text-red-400">Sync Err</span>'))
-        : '☁️ <span class="text-blue-400 font-bold">Cloud Sync</span>';
+        ? (state.syncStatus === 'synced' ? `${ic('cloud','w-3.5 h-3.5 text-emerald-400')} <span class="text-emerald-400 font-bold">Synced</span>` : (state.syncStatus === 'syncing' ? `${ic('cloud','w-3.5 h-3.5 text-accent animate-pulse')} <span class="text-accent">Syncing...</span>` : `${ic('cloud','w-3.5 h-3.5 text-red-400')} <span class="text-red-400">Sync Err</span>`))
+        : `${ic('cloud','w-3.5 h-3.5 text-slate-300')} <span class="text-slate-200 font-bold">Cloud Sync</span>`;
 
       let html = `
         <header class="flex justify-between items-center pb-2.5 border-b border-sub relative shrink-0 gap-2">
@@ -798,7 +831,7 @@ function renderBottomNav() {
           <nav class="hidden md:flex items-center space-x-1 font-mono text-xs flex-wrap justify-center">
             ${[
               { id: 'calendar', label: 'Home' },
-              { id: isWorkoutActive ? 'logger' : 'staging', label: isWorkoutActive ? 'Active Workout 🔥' : 'Stage' },
+              { id: isWorkoutActive ? 'logger' : 'staging', label: isWorkoutActive ? 'Active Workout' : 'Stage' },
               { id: 'programming_builder', label: 'Protocols' },
               { id: 'splits', label: 'Splits' },
               { id: 'blocks', label: 'Blocks' },
@@ -831,7 +864,7 @@ function renderBottomNav() {
         ${(isWorkoutActive && state.screen !== 'logger') ? `
           <div class="bg-gradient-to-r from-blue-950/80 to-indigo-950/80 border border-blue-600/60 p-2.5 rounded-2xl flex justify-between items-center text-xs font-mono shadow-xl backdrop-blur-md shrink-0">
             <div class="flex items-center space-x-2.5">
-              <span class="text-base animate-bounce">🏋️</span>
+              ${ic('dumbbell','w-4 h-4 text-accent')}
               <div>
                 <span class="font-bold text-white">Active Session in Progress</span>
                 <div class="text-[10px] text-blue-300">Started: ${state.activeWorkoutDateKey || 'Current'} • ${state.activeWorkout.length} Movements Active</div>
@@ -909,7 +942,7 @@ function renderBottomNav() {
 
               <div class="space-y-2 border-t border-sub pt-3 font-mono text-xs">
                 <button type="button" onclick="appActions.promptInstallApp()" class="w-full py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl text-white font-bold flex items-center justify-center space-x-2 shadow-lg tactile">
-                  <span>📲</span><span>Install Standalone App</span>
+                  ${ic('download','w-3.5 h-3.5')}<span>Install Standalone App</span>
                 </button>
                 <div class="text-[10px] text-slate-500 text-center">
                   <div>APEX Engine ${window.apexCore?.APP_VERSION || ''}</div>
@@ -1428,7 +1461,7 @@ function renderBottomNav() {
         <div class="flex flex-wrap items-center justify-between gap-1">
           <label class="text-[9px] text-slate-400 font-bold uppercase">Prescribed Reps / Array & Rep Source</label>
           <button type="button" onclick="appActions.toggleSchemeRepLock('${curScheme}')" class="px-2 py-0.5 rounded-lg border text-[9px] font-bold transition tactile ${isRepLocked ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'bg-card-sub border-sub text-slate-300 hover:text-white'}">
-            ${isRepLocked ? '🔒 Locked to Blueprint (Tap to Inherit Phase)' : '🔄 Inheriting Phase Matrix (Tap to Lock)'}
+            ${isRepLocked ? `${ic('lock','w-3 h-3 mr-1')}Locked to Blueprint (Tap to Inherit Phase)` : `${ic('refresh','w-3 h-3 mr-1')}Inheriting Phase Matrix (Tap to Lock)`}
           </button>
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center pt-0.5">
@@ -1521,7 +1554,7 @@ function renderBottomNav() {
     </div>
     <div class="flex items-center space-x-1.5">
       <button type="button" onclick="appActions.duplicateSchemeBlueprint('${curScheme}')" class="px-2.5 py-1.5 bg-input hover:bg-slate-700 border border-sub text-slate-200 rounded-xl text-xs font-bold tactile shadow-md" title="Clone scheme into a new custom blueprint">
-        📋 Duplicate
+        ${ic('copy','w-3.5 h-3.5 mr-1')}Duplicate
       </button>
       ${(curScheme.startsWith('custom_') || !DEFAULT_SCHEME_BLUEPRINTS[curScheme]) ? `
         <button type="button" onclick="appActions.deleteCustomBlueprint('${curScheme}')" class="px-2.5 py-1.5 bg-rose-950/80 hover:bg-rose-900 border border-rose-700 text-rose-300 font-bold rounded-xl text-xs tactile shadow-md">
@@ -1687,16 +1720,27 @@ const displayTargetRpe = targetRpenum <= 5.5 ? '&lt;6.0' : targetRpenum.toFixed(
 const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.actualRpe !== '') ? Number(s.actualRpe) : 0;
 
 
-          const hasCustomLabel = s.label && !/^Set \d+$/i.test(s.label);
+          const rawLabel = String(s.label || '').trim();
+          const isGenericLabel = !rawLabel || /^(Set\s*\d+|S\d+)$/i.test(rawLabel);
+          const isGroundingLabel = /🔥|grounding|calibration/i.test(rawLabel);
+          const cleanCustomLabel = rawLabel.replace(/🔥\s*/g, '').trim();
 
             return `
               <div id="set-row-${exIdx}-${sIdx}" class="px-2 py-1.5 rounded-lg border transition-colors ${s.done ? 'bg-emerald-950/20 border-emerald-600/40' : 'bg-input border-sub'}">
+                ${!isGenericLabel ? `
+                  <div class="flex items-center justify-between pb-1 mb-1 border-b border-sub/40 text-[9px] font-mono">
+                    <span class="inline-flex items-center gap-1 font-bold ${isGroundingLabel ? 'text-accent' : 'text-slate-400'} truncate">
+                      ${isGroundingLabel ? ic('flame', 'w-2.5 h-2.5 text-accent') : ''}
+                      <span>${cleanCustomLabel}</span>
+                    </span>
+                  </div>
+                ` : ''}
                 <div class="grid grid-cols-12 gap-1.5 items-center text-center">
                   
-                  <!-- Col 1-2: Delete & Wrapped, Taller Set Label -->
+                  <!-- Col 1-2: Delete & Compact Set Pill -->
                   <div class="col-span-2 flex items-center space-x-1 text-left min-w-0">
                     <button type="button" onclick="appActions.deleteSet(${exIdx},${sIdx})" class="text-[10px] text-slate-500 hover:text-rose-400 p-0.5 shrink-0" title="Remove Set">✕</button>
-                    <span class="w-full min-h-[30px] px-1 py-0.5 rounded bg-card-sub border border-sub font-mono text-[9px] font-bold text-slate-300 leading-[1.1] whitespace-normal break-words flex items-center justify-center text-center">${hasCustomLabel ? s.label : `Set ${sIdx + 1}`}</span>
+                    <span class="w-full h-8 px-1 rounded bg-card-sub border ${isGroundingLabel ? 'border-accent/50 text-accent' : 'border-sub text-slate-300'} font-mono text-[10px] font-bold flex items-center justify-center text-center shrink-0">S${sIdx + 1}</span>
                   </div>
 
                   <!-- Col 3-5: Target Prescription (Wrapped & Full Text on Mobile) -->
@@ -2023,7 +2067,7 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
       <button type="button"
         onclick="appActions.openSchemeInfoModal('${String(ex.scheme || '').replace(/'/g, "\\'")}')"
         title="Protocol Instructions"
-        class="p-1 rounded-xl border transition-colors flex items-center justify-center bg-input text-slate-400 hover:text-accent border-sub tactile">
+        class="p-1.5 rounded-xl border transition-colors flex items-center justify-center bg-input text-slate-400 hover:text-accent border-sub tactile">
         <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="10"></circle>
           <line x1="12" y1="16" x2="12" y2="12"></line>
@@ -2035,20 +2079,26 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
       <button type="button" 
         onclick="appActions.toggleExerciseCalc(${exIdx})" 
         title="Load Calculator"
-        class="p-1 rounded-xl border transition-colors flex items-center justify-center ${state.openExerciseCalc === exIdx ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm' : 'bg-input text-slate-400 hover:text-slate-200 border-sub'}">
-        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-        </svg>
+        class="p-1.5 rounded-xl border transition-colors flex items-center justify-center tactile ${state.openExerciseCalc === exIdx ? 'bg-accent/20 text-accent border-accent/60 shadow-sm' : 'bg-input text-slate-400 hover:text-white border-sub'}">
+        ${ic('bolt', 'w-3.5 h-3.5')}
       </button>
 
-                        <button type="button" onclick="appActions.toggleCardMenu(${exIdx}, event)" class="p-1 rounded-xl bg-input border border-sub text-slate-300 hover:text-white text-xs w-7 h-7 flex items-center justify-center font-bold tactile">⋮</button>
+      <!-- Card Action Menu Button -->
+      <button type="button" onclick="appActions.toggleCardMenu(${exIdx}, event)" title="Movement Options"
+        class="p-1.5 rounded-xl border transition-colors flex items-center justify-center tactile ${state.cardMenuOpen === exIdx ? 'bg-accent/20 text-accent border-accent/60 shadow-sm' : 'bg-input border-sub text-slate-400 hover:text-white'}">
+        ${ic('more', 'w-3.5 h-3.5')}
+      </button>
                   ${state.cardMenuOpen === exIdx ? `
-        <div class="absolute right-0 top-8 w-48 bg-card border border-sub rounded-2xl shadow-2xl z-40 p-1.5 font-mono text-[11px] space-y-0.5">
-          <button type="button" onclick="appActions.openConfig(${exIdx}, true)" class="w-full text-left p-1.5 rounded-lg hover:bg-slate-800 text-slate-200">Edit Modifiers / Lift</button>
-          <button type="button" onclick="appActions.moveActiveEx(${exIdx}, -1)" class="w-full text-left p-1.5 rounded-lg hover:bg-slate-800 flex items-center space-x-1.5 text-slate-200"><span>↑</span><span>Move Up</span></button>
-          <button type="button" onclick="appActions.moveActiveEx(${exIdx}, 1)" class="w-full text-left p-1.5 rounded-lg hover:bg-slate-800 flex items-center space-x-1.5 text-slate-200"><span>↓</span><span>Move Down</span></button>
-          <button type="button" onclick="appActions.openPlanner(${exIdx})" class="w-full text-left p-1.5 rounded-lg hover:bg-blue-600 hover:text-white text-slate-200">Planner & History</button>
-          <button type="button" onclick="appActions.deleteActiveEx(${exIdx})" class="w-full text-left p-1.5 rounded-lg hover:bg-red-950 text-red-400 flex items-center space-x-1.5 border-t border-sub mt-0.5"><span>✕</span><span>Remove Movement</span></button>
+        <div class="absolute right-0 top-9 w-52 bg-card border border-sub rounded-2xl shadow-2xl z-40 p-1.5 font-mono text-[11px] space-y-0.5 backdrop-blur-md">
+          <button type="button" onclick="appActions.openConfig(${exIdx}, true)" class="w-full text-left px-2.5 py-2 rounded-xl hover:bg-input text-slate-200 flex items-center gap-2 transition">${ic('sliders','w-3.5 h-3.5 text-slate-400')}<span>Edit Modifiers / Lift</span></button>
+          <button type="button" onclick="appActions.openPlanner(${exIdx})" class="w-full text-left px-2.5 py-2 rounded-xl hover:bg-input text-slate-200 flex items-center gap-2 transition">${ic('chart','w-3.5 h-3.5 text-slate-400')}<span>Planner & History</span></button>
+          <div class="grid grid-cols-2 gap-1 pt-0.5 border-t border-sub/50">
+            <button type="button" onclick="appActions.moveActiveEx(${exIdx}, -1)" class="px-2 py-1.5 rounded-xl hover:bg-input text-slate-300 flex items-center justify-center gap-1 transition">${ic('arrowUp','w-3.5 h-3.5')}<span>Up</span></button>
+            <button type="button" onclick="appActions.moveActiveEx(${exIdx}, 1)" class="px-2 py-1.5 rounded-xl hover:bg-input text-slate-300 flex items-center justify-center gap-1 transition">${ic('arrowDown','w-3.5 h-3.5')}<span>Down</span></button>
+          </div>
+          <div class="pt-0.5 border-t border-sub/50">
+            <button type="button" onclick="appActions.deleteActiveEx(${exIdx})" class="w-full text-left px-2.5 py-2 rounded-xl hover:bg-red-950/60 text-red-400 flex items-center gap-2 transition">${ic('trash','w-3.5 h-3.5')}<span>Remove Movement</span></button>
+          </div>
         </div>
       ` : ''}
                 </div>
@@ -2058,11 +2108,11 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
 
               ${ex.tier === 'Main' ? `
                 <div class="flex items-center space-x-1.5 pt-0.5 font-mono">
-                  <button type="button" onclick="appActions.toggleGroundingSet(${exIdx}, true)" class="px-2 py-0.5 rounded-lg text-[9px] font-bold border transition tactile ${ex.isGrounding ? 'bg-amber-600 text-white border-amber-400 shadow-sm' : 'bg-input text-slate-400 border-sub'}">
-                    ${ex.isGrounding ? '🔥 Top Calibration Set (@9.0)' : 'Calibration Set'}
+                  <button type="button" onclick="appActions.toggleGroundingSet(${exIdx}, true)" class="px-2 py-1 rounded-lg text-[9px] font-bold border transition tactile inline-flex items-center gap-1 ${ex.isGrounding ? 'bg-accent/20 text-accent border-accent/60 shadow-sm' : 'bg-input text-slate-400 hover:text-slate-200 border-sub'}">
+                    ${ic('flame','w-3 h-3')}<span>${ex.isGrounding ? 'Calibration (@9.0)' : 'Calibration Set'}</span>
                   </button>
-                  <button type="button" onclick="appActions.toggleSkipBackoffs(${exIdx}, true)" class="px-2 py-0.5 rounded-lg text-[9px] font-bold border transition tactile ${ex.skipBackoffs ? 'bg-indigo-600 text-white border-indigo-400 shadow-sm' : 'bg-input text-slate-400 border-sub'}">
-                    ${ex.skipBackoffs ? '⚡ Skip Back-offs (ON)' : 'Skip Back-offs'}
+                  <button type="button" onclick="appActions.toggleSkipBackoffs(${exIdx}, true)" class="px-2 py-1 rounded-lg text-[9px] font-bold border transition tactile inline-flex items-center gap-1 ${ex.skipBackoffs ? 'bg-accent/20 text-accent border-accent/60 shadow-sm' : 'bg-input text-slate-400 hover:text-slate-200 border-sub'}">
+                    ${ic('bolt','w-3 h-3')}<span>${ex.skipBackoffs ? 'Skip Back-offs (ON)' : 'Skip Back-offs'}</span>
                   </button>
                 </div>
               ` : ''}
@@ -2070,7 +2120,7 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
               ${ex.fatigueWarning ? `
                 <div class="bg-amber-950/70 border border-amber-600/80 p-2.5 rounded-xl flex items-center justify-between text-xs font-mono animate-pulse">
                   <div class="flex items-center space-x-2">
-                    <span class="text-base">⚠️</span>
+                    ${ic('alert','w-4 h-4 text-accent shrink-0')}
                     <div>
                       <div class="text-amber-200 font-bold">Fatigue Overshoot Detected</div>
                       <div class="text-[10px] text-amber-300/80">RPE exceeded target by ≥1.0. Recommend -5% back-off.</div>
@@ -2136,7 +2186,7 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
     </div>
     ${ex.liveAnchorSync ? `
                 <div class="mb-2 p-2 bg-amber-500/10 border border-amber-500/40 rounded-xl flex items-center justify-between font-mono text-xs">
-                  <span class="text-amber-300">⚡ Set 1 Drift: <b>${ex.liveAnchorSync.pctDiff > 0 ? '+' : ''}${ex.liveAnchorSync.pctDiff}%</b> (Live e1RM: <b>${ex.liveAnchorSync.liveE1} lbs</b>)</span>
+                  <span class="text-amber-300">${ic('bolt','w-3 h-3 text-accent mr-1')}Set 1 Drift: <b>${ex.liveAnchorSync.pctDiff > 0 ? '+' : ''}${ex.liveAnchorSync.pctDiff}%</b> (Live e1RM: <b>${ex.liveAnchorSync.liveE1} lbs</b>)</span>
                   <button type="button" onclick="appActions.syncLiveAnchor(${exIdx})" class="px-2.5 py-1 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-bold shadow-sm transition tactile">
                     Sync Remaining Sets
                   </button>
@@ -2148,7 +2198,7 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                     
                     ${ghostPacer ? `
                       <div class="px-2.5 py-1.5 mt-1 rounded-xl bg-input/70 border border-sub/70 flex items-center justify-between text-[9.5px] font-mono">
-                        <span class="text-slate-400 font-bold uppercase tracking-wider shrink-0">👻 Ghost Pacer</span>
+                        <span class="text-slate-400 font-bold uppercase tracking-wider shrink-0">${ic('activity','w-3 h-3 text-slate-400 mr-1')}Ghost Pacer</span>
                         <span class="${ghostPacer.deltaVs90 !== null && ghostPacer.deltaVs90 > 0 ? 'text-emerald-400 font-bold' : 'text-accent font-semibold'} text-right truncate ml-2">${ghostPacer.cue}</span>
                       </div>
                     ` : ''}
@@ -2225,7 +2275,7 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                 ${state.isEditingHistorical ? 'Update & Save Changes \u2192' : 'Finish Session \u2192'}
               </button>
               <button type="button" onclick="appActions.discardActiveWorkout()" class="w-full py-2 bg-input hover:bg-red-950/40 text-red-400 border border-sub rounded-2xl text-xs font-bold font-mono tactile">
-                🗑 Discard Active Session
+                ${ic('trash','w-3.5 h-3.5 mr-1')}Discard Active Session
               </button>
             </div>
           </main>
@@ -2287,11 +2337,11 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
 
             ${slot.tier === 'Main' ? `
               <div class="flex items-center space-x-1.5 pt-0.5 font-mono">
-                <button type="button" onclick="appActions.toggleGroundingSet(${i}, false)" class="px-2 py-0.5 rounded-lg text-[9px] font-bold border transition tactile ${slot.isGrounding ? 'bg-amber-600 text-white border-amber-400 shadow-sm' : 'bg-input text-slate-400 border-sub'}">
-                  ${slot.isGrounding ? '🔥 Top Calibration Set (@9.0)' : 'Calibration Set'}
+                <button type="button" onclick="appActions.toggleGroundingSet(${i}, false)" class="px-2 py-1 rounded-lg text-[9px] font-bold border transition tactile inline-flex items-center gap-1 ${slot.isGrounding ? 'bg-accent/20 text-accent border-accent/60 shadow-sm' : 'bg-input text-slate-400 hover:text-slate-200 border-sub'}">
+                  ${ic('flame','w-3 h-3')}<span>${slot.isGrounding ? 'Calibration (@9.0)' : 'Calibration Set'}</span>
                 </button>
-                <button type="button" onclick="appActions.toggleSkipBackoffs(${i}, false)" class="px-2 py-0.5 rounded-lg text-[9px] font-bold border transition tactile ${slot.skipBackoffs ? 'bg-indigo-600 text-white border-indigo-400 shadow-sm' : 'bg-input text-slate-400 border-sub'}">
-                  ${slot.skipBackoffs ? '⚡ Skip Back-offs (ON)' : 'Skip Back-offs'}
+                <button type="button" onclick="appActions.toggleSkipBackoffs(${i}, false)" class="px-2 py-1 rounded-lg text-[9px] font-bold border transition tactile inline-flex items-center gap-1 ${slot.skipBackoffs ? 'bg-accent/20 text-accent border-accent/60 shadow-sm' : 'bg-input text-slate-400 hover:text-slate-200 border-sub'}">
+                  ${ic('bolt','w-3 h-3')}<span>${slot.skipBackoffs ? 'Skip Back-offs (ON)' : 'Skip Back-offs'}</span>
                 </button>
               </div>
             ` : ''}
@@ -2369,7 +2419,7 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
       </div>
       ${isOverCeiling ? `
         <div class="text-[9.5px] text-rose-300 font-semibold pt-0.5">
-          ⚠️ High Fatigue Warning: Planned density exceeds your recovery threshold (${curReadinessScore}% Readiness). Consider substituting high-SFR clusters or trimming set volume.
+          ${ic('alert','w-3.5 h-3.5 mr-1')}High Fatigue Warning: Planned density exceeds your recovery threshold (${curReadinessScore}% Readiness). Consider substituting high-SFR clusters or trimming set volume.
         </div>
       ` : ''}
     </div>
@@ -2400,8 +2450,8 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
               
               <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs font-mono">
                 <button type="button" onclick="appActions.openAdd(false)" class="py-2.5 bg-card-sub rounded-2xl text-slate-300 font-semibold border border-sub hover:text-white tactile">+ Movement</button>
-                <button type="button" onclick="appActions.saveCurrentStagedBlueprint()" class="py-2.5 bg-indigo-950/70 text-indigo-300 border border-indigo-700 rounded-2xl font-bold hover:bg-indigo-900 tactile">💾 Save Plan</button>
-                <button type="button" onclick="appActions.openCopyModal('${targetDateKey}', state.stagedSlots)" class="py-2.5 bg-card-sub text-slate-300 rounded-2xl font-semibold border border-sub hover:text-white tactile">📋 Copy To...</button>
+                <button type="button" onclick="appActions.saveCurrentStagedBlueprint()" class="py-2.5 bg-indigo-950/70 text-indigo-300 border border-indigo-700 rounded-2xl font-bold hover:bg-indigo-900 tactile">${ic('save','w-3.5 h-3.5 mr-1')}Save Plan</button>
+                <button type="button" onclick="appActions.openCopyModal('${targetDateKey}', state.stagedSlots)" class="py-2.5 bg-card-sub text-slate-300 rounded-2xl font-semibold border border-sub hover:text-white tactile">${ic('copy','w-3.5 h-3.5 mr-1')}Copy To...</button>
                 <button type="button" onclick="appActions.navigate('calendar', event)" class="py-2.5 bg-input text-slate-400 rounded-2xl border border-sub tactile">Cancel</button>
               </div>
             </div>
@@ -2556,8 +2606,8 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
 
             <div class="grid grid-cols-2 md:grid-cols-4 gap-2 pt-1.5 border-t border-sub/60 font-mono text-xs w-full">
               <button type="button" onclick="appActions.deleteHistoricalSession('${dKey}')" class="py-2.5 bg-input hover:bg-red-950/40 text-red-400 border border-sub rounded-2xl font-bold tactile">Delete Log</button>
-              <button type="button" onclick="appActions.openCopyModal('${dKey}')" class="py-2.5 bg-card-sub text-slate-300 rounded-2xl font-semibold border border-sub hover:text-white tactile">📋 Copy To...</button>
-              <button type="button" onclick="appActions.editCompletedSession('${dKey}')" class="py-2.5 bg-amber-600 hover:bg-amber-500 rounded-2xl text-black font-bold tactile">✏️ Edit</button>
+              <button type="button" onclick="appActions.openCopyModal('${dKey}')" class="py-2.5 bg-card-sub text-slate-300 rounded-2xl font-semibold border border-sub hover:text-white tactile">${ic('copy','w-3.5 h-3.5 mr-1')}Copy To...</button>
+              <button type="button" onclick="appActions.editCompletedSession('${dKey}')" class="py-2.5 bg-amber-600 hover:bg-amber-500 rounded-2xl text-black font-bold tactile">${ic('edit','w-3.5 h-3.5 mr-1')}Edit</button>
               <button type="button" onclick="appActions.navigate('calendar', event)" class="py-2.5 bg-blue-600 hover:bg-blue-500 rounded-2xl font-bold text-white transition tactile">&larr; Calendar</button>
             </div>
           </main>
@@ -2610,12 +2660,12 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                   <button type="button" 
                     onclick="appActions.setBlockProgressionMode(${idx}, 'intensity')" 
                     class="px-2 py-0.5 rounded text-[9px] font-bold transition tactile ${(!b.progressionMode || b.progressionMode === 'intensity') ? 'bg-accent text-white shadow-sm' : 'text-slate-400 hover:text-white'}">
-                    ⚡ Intensity (Wave)
+                    ${ic('bolt','w-3 h-3 mr-0.5')}Intensity
                   </button>
                   <button type="button" 
                     onclick="appActions.setBlockProgressionMode(${idx}, 'load')" 
                     class="px-2 py-0.5 rounded text-[9px] font-bold transition tactile ${(b.progressionMode === 'load') ? 'bg-accent text-white shadow-sm' : 'text-slate-400 hover:text-white'}">
-                    📈 Load (Static)
+                    ${ic('trendUp','w-3 h-3 mr-0.5')}Load
                   </button>
                 </div>
               </div>
@@ -2641,7 +2691,7 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                 <div class="text-[9px] text-slate-300 mt-0.5">Analyze completed block volume, e1RM adaptation, and localized fatigue.</div>
               </div>
               <button type="button" onclick="appActions.openBlockWizard()" class="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs tactile shadow-lg">
-                🧙 Block Review & Transition &rarr;
+                ${ic('wand','w-3.5 h-3.5 mr-1')}Block Review & Transition &rarr;
               </button>
             </div>
 
@@ -2726,7 +2776,7 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
             <div class="grid grid-cols-3 gap-1.5 p-1 bg-input rounded-2xl border border-sub font-mono text-xs w-full">
             <button type="button" onclick="appActions.setResTab('exercises')" class="py-2 rounded-xl font-bold transition tactile ${activeTab === 'exercises' ? 'bg-blue-600 text-white shadow' : 'text-slate-400'}">Movements (${catKeys.length})</button>
             <button type="button" onclick="appActions.setResTab('modifiers')" class="py-2 rounded-xl font-bold transition tactile ${activeTab === 'modifiers' ? 'bg-blue-600 text-white shadow' : 'text-slate-400'}">Modifiers (${(state.modifierCats || []).length})</button>
-            <button type="button" onclick="appActions.setResTab('equipment')" class="py-2 rounded-xl font-bold transition tactile ${activeTab === 'equipment' ? 'bg-blue-600 text-white shadow' : 'text-slate-400'}">⚙️ Gym Inventory</button>
+            <button type="button" onclick="appActions.setResTab('equipment')" class="py-2 rounded-xl font-bold transition tactile ${activeTab === 'equipment' ? 'bg-blue-600 text-white shadow' : 'text-slate-400'}">${ic('sliders','w-3.5 h-3.5 mr-1')}Gym Inventory</button>
           </div>
 
             ${activeTab === 'exercises' ? `
@@ -2777,7 +2827,7 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                               <span class="text-slate-200 font-bold truncate max-w-[170px]">${ex}</span>
                               <div class="flex items-center space-x-1">
                                 <button type="button" onclick="appActions.toggleExRepOverride('${ex}')" class="px-2 py-0.5 rounded-lg border text-[10px] font-bold tactile ${isExpanded ? 'bg-blue-600 text-white border-blue-500' : 'bg-card-sub text-slate-300 border-sub hover:text-white'}">
-                                  🎯 Reps
+                                  ${ic('target','w-3 h-3 mr-0.5')}Reps
                                 </button>
                                 <button type="button" onclick="appActions.deleteExercise('${cat}', '${ex}')" class="text-slate-500 hover:text-red-400 text-xs px-1 font-bold tactile">×</button>
                               </div>
@@ -3091,7 +3141,7 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                   <div class="text-[9px] text-slate-400">Adjusts how strongly recent top sets update your working 1RM baseline</div>
                 </div>
                 <button type="button" onclick="appActions.reconcileGroundingE1rms()" class="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[10px] font-bold tactile shadow">
-                  ⚡ Re-blend Anchors Now
+                  ${ic('bolt','w-3 h-3 mr-1')}Re-blend Anchors Now
                 </button>
               </div>
               <div class="grid grid-cols-3 gap-2 pt-1">
@@ -3178,7 +3228,7 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                     </label>
                   </div>
                   <button type="button" onclick="appActions.exportCsvSummary()" class="w-full py-2 bg-input border border-sub text-slate-300 hover:text-white rounded-xl font-bold text-[10px] tactile">
-                    📊 Export Summary CSV
+                    ${ic('chart','w-3.5 h-3.5 mr-1')}Export Summary CSV
                   </button>
                   <div class="grid grid-cols-2 gap-1.5 pt-1 border-t border-sub/40">
                     <button type="button" onclick="appActions.exportProgrammingBuilderJson()" class="py-1.5 bg-input border border-sub hover:border-blue-500 rounded-xl text-slate-300 font-bold text-[9.5px] tactile">
@@ -3434,7 +3484,7 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
               </div>
 
               <button type="button" onclick="appActions.launchProgramPreset('${selectedProg.id}', ${selectedDays})" class="w-full py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 rounded-2xl text-xs font-bold text-white shadow-xl tactile">
-                ⚡ Apply ${selectedDays}-Day Blueprint to Calendar &rarr;
+                ${ic('bolt','w-3.5 h-3.5 mr-1')}Apply ${selectedDays}-Day Blueprint to Calendar &rarr;
               </button>
             </div>
           </main>
@@ -3514,7 +3564,7 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                   <button type="button" 
   onclick="appActions.toggleSplitGppMode('${activeBlueprintName}')" 
   class="px-2.5 py-1.5 rounded-xl border font-mono text-xs font-bold transition tactile ${activeSlots.every(s => s.tier === 'Assistance') && activeSlots.length > 0 ? 'bg-accent/20 text-accent border-accent' : 'bg-input text-slate-400 border-sub hover:text-white'}">
-  🏃 GPP Mode
+  ${ic('activity','w-3.5 h-3.5 mr-1')}GPP Mode
 </button>
 <button type="button" onclick="appActions.addSlotToBlueprint('${state.editingBlueprintName}')" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded-xl text-white font-bold text-xs tactile">
   + Add Slot
@@ -3722,7 +3772,7 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                   </div>
                   <div class="flex items-center space-x-1.5">
                     <button type="button" onclick="appActions.openPrLedgerModal()" class="px-2.5 py-1 bg-amber-500/20 border border-amber-500/50 text-amber-300 rounded-xl text-[10px] font-bold tactile shadow-sm">
-                      🔥 PR Ledger
+                      ${ic('flame','w-3 h-3 mr-1')}PR Ledger
                     </button>
                     <select onchange="state.analyticsSelectedLift = this.value; window.render();" class="bg-input border border-sub rounded-xl px-2.5 py-1 text-slate-200 text-xs focus:outline-none max-w-[160px] truncate font-bold">
                       ${everUsedVariants.map(v => `<option value="${v}" ${selectedVariant === v ? 'selected' : ''}>${v}</option>`).join('')}
@@ -3921,7 +3971,7 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                     <div class="text-[9px] text-slate-400">${bwRecords.length} check-ins recorded in ${activeTf}</div>
                   </div>
                   <button type="button" onclick="appActions.toggleBwView()" class="px-3 py-1.5 bg-input border border-sub text-slate-200 rounded-xl font-bold tactile hover:text-white text-xs">
-                    ${state.analyticsBwView === 'table' ? '📈 Graph View' : '📋 Table View'}
+                    ${state.analyticsBwView === 'table' ? `${ic('trendUp','w-3.5 h-3.5 mr-1')}Graph View` : `${ic('layers','w-3.5 h-3.5 mr-1')}Table View`}
                   </button>
                 </div>
 
@@ -4203,7 +4253,7 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
             <div class="bg-card border border-sub rounded-3xl w-full max-w-xl p-4 space-y-3.5 shadow-2xl my-auto text-xs font-mono max-h-[90vh] flex flex-col">
               <div class="flex justify-between items-start border-b border-sub pb-2">
                 <div>
-                  <span class="text-[9px] text-accent font-bold uppercase">🧙 End-of-Block Review & Transition</span>
+                  <span class="text-[9px] text-accent font-bold uppercase">${ic('wand','w-3.5 h-3.5 mr-1')}End-of-Block Review & Transition</span>
                   <h3 class="text-sm font-bold text-white mt-0.5">Review ${d.currentPhase} Block &rarr; Advance to ${d.nextPhase}</h3>
                 </div>
                 <button type="button" onclick="appActions.closeBlockWizard()" class="text-slate-400 hover:text-white p-1 text-sm font-bold">✕</button>
@@ -4502,13 +4552,13 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
             
             <div class="flex justify-between items-center border-b border-sub pb-2">
               <div>
-                <span class="font-bold text-accent text-sm">📊 Planner: ${ex}</span>
+                <span class="font-bold text-accent text-sm">${ic('chart','w-4 h-4 text-accent mr-1')}Planner: ${ex}</span>
               </div>
               <div class="flex items-center space-x-1.5">
                 <button type="button" onclick="appActions.openRpeMatrixModal('${ex}')" class="p-1.5 rounded-lg bg-input border border-sub text-slate-300 hover:text-accent tactile" title="RPE Matrix">
                   <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
                 </button>
-                <button type="button" onclick="appActions.togglePlannerCalc()" title="Load Calculator" class="p-1.5 rounded-lg border transition-colors flex items-center justify-center tactile ${state.plannerCalcOpen ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm' : 'bg-input text-slate-300 hover:text-amber-400 border-sub'}">
+                <button type="button" onclick="appActions.togglePlannerCalc()" title="Load Calculator" class="p-1.5 rounded-lg border transition-colors flex items-center justify-center tactile ${state.plannerCalcOpen ? 'bg-accent/20 text-accent border-accent/60 shadow-sm' : 'bg-input text-slate-400 hover:text-white border-sub'}">
                   <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
                 </button>
                 <button type="button" onclick="appActions.closePlanner()" class="p-1.5 rounded-lg bg-input border border-sub text-slate-400 hover:text-white leading-none tactile">✕</button>
@@ -4573,7 +4623,7 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
           <div class="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center p-3 z-50 overflow-y-auto" onclick="event.stopPropagation()">
             <div class="bg-card border border-sub rounded-3xl w-full max-w-sm p-4 space-y-3 shadow-2xl my-auto text-xs font-mono">
               <div class="flex justify-between items-center border-b border-sub pb-2">
-                <span class="font-bold text-white text-sm">📋 Copy Workout Plan</span>
+                <span class="font-bold text-white text-sm">${ic('copy','w-4 h-4 text-accent mr-1')}Copy Workout Plan</span>
                 <button type="button" onclick="appActions.closeCopyModal()" class="text-slate-400 hover:text-white p-1">✕</button>
               </div>
               <div class="space-y-2">
@@ -4612,7 +4662,7 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
           <div class="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center p-3 z-50 overflow-y-auto" onclick="event.stopPropagation()">
             <div class="bg-card border border-sub rounded-3xl w-full max-w-sm p-4 space-y-3.5 shadow-2xl my-auto text-xs font-mono">
               <div class="flex justify-between items-center border-b border-sub pb-2">
-                <span class="font-bold text-white text-sm">🏁 Finish & Save Session</span>
+                <span class="font-bold text-white text-sm">${ic('flag','w-4 h-4 text-accent mr-1')}Finish & Save Session</span>
                 <button type="button" onclick="appActions.closeFinishModal()" class="text-slate-400 hover:text-white p-1">✕</button>
               </div>
               
@@ -4655,7 +4705,7 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
           <div class="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center p-3 z-50 overflow-y-auto" onclick="event.stopPropagation()">
             <div class="bg-card border border-sub rounded-3xl w-full max-w-sm p-4 space-y-3 shadow-2xl my-auto max-h-[88vh] overflow-y-auto font-mono text-xs">
               <div class="flex justify-between items-center border-b border-sub pb-2">
-                <span class="text-xs font-bold text-white">☁️ Supabase Cloud Sync</span>
+                <span class="text-xs font-bold text-white">${ic('cloud','w-4 h-4 text-accent mr-1')}Supabase Cloud Sync</span>
                 <button type="button" onclick="appActions.closeAuthModal()" class="text-slate-400 hover:text-white p-1">✕</button>
               </div>
 
@@ -4824,7 +4874,7 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
       html += `
         <footer class="pt-2 border-t border-sub/50 flex justify-between items-center text-[9px] font-mono text-slate-500 shrink-0" onclick="appActions.closeCardMenu()">
           <span>APEX Training Engine ${core.APP_VERSION || 'v4.6.5-PWA'}</span>
-          <span>${state.user ? '☁️ Connected (' + state.user.email.split('@')[0] + ')' : '⚡ Offline PWA Mode'}</span>
+          <span>${state.user ? 'Connected (' + state.user.email.split('@')[0] + ')' : 'Offline PWA Mode'}</span>
         </footer>
       `;
       if (state.rpeMatrixModal && state.rpeMatrixModal.open) {
@@ -5691,3 +5741,4 @@ window.sanitizeSvgPath = function(pathStr) {
   }
   return pathStr;
 };
+Validating JavaScript source file integrity

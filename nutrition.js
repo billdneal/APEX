@@ -885,7 +885,7 @@ ${ingText}`
                     </div>
                     <div class="flex items-center space-x-1.5 shrink-0">
                       <span class="font-black text-accent">${e.kcal}</span>
-                      <button type="button" onclick="appActions.editNutritionEntry('${e.id}')" title="Edit entry" class="text-slate-400 hover:text-white px-1 text-[10px]">✎</button>
+                      <button type="button" onclick="appActions.editNutritionEntry('${e.id}')" title="Edit entry" class="text-slate-400 hover:text-white p-1 inline-flex items-center justify-center">${window.apexIcon ? window.apexIcon('edit','w-3 h-3') : 'Edit'}</button>
                       <button type="button" onclick="appActions.deleteNutritionEntry('${e.id}')" title="Delete entry" class="text-slate-500 hover:text-rose-400 px-1 font-bold">✕</button>
                     </div>
                   </div>
@@ -1051,7 +1051,7 @@ ${ingText}`
 
               <div class="grid grid-cols-2 gap-2">
                 <button type="button" onclick="appActions.addManualFoodFromForm(false)" class="py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs tactile shadow">+ Log to ${ui.mealSlot}</button>
-                <button type="button" onclick="appActions.addManualFoodFromForm(true)" class="py-2.5 bg-input hover:bg-slate-800 border border-sub text-emerald-300 font-bold rounded-xl text-xs tactile">★ Save & Log</button>
+                <button type="button" onclick="appActions.addManualFoodFromForm(true)" class="py-2.5 bg-input hover:bg-slate-800 border border-sub text-emerald-300 font-bold rounded-xl text-xs tactile"><span class="inline-flex items-center justify-center gap-1">${window.apexIcon ? window.apexIcon('star','w-3.5 h-3.5') : ''}<span>Save & Log</span></span></button>
               </div>
             </div>
           ` : ''}
@@ -1062,7 +1062,7 @@ ${ingText}`
               <div class="flex justify-between items-center">
                 <span class="text-[10px] text-accent font-bold uppercase">Barcode Lookup (Open Food Facts)</span>
                 <button type="button" onclick="appActions.toggleBarcodeScanner()" class="px-2.5 py-1 bg-input border border-sub rounded-xl text-[10px] text-white font-bold tactile">
-                  ${ui.scannerActive ? '✕ Close Camera' : '📷 Scan'}
+                  ${ui.scannerActive ? '✕ Close Camera' : `<span class="inline-flex items-center gap-1">${window.apexIcon ? window.apexIcon('camera','w-3.5 h-3.5') : ''}<span>Scan</span></span>`}
                 </button>
               </div>
               ${ui.scannerActive ? `<div id="apex-barcode-reader" class="w-full rounded-2xl overflow-hidden border border-sub"></div>` : ''}
@@ -1147,7 +1147,7 @@ ${ingText}`
                       <button type="button" onclick="appActions.deleteSavedMeal('${m.id}')" class="text-slate-500 hover:text-rose-400 px-1 font-bold">✕</button>
                     </div>
                   </div>
-                `).join('') : `<div class="text-center py-4 text-slate-500 text-[10px]">No saved meals yet. Use "★ Save & Log" on the Manual tab to build your library.</div>`}
+                `).join('') : `<div class="text-center py-4 text-slate-500 text-[10px]">No saved meals yet. Use "<span class="inline-flex items-center justify-center gap-1">${window.apexIcon ? window.apexIcon('star','w-3.5 h-3.5') : ''}<span>Save & Log</span></span>" on the Manual tab to build your library.</div>`}
               </div>
             </div>
           ` : ''}
