@@ -2011,30 +2011,7 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                     <div class="flex items-center space-x-2 mt-0.5">
                       <h3 class="text-xs md:text-sm font-bold text-white">${ex.exercise}</h3>
                       </div>
-                    ${(() => {
-                      if (isCollapsed) return '';
-                      const curBp = (state.schemeBlueprints && state.schemeBlueprints[ex.scheme]) || (DEFAULT_SCHEME_BLUEPRINTS && DEFAULT_SCHEME_BLUEPRINTS[ex.scheme]);
-                      const text = curBp?.instructions || curBp?.directive;
-                      if (!text) return '';
 
-                      if (!state.collapsedInstructions) state.collapsedInstructions = {};
-                      const isInstCollapsed = Boolean(state.collapsedInstructions[exIdx]);
-
-                      return `
-                        <div class="mt-1" onclick="event.stopPropagation()">
-                          <div class="flex items-center space-x-1 cursor-pointer select-none text-[9px] font-mono text-slate-400 hover:text-slate-200" 
-                               onclick="appActions.toggleInstructionCollapse(${exIdx})">
-                            <span>${isInstCollapsed ? '▶' : '▼'}</span>
-                            <span class="uppercase tracking-wider font-bold">Instructions</span>
-                          </div>
-                          ${!isInstCollapsed ? `
-                            <div class="text-[9.5px] font-mono text-slate-300 bg-input/80 border border-sub/80 px-2.5 py-1.5 rounded-xl mt-1 leading-relaxed">
-                              ${text}
-                            </div>
-                          ` : ''}
-                        </div>
-                      `;
-                    })()}
                     <div class="flex flex-wrap gap-1 mt-1 cursor-pointer" onclick="event.stopPropagation(); appActions.openConfig(${exIdx}, true)" title="Tap to adjust modifiers">
                       ${cleanMods.length ? cleanMods.map(m => `<span class="text-[8px] font-mono bg-input text-slate-300 hover:text-white px-1.5 py-0.2 rounded border border-sub">${m}</span>`).join('') : `<span class="text-[8px] font-mono text-slate-500 hover:text-accent">+ Add Modifiers</span>`}
                     </div>
@@ -2042,6 +2019,18 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                 </div>
 
                 <div class="relative flex items-center gap-1.5" onclick="event.stopPropagation()">
+      <!-- Protocol Instructions Info Icon -->
+      <button type="button"
+        onclick="appActions.openSchemeInfoModal('${String(ex.scheme || '').replace(/'/g, "\\'")}')"
+        title="Protocol Instructions"
+        class="p-1 rounded-xl border transition-colors flex items-center justify-center bg-input text-slate-400 hover:text-accent border-sub tactile">
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="16" x2="12" y2="12"></line>
+          <line x1="12" y1="8" x2="12.01" y2="8"></line>
+        </svg>
+      </button>
+
       <!-- Load Calculator Bolt Icon -->
       <button type="button" 
         onclick="appActions.toggleExerciseCalc(${exIdx})" 
@@ -2163,6 +2152,13 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                         <span class="${ghostPacer.deltaVs90 !== null && ghostPacer.deltaVs90 > 0 ? 'text-emerald-400 font-bold' : 'text-accent font-semibold'} text-right truncate ml-2">${ghostPacer.cue}</span>
                       </div>
                     ` : ''}
+
+                    <div class="mt-1.5">
+                      <input type="text" placeholder="Note (e.g. J-cup hole 11, bench notch 3, elbow cue)..."
+                        value="${String(ex.notes || '').replace(/"/g, '&quot;')}"
+                        onchange="appActions.updateExerciseNotes(${exIdx}, this.value)"
+                        class="w-full bg-input/60 border border-sub/60 rounded-xl px-2.5 py-1 text-[10px] font-mono text-slate-300 placeholder-slate-500 focus:outline-none focus:border-accent" />
+                    </div>
 
                     <div class="flex justify-between items-center pt-2 mt-1 border-t border-sub/40 font-mono text-[10px]">
                       <button type="button" onclick="appActions.addSet(${exIdx})" class="text-[9px] md:text-xs font-mono text-slate-300 bg-input px-2.5 py-1 rounded-xl border border-sub font-semibold hover:text-white tactile">+ Add Set</button>
@@ -2552,6 +2548,7 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                     <div class="text-[10px] text-slate-300 pt-1 border-t border-sub/50 leading-relaxed">
                       ${setDetails || 'No completed sets recorded.'}
                     </div>
+                    ${ex.notes ? `<div class="text-[9.5px] text-slate-400 italic pt-0.5">Note: ${ex.notes}</div>` : ''}
                   </div>
                 `;
               }).join('')}
@@ -4843,6 +4840,35 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
     </div>
   `;
 }
+      if (state.schemeInfoModal && state.schemeInfoModal.open) {
+        html += `
+          <div class="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-3 backdrop-blur-sm" onclick="appActions.closeSchemeInfoModal()">
+            <div class="bg-card border border-sub rounded-3xl p-4 w-full max-w-sm space-y-3 shadow-2xl font-mono text-xs" onclick="event.stopPropagation()">
+              <div class="flex justify-between items-center border-b border-sub pb-2">
+                <div class="flex items-center space-x-2">
+                  <svg class="w-4 h-4 text-accent shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="16" x2="12" y2="12"></line>
+                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                  </svg>
+                  <span class="font-bold text-sm text-white">${state.schemeInfoModal.scheme}</span>
+                </div>
+                <button type="button" onclick="appActions.closeSchemeInfoModal()" class="text-slate-400 hover:text-white text-base">✕</button>
+              </div>
+              <div class="flex items-center justify-between text-[10px] text-slate-400 bg-input px-3 py-1.5 rounded-xl border border-sub">
+                <span>Pattern: <b class="text-slate-200 capitalize">${String(state.schemeInfoModal.pattern || 'straight').replace('_', ' ')}</b></span>
+                <span>Target Rest: <b class="text-accent">${state.schemeInfoModal.restSeconds || 120}s</b></span>
+              </div>
+              <div class="p-3 bg-input/70 rounded-2xl border border-sub text-[11px] text-slate-200 leading-relaxed">
+                ${state.schemeInfoModal.text}
+              </div>
+              <button type="button" onclick="appActions.closeSchemeInfoModal()" class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs tactile">
+                Got It
+              </button>
+            </div>
+          </div>
+        `;
+      }
 html += renderBottomNav();
       app.innerHTML = html;
 

@@ -429,6 +429,18 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
     });
   }
 
+  function getLastExerciseNote(exName) {
+    if (!exName || !state.dayLogs) return '';
+    const dates = Object.keys(state.dayLogs).sort().reverse();
+    for (const dKey of dates) {
+      const exs = state.dayLogs[dKey]?.workout?.exercises;
+      if (!Array.isArray(exs)) continue;
+      const match = exs.find(e => e && e.exercise === exName && e.notes && String(e.notes).trim());
+      if (match) return String(match.notes).trim();
+    }
+    return '';
+  }
+
   Object.assign(window.appActions, {
     // Equipment & Plate Inventory Controllers
     updateEquipmentSetting(category, field, val) {
@@ -1278,6 +1290,7 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
           scheme: normScheme,
           isGrounding: Boolean(slot.isGrounding),
           skipBackoffs: Boolean(slot.skipBackoffs),
+          notes: slot.notes !== undefined ? slot.notes : getLastExerciseNote(slot.exercise),
           fatigueWarning: false,
           densityLoad: calcLoad(anchorE1 * readyBand.factor, dPct),
           densitySec: dTotalSecs,
@@ -1607,6 +1620,33 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
     },
 
     toggleCardCollapse(exIdx) { state.collapsedCards[exIdx] = !state.collapsedCards[exIdx]; safeRender(); },
+    updateExerciseNotes(exIdx, val) {
+      if (!state.activeWorkout || !state.activeWorkout[exIdx]) return;
+      state.activeWorkout[exIdx].notes = String(val || '');
+      persist();
+      triggerCloudSync(2500);
+    },
+
+    openSchemeInfoModal(schemeName) {
+      const clean = normalizeSchemeName(schemeName || 'Straight Sets');
+      const bp = (state.schemeBlueprints && state.schemeBlueprints[clean]) || (DEFAULT_SCHEME_BLUEPRINTS && DEFAULT_SCHEME_BLUEPRINTS[clean]) || {};
+      const desc = (core.schemeDescriptions && core.schemeDescriptions[clean]) || '';
+      const text = bp.instructions || bp.directive || desc || 'No additional instructions configured for this protocol.';
+      state.schemeInfoModal = {
+        open: true,
+        scheme: clean,
+        pattern: bp.pattern || 'straight',
+        restSeconds: bp.restSeconds || 120,
+        text
+      };
+      safeRender();
+    },
+
+    closeSchemeInfoModal() {
+      state.schemeInfoModal = { open: false, scheme: '', text: '' };
+      safeRender();
+    },
+
     toggleInstructionCollapse(exIdx) {
       if (!state.collapsedInstructions) state.collapsedInstructions = {};
       state.collapsedInstructions[exIdx] = !state.collapsedInstructions[exIdx];
@@ -1701,6 +1741,7 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
             scheme: normalizeSchemeName(ex.scheme),
             isGrounding: Boolean(ex.isGrounding),
             skipBackoffs: Boolean(ex.skipBackoffs),
+            notes: ex.notes ? String(ex.notes).trim() : '',
             densityLoad: ex.densityLoad || 0,
             densitySec: ex.densitySec || 0,
             sets: ex.sets.map(s => ({ ...s, targetRpe: roundRpe(s.targetRpe), actualRpe: roundRpe(s.actualRpe), lapRunning: false, lapTimerObj: null })),
@@ -2376,17 +2417,22 @@ updateSplitSlotTier(splitName, slotIdx, newTier) {
     },
 
     exportCsvSummary() {
-      const rows = [["Date", "Weight", "ReadinessScore", "WorkoutDuration", "WorkoutSRPE", "ExercisesCount"]];
+      const rows = [["Date", "Weight", "ReadinessScore", "WorkoutDuration", "WorkoutSRPE", "ExercisesCount", "Calories", "Protein", "Carbs", "Fat"]];
       const dates = Object.keys(state.dayLogs || {}).sort();
       dates.forEach(dKey => {
         const log = state.dayLogs[dKey];
+        const nut = log.nutrition?.totals || {};
         rows.push([
           dKey,
           log.weight || "",
           log.recovery?.score || "",
           log.workout?.dur || "",
           log.workout?.srpe || "",
-          log.workout?.exercises?.length || 0
+          log.workout?.exercises?.length || 0,
+          nut.kcal || "",
+          nut.p || "",
+          nut.c || "",
+          nut.f || ""
         ]);
       });
 

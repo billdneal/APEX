@@ -195,7 +195,10 @@
     searchResults: [],
     barcodeLoading: false,
     scannerActive: false,
-    mealSlot: 'Lunch'
+    mealSlot: 'Lunch',
+    editingId: null,
+    recipeBuilderOpen: false,
+    recipeLoading: false
   };
 
   let qrScannerInstance = null;
@@ -347,7 +350,137 @@
       const k = getSelectedDateKey();
       const nut = getDayNutrition(k);
       nut.entries = nut.entries.filter(e => e.id !== entryId);
+      if (state.nutritionUi.editingId === entryId) state.nutritionUi.editingId = null;
       recalcDayTotals(k);
+      saveAndSync();
+    },
+
+    editNutritionEntry(entryId) {
+      state.nutritionUi.editingId = (state.nutritionUi.editingId === entryId) ? null : entryId;
+      if (typeof window.render === 'function') window.render();
+    },
+
+    cancelEditNutritionEntry() {
+      state.nutritionUi.editingId = null;
+      if (typeof window.render === 'function') window.render();
+    },
+
+    saveEditedNutritionEntry(entryId) {
+      const k = getSelectedDateKey();
+      const nut = getDayNutrition(k);
+      const item = (nut.entries || []).find(e => e.id === entryId);
+      if (!item) return;
+
+      const name = document.getElementById(`nut-edit-name-${entryId}`)?.value?.trim();
+      const meal = document.getElementById(`nut-edit-meal-${entryId}`)?.value || item.meal;
+      const kcal = Number(document.getElementById(`nut-edit-kcal-${entryId}`)?.value);
+      const p = Number(document.getElementById(`nut-edit-p-${entryId}`)?.value);
+      const c = Number(document.getElementById(`nut-edit-c-${entryId}`)?.value);
+      const f = Number(document.getElementById(`nut-edit-f-${entryId}`)?.value);
+
+      if (name) item.name = name;
+      item.meal = normalizeMealSlot(meal);
+      item.p = Math.max(0, Math.round(isNaN(p) ? item.p : p));
+      item.c = Math.max(0, Math.round(isNaN(c) ? item.c : c));
+      item.f = Math.max(0, Math.round(isNaN(f) ? item.f : f));
+      item.kcal = Math.max(0, Math.round(!isNaN(kcal) && kcal > 0 ? kcal : ((item.p * 4) + (item.c * 4) + (item.f * 9))));
+
+      state.nutritionUi.editingId = null;
+      recalcDayTotals(k);
+      toast(`Updated ${item.name}`);
+      saveAndSync();
+    },
+
+    toggleRecipeBuilder() {
+      state.nutritionUi.recipeBuilderOpen = !state.nutritionUi.recipeBuilderOpen;
+      if (typeof window.render === 'function') window.render();
+    },
+
+    async aiParseBatchRecipe() {
+      const name = document.getElementById('nut-batch-name')?.value?.trim();
+      const servings = Math.max(1, Number(document.getElementById('nut-batch-servings')?.value) || 4);
+      const ingText = document.getElementById('nut-batch-ingredients')?.value?.trim();
+      if (!ingText || state.nutritionUi.recipeLoading) {
+        toast('Paste your batch ingredients first.');
+        return;
+      }
+
+      const apiKey = localStorage.getItem('apex_gemini_key') || state.profile?.geminiApiKey || '';
+      const model = localStorage.getItem('apex_gemini_model') || 'gemini-2.5-flash';
+      if (!apiKey) {
+        toast('Add your Gemini API Key in Preferences first.');
+        return;
+      }
+
+      state.nutritionUi.recipeLoading = true;
+      if (typeof window.render === 'function') window.render();
+
+      try {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{
+              role: 'user',
+              parts: [{
+                text: `Calculate the TOTAL combined nutrition macros for this entire batch recipe, then divide by ${servings} servings. Return ONLY valid JSON with no markdown fences in this exact schema: {"name":"string","kcalPerServing":number,"pPerServing":number,"cPerServing":number,"fPerServing":number}.
+Recipe Name: ${name || 'Batch Meal'}
+Servings: ${servings}
+Ingredients:
+${ingText}`
+              }]
+            }],
+            generationConfig: { temperature: 0.1, maxOutputTokens: 500 }
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error?.message || `HTTP ${res.status}`);
+
+        const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        const cleaned = raw.replace(/```json/gi, '').replace(/```/g, '').trim();
+        const parsed = JSON.parse(cleaned);
+
+        const meals = getSavedMeals();
+        const finalName = name || parsed.name || 'Batch Recipe';
+        const p = Math.max(0, Math.round(Number(parsed.pPerServing) || 0));
+        const c = Math.max(0, Math.round(Number(parsed.cPerServing) || 0));
+        const f = Math.max(0, Math.round(Number(parsed.fPerServing) || 0));
+        const kcal = Math.max(0, Math.round(Number(parsed.kcalPerServing) || ((p * 4) + (c * 4) + (f * 9))));
+
+        meals.unshift({
+          id: 'meal_' + Date.now(),
+          name: finalName,
+          serving: `1/${servings} batch`,
+          kcal, p, c, f
+        });
+        state.nutritionUi.recipeBuilderOpen = false;
+        toast(`Saved "${finalName}" (${kcal} kcal • ${p}P/${c}C/${f}F per serving)`);
+      } catch (err) {
+        toast(`Recipe Parse Error: ${err.message}`);
+      } finally {
+        state.nutritionUi.recipeLoading = false;
+        saveAndSync();
+      }
+    },
+
+    saveBatchRecipeManual() {
+      const name = document.getElementById('nut-batch-name')?.value?.trim();
+      const servings = Math.max(1, Number(document.getElementById('nut-batch-servings')?.value) || 4);
+      const totKcal = Number(document.getElementById('nut-batch-kcal')?.value) || 0;
+      const totP = Number(document.getElementById('nut-batch-p')?.value) || 0;
+      const totC = Number(document.getElementById('nut-batch-c')?.value) || 0;
+      const totF = Number(document.getElementById('nut-batch-f')?.value) || 0;
+      if (!name) { toast('Enter a recipe name.'); return; }
+
+      const p = Math.round(totP / servings);
+      const c = Math.round(totC / servings);
+      const f = Math.round(totF / servings);
+      const kcal = totKcal > 0 ? Math.round(totKcal / servings) : Math.round((p * 4) + (c * 4) + (f * 9));
+
+      const meals = getSavedMeals();
+      meals.unshift({ id: 'meal_' + Date.now(), name, serving: `1/${servings} batch`, kcal, p, c, f });
+      state.nutritionUi.recipeBuilderOpen = false;
+      toast(`Saved "${name}" (${kcal} kcal per serving)`);
       saveAndSync();
     },
 
@@ -719,20 +852,45 @@
           </div>
           ${items.length ? `
             <div class="space-y-1.5">
-              ${items.map(e => `
-                <div class="bg-input p-2.5 rounded-xl border border-sub flex justify-between items-center text-[10.5px]">
-                  <div class="min-w-0 pr-2">
-                    <div class="font-bold text-white truncate">${e.name}</div>
-                    <div class="text-[9px] text-slate-400 mt-0.5">
-                      ${e.servingInfo ? `<span class="text-slate-300">${e.servingInfo}</span> • ` : ''}<span class="text-blue-300">${e.p}P</span> / <span class="text-emerald-300">${e.c}C</span> / <span class="text-amber-300">${e.f}F</span>
+              ${items.map(e => {
+                if (ui.editingId === e.id) {
+                  return `
+                    <div class="bg-input p-2.5 rounded-xl border border-accent/60 space-y-2 text-[10.5px]">
+                      <div class="grid grid-cols-12 gap-1.5">
+                        <input type="text" id="nut-edit-name-${e.id}" value="${String(e.name || '').replace(/"/g, '&quot;')}" class="col-span-8 bg-card-sub border border-sub rounded-lg px-2 py-1 text-white text-[10.5px] font-bold">
+                        <select id="nut-edit-meal-${e.id}" class="col-span-4 bg-card-sub border border-sub rounded-lg px-1.5 py-1 text-accent text-[10px] font-bold">
+                          ${MEAL_SLOTS.map(m => `<option value="${m}" ${normalizeMealSlot(e.meal) === m ? 'selected' : ''}>${m}</option>`).join('')}
+                        </select>
+                      </div>
+                      <div class="grid grid-cols-4 gap-1.5">
+                        <input type="number" id="nut-edit-kcal-${e.id}" value="${e.kcal}" placeholder="kcal" class="bg-card-sub border border-sub rounded-lg py-1 text-center text-white text-[10px] font-bold">
+                        <input type="number" id="nut-edit-p-${e.id}" value="${e.p}" placeholder="P" class="bg-card-sub border border-sub rounded-lg py-1 text-center text-blue-300 text-[10px] font-bold">
+                        <input type="number" id="nut-edit-c-${e.id}" value="${e.c}" placeholder="C" class="bg-card-sub border border-sub rounded-lg py-1 text-center text-emerald-300 text-[10px] font-bold">
+                        <input type="number" id="nut-edit-f-${e.id}" value="${e.f}" placeholder="F" class="bg-card-sub border border-sub rounded-lg py-1 text-center text-amber-300 text-[10px] font-bold">
+                      </div>
+                      <div class="flex justify-end space-x-1.5">
+                        <button type="button" onclick="appActions.cancelEditNutritionEntry()" class="px-2.5 py-1 bg-card-sub border border-sub rounded-lg text-[9.5px] text-slate-300">Cancel</button>
+                        <button type="button" onclick="appActions.saveEditedNutritionEntry('${e.id}')" class="px-3 py-1 bg-blue-600 hover:bg-blue-500 rounded-lg text-[9.5px] text-white font-bold">Save</button>
+                      </div>
+                    </div>
+                  `;
+                }
+                return `
+                  <div class="bg-input p-2.5 rounded-xl border border-sub flex justify-between items-center text-[10.5px]">
+                    <div class="min-w-0 pr-2">
+                      <div class="font-bold text-white truncate">${e.name}</div>
+                      <div class="text-[9px] text-slate-400 mt-0.5">
+                        ${e.servingInfo ? `<span class="text-slate-300">${e.servingInfo}</span> • ` : ''}<span class="text-blue-300">${e.p}P</span> / <span class="text-emerald-300">${e.c}C</span> / <span class="text-amber-300">${e.f}F</span>
+                      </div>
+                    </div>
+                    <div class="flex items-center space-x-1.5 shrink-0">
+                      <span class="font-black text-accent">${e.kcal}</span>
+                      <button type="button" onclick="appActions.editNutritionEntry('${e.id}')" title="Edit entry" class="text-slate-400 hover:text-white px-1 text-[10px]">✎</button>
+                      <button type="button" onclick="appActions.deleteNutritionEntry('${e.id}')" title="Delete entry" class="text-slate-500 hover:text-rose-400 px-1 font-bold">✕</button>
                     </div>
                   </div>
-                  <div class="flex items-center space-x-2 shrink-0">
-                    <span class="font-black text-accent">${e.kcal}</span>
-                    <button type="button" onclick="appActions.deleteNutritionEntry('${e.id}')" class="text-slate-500 hover:text-rose-400 px-1 font-bold">✕</button>
-                  </div>
-                </div>
-              `).join('')}
+                `;
+              }).join('')}
             </div>
           ` : `<div class="text-[9.5px] text-slate-500 py-1 px-1">Nothing logged for ${slot.toLowerCase()} yet.</div>`}
         </div>
@@ -946,7 +1104,36 @@
           ${ui.addTab === 'saved' ? `
             <!-- Saved Meals & Batch-Cook Library -->
             <div class="bg-card-sub p-4 rounded-3xl border border-sub space-y-3 font-mono text-xs shadow-md">
-              <span class="text-[10px] text-accent font-bold uppercase">Saved Meals & Batch-Cook Portions</span>
+              <div class="flex justify-between items-center">
+                <span class="text-[10px] text-accent font-bold uppercase">Saved Meals & Batch-Cook Portions</span>
+                <button type="button" onclick="appActions.toggleRecipeBuilder()" class="px-2.5 py-1 bg-input hover:bg-slate-800 border border-sub rounded-xl text-[9.5px] text-accent font-bold tactile">
+                  ${ui.recipeBuilderOpen ? '✕ Close Builder' : '+ Batch Recipe'}
+                </button>
+              </div>
+
+              ${ui.recipeBuilderOpen ? `
+                <div class="p-3 bg-input/90 rounded-2xl border border-accent/40 space-y-2.5">
+                  <div class="text-[9.5px] text-white font-bold uppercase">Multi-Serving Batch-Cook Recipe Builder</div>
+                  <div class="grid grid-cols-12 gap-1.5">
+                    <input type="text" id="nut-batch-name" placeholder="Recipe name (e.g. Turkey Taco Base)" class="col-span-8 bg-card-sub border border-sub rounded-xl px-2.5 py-1.5 text-white text-xs">
+                    <input type="number" id="nut-batch-servings" min="1" step="1" value="6" title="Total Batch Servings" placeholder="Srv" class="col-span-4 bg-card-sub border border-sub rounded-xl px-2 py-1.5 text-center text-accent font-bold text-xs">
+                  </div>
+                  <textarea id="nut-batch-ingredients" rows="3" placeholder="Paste full batch ingredients for AI auto-split (e.g. 2 lbs 93/7 ground turkey, 2 cups dry rice, 2 tbsp olive oil)..." class="w-full bg-card-sub border border-sub rounded-xl p-2 text-white text-[11px] focus:outline-none focus:border-accent"></textarea>
+                  <button type="button" onclick="appActions.aiParseBatchRecipe()" ${ui.recipeLoading ? 'disabled' : ''} class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs tactile">
+                    ${ui.recipeLoading ? 'Calculating per-serving macros...' : '✦ AI Split & Save Per-Serving'}
+                  </button>
+                  <div class="text-[8.5px] text-slate-400 text-center uppercase">— OR Enter Whole-Batch Totals Manually —</div>
+                  <div class="grid grid-cols-4 gap-1.5">
+                    <input type="number" id="nut-batch-kcal" placeholder="Tot kcal" class="bg-card-sub border border-sub rounded-lg py-1 text-center text-white text-[10px]">
+                    <input type="number" id="nut-batch-p" placeholder="Tot P" class="bg-card-sub border border-sub rounded-lg py-1 text-center text-blue-300 text-[10px]">
+                    <input type="number" id="nut-batch-c" placeholder="Tot C" class="bg-card-sub border border-sub rounded-lg py-1 text-center text-emerald-300 text-[10px]">
+                    <input type="number" id="nut-batch-f" placeholder="Tot F" class="bg-card-sub border border-sub rounded-lg py-1 text-center text-amber-300 text-[10px]">
+                  </div>
+                  <button type="button" onclick="appActions.saveBatchRecipeManual()" class="w-full py-1.5 bg-card-sub hover:bg-slate-800 border border-sub text-slate-200 font-bold rounded-xl text-[10px] tactile">
+                    Save Manual Batch Split
+                  </button>
+                </div>
+              ` : ''}
               <div class="space-y-1.5">
                 ${savedMeals.length ? savedMeals.map((m, idx) => `
                   <div class="bg-input p-2.5 rounded-xl border border-sub flex justify-between items-center gap-2 text-[10.5px]">

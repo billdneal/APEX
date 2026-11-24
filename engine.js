@@ -1557,6 +1557,40 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
     }
 
     function getCalorieAwareVolumeMultiplier() {
+      // 1. Prefer actual 21-day Energy Balance (Avg Intake vs. Adaptive TDEE) when calibrated
+      if (typeof window.apexCore?.computeAdaptiveTdee === 'function') {
+        const tdee = window.apexCore.computeAdaptiveTdee(21);
+        if (tdee && tdee.ready && tdee.estimatedTdee > 0 && tdee.avgKcal > 0) {
+          const balance = Math.round(tdee.avgKcal - tdee.estimatedTdee);
+          if (balance <= -250) {
+            return {
+              factor: 0.85,
+              state: 'Deficit',
+              label: `Deficit Adjusted (-15% MRV • ${balance} kcal/d)`,
+              badge: 'bg-amber-500/20 text-amber-300 border-amber-500/50',
+              bwVelocity: tdee.weeklyBwDelta || 0
+            };
+          }
+          if (balance >= 200) {
+            return {
+              factor: 1.08,
+              state: 'Surplus',
+              label: `Surplus Boost (+8% MRV • +${balance} kcal/d)`,
+              badge: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50',
+              bwVelocity: tdee.weeklyBwDelta || 0
+            };
+          }
+          return {
+            factor: 1.0,
+            state: 'Maintenance',
+            label: `Maintenance (${balance >= 0 ? '+' : ''}${balance} kcal/d vs TDEE)`,
+            badge: 'bg-blue-500/20 text-blue-300 border-blue-500/50',
+            bwVelocity: tdee.weeklyBwDelta || 0
+          };
+        }
+      }
+
+      // 2. Fallback to 21-day bodyweight velocity when Nutrition TDEE is still calibrating
       const allBwDates = Object.keys(state.dayLogs || {})
         .filter(k => state.dayLogs[k]?.weight && Number(state.dayLogs[k].weight) > 0)
         .sort();
