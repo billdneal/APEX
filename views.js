@@ -5741,4 +5741,3 @@ window.sanitizeSvgPath = function(pathStr) {
   }
   return pathStr;
 };
-Validating JavaScript source file integrity
