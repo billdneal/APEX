@@ -1721,26 +1721,17 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
 
 
           const rawLabel = String(s.label || '').trim();
-          const isGenericLabel = !rawLabel || /^(Set\s*\d+|S\d+)$/i.test(rawLabel);
           const isGroundingLabel = /🔥|grounding|calibration/i.test(rawLabel);
           const cleanCustomLabel = rawLabel.replace(/🔥\s*/g, '').trim();
 
             return `
               <div id="set-row-${exIdx}-${sIdx}" class="px-2 py-1.5 rounded-lg border transition-colors ${s.done ? 'bg-emerald-950/20 border-emerald-600/40' : 'bg-input border-sub'}">
-                ${!isGenericLabel ? `
-                  <div class="flex items-center justify-between pb-1 mb-1 border-b border-sub/40 text-[9px] font-mono">
-                    <span class="inline-flex items-center gap-1 font-bold ${isGroundingLabel ? 'text-accent' : 'text-slate-400'} truncate">
-                      ${isGroundingLabel ? ic('flame', 'w-2.5 h-2.5 text-accent') : ''}
-                      <span>${cleanCustomLabel}</span>
-                    </span>
-                  </div>
-                ` : ''}
                 <div class="grid grid-cols-12 gap-1.5 items-center text-center">
                   
                   <!-- Col 1-2: Delete & Compact Set Pill -->
                   <div class="col-span-2 flex items-center space-x-1 text-left min-w-0">
                     <button type="button" onclick="appActions.deleteSet(${exIdx},${sIdx})" class="text-[10px] text-slate-500 hover:text-rose-400 p-0.5 shrink-0" title="Remove Set">✕</button>
-                    <span class="w-full h-8 px-1 rounded bg-card-sub border ${isGroundingLabel ? 'border-accent/50 text-accent' : 'border-sub text-slate-300'} font-mono text-[10px] font-bold flex items-center justify-center text-center shrink-0">S${sIdx + 1}</span>
+                    <span title="${cleanCustomLabel || `Set ${sIdx + 1}`}" class="w-full h-8 px-1 rounded bg-card-sub border ${isGroundingLabel ? 'border-accent/50 text-accent' : 'border-sub text-slate-300'} font-mono text-[10px] font-bold flex items-center justify-center text-center shrink-0">S${sIdx + 1}</span>
                   </div>
 
                   <!-- Col 3-5: Target Prescription (Wrapped & Full Text on Mobile) -->
