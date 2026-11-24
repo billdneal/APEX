@@ -1725,31 +1725,34 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
           const cleanCustomLabel = rawLabel.replace(/🔥\s*/g, '').trim();
 
             return `
-              <div id="set-row-${exIdx}-${sIdx}" class="px-2 py-1.5 rounded-lg border transition-colors ${s.done ? 'bg-emerald-950/20 border-emerald-600/40' : 'bg-input border-sub'}">
-                <div class="grid grid-cols-12 gap-1.5 items-center text-center">
+              <div id="set-row-${exIdx}-${sIdx}" class="px-2 py-1.5 rounded-xl border transition-colors ${s.done ? 'bg-emerald-950/20 border-emerald-600/40' : 'bg-input border-sub'}">
+                <div class="grid grid-cols-[44px_minmax(0,1fr)_136px_38px] sm:grid-cols-[50px_minmax(0,1fr)_172px_46px] gap-1.5 items-center">
                   
-                  <!-- Col 1-2: Delete & Compact Set Pill -->
-                  <div class="col-span-2 flex items-center space-x-1 text-left min-w-0">
-                    <button type="button" onclick="appActions.deleteSet(${exIdx},${sIdx})" class="text-[10px] text-slate-500 hover:text-rose-400 p-0.5 shrink-0" title="Remove Set">✕</button>
-                    <span title="${cleanCustomLabel || `Set ${sIdx + 1}`}" class="w-full h-8 px-1 rounded bg-card-sub border ${isGroundingLabel ? 'border-accent/50 text-accent' : 'border-sub text-slate-300'} font-mono text-[10px] font-bold flex items-center justify-center text-center shrink-0">S${sIdx + 1}</span>
+                  <!-- Col 1: Delete & Tight Compact Set Pill -->
+                  <div class="flex items-center gap-1 min-w-0">
+                    <button type="button" onclick="appActions.deleteSet(${exIdx},${sIdx})" class="w-3.5 text-[10px] text-slate-500 hover:text-rose-400 flex items-center justify-center shrink-0" title="Remove Set">✕</button>
+                    <span title="${cleanCustomLabel || `Set ${sIdx + 1}`}" class="w-6 sm:w-7 h-7 rounded-md bg-card-sub border ${isGroundingLabel ? 'border-accent/60 text-accent' : 'border-sub text-slate-300'} font-mono text-[10px] font-bold flex items-center justify-center shrink-0">S${sIdx + 1}</span>
                   </div>
 
-                  <!-- Col 3-5: Target Prescription (Wrapped & Full Text on Mobile) -->
-                  <span class="col-span-3 font-mono text-[10px] md:text-xs font-semibold text-slate-300 text-left pl-0.5 leading-[1.15] whitespace-normal break-words">
-                    ${(s.targetLoad !== undefined && s.targetLoad !== null && s.targetLoad !== '' && Number(s.targetLoad) > 0) ? s.targetLoad + 'x' : ''}${s.targetReps || ''}${meta.r ? 'r' : ''} <span class="text-slate-400 whitespace-nowrap">@${displayTargetRpe}</span>
-                  </span>
+                  <!-- Col 2: Target Prescription (Clean Left-Aligned 2-Line Stack) -->
+                  <div class="min-w-0 flex flex-col justify-center text-left font-mono leading-tight">
+                    <span class="text-[10.5px] sm:text-xs font-bold text-slate-200 truncate">
+                      ${(s.targetLoad !== undefined && s.targetLoad !== null && s.targetLoad !== '' && Number(s.targetLoad) > 0) ? s.targetLoad + 'x' : ''}${s.targetReps || ''}${meta.r ? 'r' : ''}
+                    </span>
+                    <span class="text-[9.5px] sm:text-[10px] font-semibold text-slate-400">@${displayTargetRpe}</span>
+                  </div>
 
-                  <!-- Col 6-10: Actual Inputs (Lbs, Reps, Wider RPE) -->
-                  <div class="col-span-5 grid grid-cols-[1fr_0.85fr_1.25fr] gap-1 items-center">
+                  <!-- Col 3: Actual Inputs (Lbs, Reps, RPE) -->
+                  <div class="grid grid-cols-[1.15fr_0.85fr_1fr] gap-1 items-center">
                     ${meta.w ? `
-                      <input type="number" step="2.5" inputmode="decimal" placeholder="lbs" value="${s.actualWeight !== undefined && s.actualWeight !== null && s.actualWeight !== '' ? s.actualWeight : (s.targetLoad || '')}" onchange="appActions.updateSetInput(${exIdx}, ${sIdx}, 'actualWeight', this.value)" class="w-full h-8 bg-card-sub border border-sub rounded text-center font-mono text-xs font-bold text-white px-0.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
+                      <input type="number" step="2.5" inputmode="decimal" placeholder="lbs" value="${s.actualWeight !== undefined && s.actualWeight !== null && s.actualWeight !== '' ? s.actualWeight : (s.targetLoad || '')}" onchange="appActions.updateSetInput(${exIdx}, ${sIdx}, 'actualWeight', this.value)" class="w-full h-8 bg-card-sub border border-sub rounded-lg text-center font-mono text-xs font-bold text-white px-0.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
                     ` : `
-                      <div class="w-full h-8 bg-card-sub/40 border border-sub/50 rounded flex items-center justify-center font-mono text-xs font-bold text-slate-400">—</div>
+                      <div class="w-full h-8 bg-card-sub/40 border border-sub/50 rounded-lg flex items-center justify-center font-mono text-xs font-bold text-slate-400">—</div>
                     `}
 
-                    <input type="number" step="1" inputmode="numeric" placeholder="Reps" value="${s.actualReps !== undefined && s.actualReps !== null ? s.actualReps : ''}" onchange="appActions.updateSetInput(${exIdx}, ${sIdx}, 'actualReps', this.value)" class="w-full h-8 bg-card-sub border border-sub rounded text-center font-mono text-xs font-bold text-white px-0.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
+                    <input type="number" step="1" inputmode="numeric" placeholder="Reps" value="${s.actualReps !== undefined && s.actualReps !== null ? s.actualReps : ''}" onchange="appActions.updateSetInput(${exIdx}, ${sIdx}, 'actualReps', this.value)" class="w-full h-8 bg-card-sub border border-sub rounded-lg text-center font-mono text-xs font-bold text-white px-0.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
 
-                    <select onchange="appActions.updateSetInput(${exIdx}, ${sIdx}, 'actualRpe', this.value)" style="background-image: none;" class="w-full h-8 bg-card-sub border border-sub rounded text-center font-mono text-xs font-bold text-accent px-1 appearance-none cursor-pointer">
+                    <select onchange="appActions.updateSetInput(${exIdx}, ${sIdx}, 'actualRpe', this.value)" style="background-image: none;" class="w-full h-8 bg-card-sub border border-sub rounded-lg text-center font-mono text-xs font-bold text-accent px-0.5 appearance-none cursor-pointer">
                       <option value="">RPE</option>
                       <option value="5.5" ${actualRpenum > 0 && actualRpenum <= 5.5 ? 'selected' : ''}>&lt;6.0</option>
                       <option value="6.0" ${actualRpenum === 6 ? 'selected' : ''}>6.0</option>
@@ -1764,9 +1767,9 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                     </select>
                   </div>
 
-                  <!-- Col 11-12: Log Button -->
-                  <div class="col-span-2 flex justify-end">
-                    <button type="button" id="set-btn-${exIdx}-${sIdx}" onclick="appActions.logSet(${exIdx}, ${sIdx}, event)" class="w-full h-8 rounded font-bold text-xs transition-all flex items-center justify-center ${s.done ? 'bg-emerald-600 text-white shadow-md shadow-emerald-900/30' : 'bg-card-sub border border-sub text-slate-400 hover:text-white'}">
+                  <!-- Col 4: Compact Log Button -->
+                  <div class="flex justify-end">
+                    <button type="button" id="set-btn-${exIdx}-${sIdx}" onclick="appActions.logSet(${exIdx}, ${sIdx}, event)" class="w-full h-8 rounded-lg font-bold text-[11px] transition-all flex items-center justify-center ${s.done ? 'bg-emerald-600 text-white shadow-md shadow-emerald-900/30' : 'bg-card-sub border border-sub text-slate-400 hover:text-white'}">
                       ${s.done ? '✓' : 'Log'}
                     </button>
                   </div>
@@ -2157,23 +2160,23 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                   ` : ''}
 
                   <div class="space-y-1.5">
-                    <div class="grid grid-cols-12 gap-1 px-2 text-[9px] md:text-[10px] font-mono text-slate-400 font-bold items-end pb-1">
-      <div class="col-span-2 flex items-end justify-center pb-0.5">SET</div>
-      <div class="col-span-3 flex items-end justify-center pb-0.5">TARGET</div>
+                    <div class="grid grid-cols-[44px_minmax(0,1fr)_136px_38px] sm:grid-cols-[50px_minmax(0,1fr)_172px_46px] gap-1.5 px-2 text-[9px] sm:text-[10px] font-mono text-slate-400 font-bold items-end pb-0.5">
+      <div class="pl-[18px] text-center pb-0.5">SET</div>
+      <div class="text-left pb-0.5">TARGET</div>
       
       <!-- Stacked Actual + Sub-columns -->
-      <div class="col-span-5 flex flex-col items-center">
-        <span class="text-[7.5px] md:text-[8px] uppercase tracking-widest text-slate-500 font-semibold mb-0.5">
+      <div class="flex flex-col items-center">
+        <span class="text-[7.5px] uppercase tracking-widest text-slate-500 font-semibold mb-0.5">
           ${meta.t ? 'LOAD' : 'ACTUAL'}
         </span>
-        <div class="w-full grid grid-cols-[1fr_0.85fr_1.25fr] gap-1 text-center text-[9px] md:text-[10px] text-slate-400">
+        <div class="w-full grid grid-cols-[1.15fr_0.85fr_1fr] gap-1 text-center text-[9px] sm:text-[10px] text-slate-400">
           <span>LBS</span>
           <span>REPS</span>
           <span>RPE</span>
         </div>
       </div>
 
-      <div class="col-span-2 flex items-end justify-center pb-0.5">LOG</div>
+      <div class="text-center pb-0.5">LOG</div>
     </div>
     ${ex.liveAnchorSync ? `
                 <div class="mb-2 p-2 bg-amber-500/10 border border-amber-500/40 rounded-xl flex items-center justify-between font-mono text-xs">
