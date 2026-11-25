@@ -138,41 +138,67 @@
     };
   }
 
-  // Adaptive TDEE Engine (MacroFactor-Style)
+  // Adaptive TDEE Engine (MacroFactor-Style with Noise & Minimum-Day Guardrails)
   function computeAdaptiveTdee(windowDays = 21) {
     const nowMs = Date.now();
-    const dates = Object.keys(state.dayLogs || {}).sort().filter(k => {
+    const todayKey = getTodayKey();
+    const toMs = (k) => {
       const [y, m, d] = k.split('-').map(Number);
-      if (!y || !m || !d) return false;
-      return (nowMs - new Date(y, m - 1, d).getTime()) <= (windowDays * 86400000);
+      return (y && m && d) ? new Date(y, m - 1, d, 12, 0, 0).getTime() : 0;
+    };
+
+    const dates = Object.keys(state.dayLogs || {}).sort().filter(k => {
+      const ms = toMs(k);
+      return ms > 0 && (nowMs - ms) <= (windowDays * 86400000);
     });
 
     const bwPts = dates
       .filter(k => Number(state.dayLogs[k]?.weight) > 0)
-      .map(k => ({ date: k, w: Number(state.dayLogs[k].weight) }));
-    const kcalPts = dates
-      .filter(k => Number(state.dayLogs[k]?.nutrition?.totals?.kcal) >= 500)
-      .map(k => ({ date: k, kcal: Number(state.dayLogs[k].nutrition.totals.kcal) }));
+      .map(k => ({ date: k, ms: toMs(k), w: Number(state.dayLogs[k].weight) }));
 
-    if (bwPts.length < 2 || kcalPts.length < 3) {
+    // Exclude today (in-progress) and partial logs (<800 kcal) so half-logged days never tank TDEE
+    const kcalPts = dates
+      .filter(k => k < todayKey && Number(state.dayLogs[k]?.nutrition?.totals?.kcal) >= 800)
+      .map(k => ({ date: k, ms: toMs(k), kcal: Number(state.dayLogs[k].nutrition.totals.kcal) }));
+
+    const minKcalDays = 10;
+    const minBwDays = 6;
+    const minSpanDays = 14;
+    const spanDays = (bwPts.length >= 2)
+      ? Math.round((bwPts[bwPts.length - 1].ms - bwPts[0].ms) / 86400000)
+      : 0;
+
+    if (bwPts.length < minBwDays || kcalPts.length < minKcalDays || spanDays < minSpanDays) {
       return {
         ready: false,
         bwDays: bwPts.length,
         kcalDays: kcalPts.length,
-        message: `Log at least 3 days of calories (${kcalPts.length}/3) and 2 weigh-ins (${bwPts.length}/2) in the past ${windowDays} days to unlock Adaptive TDEE.`
+        spanDays,
+        message: `Calibrating: Need ${minKcalDays} completed calorie days (${kcalPts.length}/${minKcalDays}) and ${minBwDays} weigh-ins (${bwPts.length}/${minBwDays}) across ≥${minSpanDays} days (${spanDays}/${minSpanDays}d) to unlock Adaptive TDEE.`
       };
     }
 
     const avgKcal = Math.round(kcalPts.reduce((s, x) => s + x.kcal, 0) / kcalPts.length);
-    const firstBw = bwPts[0];
-    const lastBw = bwPts[bwPts.length - 1];
-    const [y1, m1, d1] = firstBw.date.split('-').map(Number);
-    const [y2, m2, d2] = lastBw.date.split('-').map(Number);
-    const weeksSpan = Math.max(0.5, (new Date(y2, m2 - 1, d2) - new Date(y1, m1 - 1, d1)) / (7 * 86400000));
-    const weeklyBwDelta = Math.round(((lastBw.w - firstBw.w) / weeksSpan) * 100) / 100;
 
-    const estimatedTdee = Math.max(1200, Math.round(avgKcal - (weeklyBwDelta * 500)));
-    const confidence = (kcalPts.length >= 10 && bwPts.length >= 5) ? 'High' : ((kcalPts.length >= 6 && bwPts.length >= 3) ? 'Moderate' : 'Early');
+    // Smooth weight trend by comparing first-half vs. second-half averages (eliminates single-day water spikes)
+    const splitIdx = Math.floor(bwPts.length / 2);
+    const earlySlice = bwPts.slice(0, splitIdx);
+    const lateSlice = bwPts.slice(splitIdx);
+    const earlyAvgW = earlySlice.reduce((s, x) => s + x.w, 0) / earlySlice.length;
+    const lateAvgW = lateSlice.reduce((s, x) => s + x.w, 0) / lateSlice.length;
+    const earlyMidMs = earlySlice.reduce((s, x) => s + x.ms, 0) / earlySlice.length;
+    const lateMidMs = lateSlice.reduce((s, x) => s + x.ms, 0) / lateSlice.length;
+
+    const weeksSpan = Math.max(1.0, (lateMidMs - earlyMidMs) / (7 * 86400000));
+    const weeklyBwDelta = Math.round(((lateAvgW - earlyAvgW) / weeksSpan) * 100) / 100;
+
+    // Physiological sanity guardrail around current bodyweight (11–19 kcal/lb)
+    const refBw = lateAvgW || getLatestBwForNutrition();
+    const minSaneTdee = Math.round(refBw * 11);
+    const maxSaneTdee = Math.round(refBw * 19);
+    const rawTdee = Math.round(avgKcal - (weeklyBwDelta * 500));
+    const estimatedTdee = Math.min(maxSaneTdee, Math.max(minSaneTdee, rawTdee));
+    const confidence = (kcalPts.length >= 16 && bwPts.length >= 10) ? 'High' : 'Moderate';
 
     return {
       ready: true,
