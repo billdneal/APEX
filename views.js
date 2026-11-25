@@ -3261,6 +3261,37 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                   </div>
                 </div>
 
+                <!-- Merge Lift Variants History Cleanup Tool -->
+                <div class="p-3.5 bg-card-sub rounded-2xl border border-sub space-y-2 shadow-md">
+                  <div>
+                    <div class="text-[10px] text-accent font-bold uppercase">Merge Lift Variants (History Cleanup)</div>
+                    <div class="text-[9px] text-slate-400">Combine split modifier tags (e.g. Barbell + Touch &amp; Go → Touch &amp; Go) across all logs, PRs &amp; anchors.</div>
+                  </div>
+                  ${(() => {
+                    const allVariants = getEverUsedLiftVariants();
+                    const opts = allVariants.map(v => `<option value="${String(v).replace(/"/g, '&quot;')}">${v}</option>`).join('');
+                    return `
+                      <div class="space-y-1.5 pt-0.5">
+                        <div>
+                          <label class="text-[8.5px] text-slate-400 uppercase font-bold">From (Merge &amp; Remove)</label>
+                          <select id="merge-variant-from" class="w-full bg-input border border-sub rounded-xl p-1.5 text-white text-[11px] font-bold mt-0.5 focus:outline-none">
+                            ${opts}
+                          </select>
+                        </div>
+                        <div>
+                          <label class="text-[8.5px] text-slate-400 uppercase font-bold">Into (Keep Target)</label>
+                          <select id="merge-variant-to" class="w-full bg-input border border-sub rounded-xl p-1.5 text-accent text-[11px] font-bold mt-0.5 focus:outline-none">
+                            ${opts}
+                          </select>
+                        </div>
+                        <button type="button" onclick="appActions.mergeLiftVariants(document.getElementById('merge-variant-from').value, document.getElementById('merge-variant-to').value)" class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-[10px] tactile shadow">
+                          Merge Variant History &amp; Sync
+                        </button>
+                      </div>
+                    `;
+                  })()}
+                </div>
+
                 <div class="p-3.5 bg-card-sub rounded-2xl border border-sub space-y-1.5 shadow-md">
                   <div class="text-[10px] text-accent font-bold uppercase">Movement Anchors & Best (${Object.keys(state.e1rms || {}).length} Variants)</div>
                   <div class="max-h-56 overflow-y-auto space-y-1.5 pr-1">${e1rmInputs}</div>

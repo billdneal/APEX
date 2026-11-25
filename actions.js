@@ -1751,6 +1751,25 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
         })
       };
 
+      // Keep legacy state.history in sync if this date exists there
+      if (Array.isArray(state.history)) {
+        const hIdx = state.history.findIndex(h => normalizeDateKey(h.date || h.dateKey) === targetKey);
+        if (hIdx > -1) {
+          state.history[hIdx] = {
+            ...state.history[hIdx],
+            date: targetKey,
+            dur: state.dayLogs[targetKey].workout.dur,
+            srpe: state.dayLogs[targetKey].workout.srpe,
+            exercises: state.dayLogs[targetKey].workout.exercises,
+            workout: state.dayLogs[targetKey].workout
+          };
+        }
+      }
+      if (rawTargetKey && rawTargetKey !== targetKey && state.dayLogs[rawTargetKey]?.workout) {
+        delete state.dayLogs[rawTargetKey].workout;
+      }
+
+      const wasEditingHist = Boolean(state.isEditingHistorical);
       state.activeWorkout = [];
       state.activeWorkoutDay = null;
       state.activeWorkoutContext = null;
@@ -1764,7 +1783,8 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
       state.finishModal.open = false;
       state.sessionPRs = {};
       persist();
-      window.pushToCloud(false);
+      if (typeof window.pushToCloud === 'function') window.pushToCloud(wasEditingHist);
+      if (wasEditingHist && typeof showToast === 'function') showToast(`Saved updates to ${targetKey}`);
       triggerHaptic([100, 50, 100]);
       state.screen = 'calendar';
       safeRender();
@@ -1816,6 +1836,93 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
     persist();
     safeRender();
   },
+
+
+    mergeLiftVariants(fromVariantKey, toVariantKey) {
+      const fromKey = String(fromVariantKey || '').trim();
+      const toKey = String(toVariantKey || '').trim();
+      if (!fromKey || !toKey) {
+        showToast('Select both a source and target variant.');
+        return;
+      }
+      if (fromKey === toKey) {
+        showToast('Source and target variants are identical.');
+        return;
+      }
+
+      const parseV = (vKey) => {
+        if (!vKey.includes(' [')) return { baseName: vKey, mods: [] };
+        const parts = vKey.split(' [');
+        return {
+          baseName: parts[0],
+          mods: parts[1].replace(/\]$/, '').split(', ').map(s => s.trim()).filter(Boolean)
+        };
+      };
+
+      const target = parseV(toKey);
+      let updatedExercises = 0;
+      let updatedSessions = 0;
+
+      // 1. Rewrite all matching exercises in state.dayLogs
+      Object.keys(state.dayLogs || {}).forEach(dKey => {
+        const wk = state.dayLogs[dKey]?.workout;
+        if (!wk || !Array.isArray(wk.exercises)) return;
+        let touched = false;
+        wk.exercises.forEach(ex => {
+          if (!ex || !ex.exercise) return;
+          const curKey = getVariantKey(ex.exercise, sanitizeModifiers(ex.modifiers || []));
+          if (curKey === fromKey) {
+            ex.exercise = target.baseName;
+            ex.modifiers = [...target.mods];
+            updatedExercises++;
+            touched = true;
+          }
+        });
+        if (touched) updatedSessions++;
+      });
+
+      // 2. Rewrite legacy state.history if present
+      if (Array.isArray(state.history)) {
+        state.history.forEach(h => {
+          const list = h?.workout?.exercises || h?.exercises;
+          if (!Array.isArray(list)) return;
+          list.forEach(ex => {
+            if (!ex || !ex.exercise) return;
+            const curKey = getVariantKey(ex.exercise, sanitizeModifiers(ex.modifiers || []));
+            if (curKey === fromKey) {
+              ex.exercise = target.baseName;
+              ex.modifiers = [...target.mods];
+            }
+          });
+        });
+      }
+
+      // 3. Rewrite state.prLedger
+      if (Array.isArray(state.prLedger)) {
+        state.prLedger.forEach(pr => {
+          if (pr && pr.lift === fromKey) pr.lift = toKey;
+        });
+      }
+
+      // 4. Merge e1rms & anchorE1rms
+      if (state.e1rms && state.e1rms[fromKey] !== undefined) {
+        state.e1rms[toKey] = Math.max(Number(state.e1rms[toKey]) || 0, Number(state.e1rms[fromKey]) || 0);
+        delete state.e1rms[fromKey];
+      }
+      if (state.anchorE1rms && state.anchorE1rms[fromKey] !== undefined) {
+        state.anchorE1rms[toKey] = Math.max(Number(state.anchorE1rms[toKey]) || 0, Number(state.anchorE1rms[fromKey]) || 0);
+        delete state.anchorE1rms[fromKey];
+      }
+
+      if (state.analyticsSelectedLift === fromKey) {
+        state.analyticsSelectedLift = toKey;
+      }
+
+      persist();
+      if (typeof window.pushToCloud === 'function') window.pushToCloud(true);
+      showToast(`Merged ${updatedExercises} log(s) across ${updatedSessions} session(s) into ${toKey}`);
+      safeRender();
+    },
 
     deleteHistoricalSession(dateKey) {
       const normKey = normalizeDateKey(dateKey);
