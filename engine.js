@@ -251,19 +251,10 @@
     // Working Set Volume Sizing Matrix
     let baseWorkingSets = Number(recipe.baseSets || recipe.setsCount) || 3;
     
-    // Do not apply live autoregulated set reductions during blueprint previews
+    // Keep live working sets 1-for-1 with Protocol Builder baseSets (only taper on Deload or low readiness)
     if (!opts.isPreview) {
-      if (lifterType === 'Enhanced') {
-        baseWorkingSets = (tier === 'Main') ? baseWorkingSets : baseWorkingSets + 1;
-        if (w === 1) baseWorkingSets = Math.max(2, baseWorkingSets - 1);
-        else if (w >= 3) baseWorkingSets += 1;
-      } else {
-        if (w === 1) baseWorkingSets = Math.max(2, baseWorkingSets - 1);
-        else if (w >= 3 && tier !== 'Main') baseWorkingSets += 1;
-      }
-
       if (phase === 'Deload') baseWorkingSets = Math.max(2, Math.floor(baseWorkingSets * 0.6));
-      baseWorkingSets = Math.max(2, baseWorkingSets - setReduction);
+      if (setReduction > 0) baseWorkingSets = Math.max(2, baseWorkingSets - setReduction);
     }
 
     let setArray = [];
@@ -355,7 +346,16 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
     // SCHEME ROUTING ENGINE: PARAMETRIC VS SPECIALIZED
     // ====================================================
     const SPECIALIZED_SCHEMES = [
+      'Straight Sets',
       'Double Progression',
+      'Rep Goal System (Metabolic 50)',
+      'Reverse Pyramid',
+      'Ascending Pyramid',
+      'Hypertrophy Cluster',
+      'Ascending RPE Ladder',
+      'Autoregulated Fatigue Stop',
+      'Autoregulated Fatigue Drop (-5%)',
+      'Prescription Table',
       'Myo-reps',
       'Rest-Pause (Dogcrapp)',
       'Density Block',
@@ -722,27 +722,37 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
       // ----------------------------------------------------------------------
       if (cleanScheme === 'Ascending Pyramid') {
         const peakReps = isFixedRep ? minRep : Math.max(tier === 'Assistance' ? 8 : 3, baseReps - 2);
-        const peakRpe = isGrounding ? 9.0 : roundRpe(Math.min((Number(recipe.peakRpe) || 8.5) + weekRpeBump, rpeCap));
+        const basePeakRpe = Number(recipe.peakRpe || recipe.targetRpe) || 8.5;
+        const peakRpe = isGrounding ? 9.0 : roundRpe(Math.min(basePeakRpe + weekRpeBump, rpeCap));
         const peakLoad = calcLoad(adj, getPct(peakReps, peakRpe));
-
         const rampStep = Number(recipe.rampStepPct) || 9;
-        let r2Load = roundLoad(peakLoad * (1 - (rampStep / 100)));
-        let r1Load = roundLoad(peakLoad * (1 - ((rampStep * 2) / 100)));
+        const rpeDelta = recipe.rpeStepDelta !== undefined ? Number(recipe.rpeStepDelta) : 0.5;
+        const totalSets = skipBackoffs ? 1 : Math.max(2, baseWorkingSets);
 
-        if (r2Load >= peakLoad) r2Load = Math.max(0, peakLoad - roundingStep);
-        if (r1Load >= r2Load) r1Load = Math.max(0, r2Load - roundingStep);
+        const pyrSets = [];
+        for (let i = 0; i < totalSets; i++) {
+          const stepsFromPeak = (totalSets - 1) - i;
+          const isPeak = stepsFromPeak === 0;
+          const setReps = peakReps + (stepsFromPeak * 2);
+          const setRpe = isPeak ? peakRpe : roundRpe(Math.max(5.5, peakRpe - (stepsFromPeak * Math.max(0.5, rpeDelta))));
+          let setLoad = isPeak ? peakLoad : roundLoad(peakLoad * (1 - ((rampStep * stepsFromPeak) / 100)));
+          if (!isPeak && setLoad >= peakLoad) setLoad = Math.max(0, peakLoad - (roundingStep * stepsFromPeak));
 
-        if (skipBackoffs) {
-          return [
-            { label: isGrounding ? '🔥 Grounding Peak Set (@9.0)' : 'Peak Set', targetLoad: meta.w ? peakLoad : 0, targetReps: peakReps, targetTime: 0, targetRpe: peakRpe, actualWeight: meta.w ? peakLoad : 0, actualReps: peakReps, actualTime: 0, actualRpe: peakRpe, done: false, lapRunning: false }
-          ];
+          pyrSets.push({
+            label: isPeak ? (isGrounding ? '🔥 Grounding Peak Set (@9.0)' : 'Peak Set') : `Ramp ${i + 1} (-${rampStep * stepsFromPeak}%)`,
+            targetLoad: meta.w ? setLoad : 0,
+            targetReps: setReps,
+            targetTime: 0,
+            targetRpe: setRpe,
+            actualWeight: meta.w ? setLoad : 0,
+            actualReps: setReps,
+            actualTime: 0,
+            actualRpe: setRpe,
+            done: false,
+            lapRunning: false
+          });
         }
-
-        return [
-          { label: `Ramp 1 (-${rampStep * 2}%)`, targetLoad: meta.w ? r1Load : 0, targetReps: peakReps + 4, targetTime: 0, targetRpe: 7.0, actualWeight: meta.w ? r1Load : 0, actualReps: peakReps + 4, actualTime: 0, actualRpe: 7.0, done: false, lapRunning: false },
-          { label: `Ramp 2 (-${rampStep}%)`, targetLoad: meta.w ? r2Load : 0, targetReps: peakReps + 2, targetTime: 0, targetRpe: 7.5, actualWeight: meta.w ? r2Load : 0, actualReps: peakReps + 2, actualTime: 0, actualRpe: 7.5, done: false, lapRunning: false },
-          { label: isGrounding ? '🔥 Grounding Peak Set (@9.0)' : 'Peak Set', targetLoad: meta.w ? peakLoad : 0, targetReps: peakReps, targetTime: 0, targetRpe: peakRpe, actualWeight: meta.w ? peakLoad : 0, actualReps: peakReps, actualTime: 0, actualRpe: peakRpe, done: false, lapRunning: false }
-        ];
+        return pyrSets;
       }
 
       // ----------------------------------------------------------------------
@@ -882,26 +892,32 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
       // 16. ASCENDING RPE LADDER (RPE 6.0/7.0/8.0 Ramp)
       // ----------------------------------------------------------------------
       if (cleanScheme === 'Ascending RPE Ladder') {
-        const startRpe = roundRpe(Number(recipe.startRpe) || 5.5);
-        const midRpe = roundRpe(Number(recipe.midRpe) || 7.0);
-        const topRpe = isGrounding ? 9.0 : roundRpe(Math.min((Number(recipe.topRpe) || 8.0) + weekRpeBump, rpeCap));
+        const baseTopRpe = Number(recipe.topRpe || recipe.targetRpe) || 8.0;
+        const topRpe = isGrounding ? 9.0 : roundRpe(Math.min(baseTopRpe + weekRpeBump, rpeCap));
+        const stepDelta = (recipe.rpeStepDelta !== undefined && Number(recipe.rpeStepDelta) > 0) ? Number(recipe.rpeStepDelta) : 1.0;
+        const totalSets = skipBackoffs ? 1 : Math.max(2, baseWorkingSets);
 
-        const s6Load = calcLoad(adj, getPct(baseReps, startRpe));
-        const s7Load = calcLoad(adj, getPct(baseReps, midRpe));
-        const s8Load = calcLoad(adj, getPct(baseReps, topRpe));
-        
-        const startRpeLabel = startRpe <= 5.5 ? '6 (<6)' : startRpe.toFixed(1);
-        const midRpeLabel = midRpe.toFixed(1);
-        const topRpeLabel = topRpe.toFixed(1);
+        const ladderSets = [];
+        for (let i = 0; i < totalSets; i++) {
+          const stepsFromTop = (totalSets - 1) - i;
+          const isTop = stepsFromTop === 0;
+          const setRpe = isTop ? topRpe : roundRpe(Math.max(5.5, topRpe - (stepsFromTop * stepDelta)));
+          const setLoad = calcLoad(adj, getPct(baseReps, setRpe));
+          const rpeLbl = setRpe <= 5.5 ? '<6.0' : setRpe.toFixed(1);
 
-        const ladderSets = [
-          { label: `${rangeStr}r @${startRpeLabel}`, targetLoad: meta.w ? s6Load : 0, targetReps: rangeStr, targetTime: 0, targetRpe: startRpe, actualWeight: meta.w ? s6Load : 0, actualReps: minRep, actualTime: 0, actualRpe: startRpe, done: false, lapRunning: false },
-          { label: `${rangeStr}r @${midRpeLabel}`, targetLoad: meta.w ? s7Load : 0, targetReps: rangeStr, targetTime: 0, targetRpe: midRpe, actualWeight: meta.w ? s7Load : 0, actualReps: minRep, actualTime: 0, actualRpe: midRpe, done: false, lapRunning: false },
-          { label: isGrounding ? `🔥 Grounding Ladder (${rangeStr}r @9.0)` : `${rangeStr}r @${topRpeLabel}`, targetLoad: meta.w ? s8Load : 0, targetReps: rangeStr, targetTime: 0, targetRpe: topRpe, actualWeight: meta.w ? s8Load : 0, actualReps: minRep, actualTime: 0, actualRpe: topRpe, done: false, lapRunning: false }
-        ];
-
-        if (!skipBackoffs && baseWorkingSets >= 4 && phase !== 'Deload') {
-          ladderSets.push({ label: 'Repeat Top', targetLoad: meta.w ? s8Load : 0, targetReps: rangeStr, targetTime: 0, targetRpe: topRpe, actualWeight: meta.w ? s8Load : 0, actualReps: minRep, actualTime: 0, actualRpe: topRpe, done: false, lapRunning: false });
+          ladderSets.push({
+            label: (isTop && isGrounding) ? `🔥 Grounding Ladder (${rangeStr}r @9.0)` : `${rangeStr}r @${rpeLbl}`,
+            targetLoad: meta.w ? setLoad : 0,
+            targetReps: rangeStr,
+            targetTime: 0,
+            targetRpe: setRpe,
+            actualWeight: meta.w ? setLoad : 0,
+            actualReps: minRep,
+            actualTime: 0,
+            actualRpe: setRpe,
+            done: false,
+            lapRunning: false
+          });
         }
         return ladderSets;
       }
