@@ -3285,8 +3285,54 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                     <div class="text-[9px] text-slate-400">Combine split modifier tags (e.g. Barbell + Touch &amp; Go → Touch &amp; Go) across all logs, PRs &amp; anchors.</div>
                   </div>
                   ${(() => {
-                    const allVariants = getEverUsedLiftVariants();
-                    const opts = allVariants.map(v => `<option value="${String(v).replace(/"/g, '&quot;')}">${v}</option>`).join('');
+                    const counts = {};
+                    const addKey = (k, inc = 0) => {
+                      if (!k) return;
+                      counts[k] = (counts[k] || 0) + inc;
+                    };
+                    const toRawKey = (name, mods) => {
+                      const cleanName = String(name || '').trim();
+                      if (!cleanName) return '';
+                      const arr = Array.isArray(mods) ? mods : (typeof mods === 'string' ? mods.split(',') : []);
+                      const cleanMods = arr.map(s => String(s || '').trim()).filter(Boolean).sort();
+                      return cleanMods.length ? `${cleanName} [${cleanMods.join(', ')}]` : cleanName;
+                    };
+                    const scanExList = (list) => {
+                      if (!Array.isArray(list)) return;
+                      list.forEach(ex => {
+                        if (!ex) return;
+                        const k = toRawKey(ex.exercise || ex.name, ex.modifiers);
+                        if (k) addKey(k, 1);
+                      });
+                    };
+
+                    Object.keys(state.dayLogs || {}).forEach(dKey => {
+                      const log = state.dayLogs[dKey];
+                      if (!log) return;
+                      scanExList(log.workout?.exercises);
+                      scanExList(log.exercises);
+                    });
+                    Object.keys(state.savedStaged || {}).forEach(dKey => scanExList(state.savedStaged[dKey]));
+                    if (Array.isArray(state.history)) {
+                      state.history.forEach(h => {
+                        if (!h) return;
+                        scanExList(h.workout?.exercises);
+                        scanExList(h.exercises);
+                      });
+                    }
+                    if (Array.isArray(state.prLedger)) {
+                      state.prLedger.forEach(pr => { if (pr && pr.lift) addKey(String(pr.lift).trim(), 0); });
+                    }
+                    [state.e1rms, state.anchorE1rms].forEach(m => {
+                      if (m) Object.keys(m).forEach(k => addKey(String(k).trim(), 0));
+                    });
+
+                    const allVariants = Object.keys(counts).sort();
+                    const opts = allVariants.map(v => {
+                      const c = counts[v] || 0;
+                      const label = c > 0 ? `${v} (${c} log${c === 1 ? '' : 's'})` : v;
+                      return `<option value="${String(v).replace(/"/g, '&quot;')}">${label}</option>`;
+                    }).join('');
                     return `
                       <div class="space-y-1.5 pt-0.5">
                         <div>

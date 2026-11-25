@@ -1901,7 +1901,11 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
         if (t1 || t2) updatedSessions++;
       });
 
-      // 2. Rewrite legacy state.history if present
+      // 2. Rewrite savedStaged and legacy state.history if present
+      Object.keys(state.savedStaged || {}).forEach(dKey => {
+        if (rewriteList(state.savedStaged[dKey])) updatedSessions++;
+      });
+
       if (Array.isArray(state.history)) {
         state.history.forEach(h => {
           if (!h) return;
