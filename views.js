@@ -431,21 +431,38 @@ window.appActions.removeRpeMatrixSet = function(idx) {
 
   function getEverUsedLiftVariants() {
     const variants = new Set();
+    const buildVKey = (name, mods) => {
+      const cleanName = String(name || '').trim();
+      if (!cleanName) return '';
+      const cleanMods = sanitizeModifiers(mods || []);
+      if (core.getVariantKey) return core.getVariantKey(cleanName, cleanMods);
+      return cleanMods.length ? `${cleanName} [${[...cleanMods].sort().join(', ')}]` : cleanName;
+    };
+    const scanList = (list) => {
+      if (!Array.isArray(list)) return;
+      list.forEach(exObj => {
+        if (!exObj) return;
+        const name = exObj.exercise || exObj.name;
+        if (!name) return;
+        const vKey = buildVKey(name, exObj.modifiers);
+        if (vKey) variants.add(vKey);
+      });
+    };
+
     Object.keys(state.dayLogs || {}).forEach(dKey => {
-      const workout = state.dayLogs[dKey]?.workout;
-      if (workout && Array.isArray(workout.exercises)) {
-        workout.exercises.forEach(exObj => {
-          if (exObj && exObj.exercise) {
-            const cleanMods = sanitizeModifiers(exObj.modifiers || []);
-            const vKey = core.getVariantKey ? core.getVariantKey(exObj.exercise, cleanMods) : exObj.exercise;
-            const hasDoneSet = (exObj.sets || []).some(s => s && s.done);
-            if (hasDoneSet || (exObj.sets && exObj.sets.length > 0)) {
-              variants.add(vKey);
-            }
-          }
-        });
-      }
+      const log = state.dayLogs[dKey];
+      if (!log) return;
+      scanList(log.workout?.exercises);
+      scanList(log.exercises);
     });
+
+    if (Array.isArray(state.history)) {
+      state.history.forEach(h => {
+        if (!h) return;
+        scanList(h.workout?.exercises);
+        scanList(h.exercises);
+      });
+    }
 
     if (Array.isArray(state.prLedger)) {
       state.prLedger.forEach(item => {

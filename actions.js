@@ -1851,68 +1851,88 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
       }
 
       const parseV = (vKey) => {
-        if (!vKey.includes(' [')) return { baseName: vKey, mods: [] };
+        if (!vKey.includes(' [')) return { baseName: vKey.trim(), mods: [] };
         const parts = vKey.split(' [');
         return {
-          baseName: parts[0],
-          mods: parts[1].replace(/\]$/, '').split(', ').map(s => s.trim()).filter(Boolean)
+          baseName: parts[0].trim(),
+          mods: parts[1].replace(/\]$/, '').split(',').map(s => s.trim()).filter(Boolean)
         };
       };
 
+      const normSig = (baseName, modsArr) => {
+        const cleanB = String(baseName || '').trim().toLowerCase();
+        const arr = Array.isArray(modsArr) ? modsArr : (typeof modsArr === 'string' ? modsArr.split(',') : []);
+        const cleanM = arr.map(s => String(s || '').trim().toLowerCase()).filter(Boolean).sort();
+        return cleanM.length ? `${cleanB} [${cleanM.join(', ')}]` : cleanB;
+      };
+
+      const src = parseV(fromKey);
+      const srcSig = normSig(src.baseName, src.mods);
       const target = parseV(toKey);
       let updatedExercises = 0;
       let updatedSessions = 0;
 
-      // 1. Rewrite all matching exercises in state.dayLogs
-      Object.keys(state.dayLogs || {}).forEach(dKey => {
-        const wk = state.dayLogs[dKey]?.workout;
-        if (!wk || !Array.isArray(wk.exercises)) return;
+      const rewriteList = (list) => {
+        if (!Array.isArray(list)) return false;
         let touched = false;
-        wk.exercises.forEach(ex => {
-          if (!ex || !ex.exercise) return;
-          const curKey = getVariantKey(ex.exercise, sanitizeModifiers(ex.modifiers || []));
-          if (curKey === fromKey) {
-            ex.exercise = target.baseName;
+        list.forEach(ex => {
+          if (!ex) return;
+          const exName = ex.exercise || ex.name;
+          if (!exName) return;
+          const curSig = normSig(exName, ex.modifiers || []);
+          if (curSig === srcSig) {
+            if (ex.exercise !== undefined) ex.exercise = target.baseName;
+            if (ex.name !== undefined) ex.name = target.baseName;
+            if (ex.exercise === undefined && ex.name === undefined) ex.exercise = target.baseName;
             ex.modifiers = [...target.mods];
             updatedExercises++;
             touched = true;
           }
         });
-        if (touched) updatedSessions++;
+        return touched;
+      };
+
+      // 1. Rewrite all matching exercises in state.dayLogs (both workout.exercises and legacy top-level exercises)
+      Object.keys(state.dayLogs || {}).forEach(dKey => {
+        const log = state.dayLogs[dKey];
+        if (!log) return;
+        const t1 = rewriteList(log.workout?.exercises);
+        const t2 = rewriteList(log.exercises);
+        if (t1 || t2) updatedSessions++;
       });
 
       // 2. Rewrite legacy state.history if present
       if (Array.isArray(state.history)) {
         state.history.forEach(h => {
-          const list = h?.workout?.exercises || h?.exercises;
-          if (!Array.isArray(list)) return;
-          list.forEach(ex => {
-            if (!ex || !ex.exercise) return;
-            const curKey = getVariantKey(ex.exercise, sanitizeModifiers(ex.modifiers || []));
-            if (curKey === fromKey) {
-              ex.exercise = target.baseName;
-              ex.modifiers = [...target.mods];
-            }
-          });
+          if (!h) return;
+          const t1 = rewriteList(h.workout?.exercises);
+          const t2 = rewriteList(h.exercises);
+          if (t1 || t2) updatedSessions++;
         });
       }
 
       // 3. Rewrite state.prLedger
       if (Array.isArray(state.prLedger)) {
         state.prLedger.forEach(pr => {
-          if (pr && pr.lift === fromKey) pr.lift = toKey;
+          if (!pr || !pr.lift) return;
+          const p = parseV(pr.lift);
+          if (pr.lift === fromKey || normSig(p.baseName, p.mods) === srcSig) {
+            pr.lift = toKey;
+          }
         });
       }
 
-      // 4. Merge e1rms & anchorE1rms
-      if (state.e1rms && state.e1rms[fromKey] !== undefined) {
-        state.e1rms[toKey] = Math.max(Number(state.e1rms[toKey]) || 0, Number(state.e1rms[fromKey]) || 0);
-        delete state.e1rms[fromKey];
-      }
-      if (state.anchorE1rms && state.anchorE1rms[fromKey] !== undefined) {
-        state.anchorE1rms[toKey] = Math.max(Number(state.anchorE1rms[toKey]) || 0, Number(state.anchorE1rms[fromKey]) || 0);
-        delete state.anchorE1rms[fromKey];
-      }
+      // 4. Merge e1rms & anchorE1rms (including order-insensitive key matches)
+      [state.e1rms, state.anchorE1rms].forEach(mapObj => {
+        if (!mapObj) return;
+        Object.keys(mapObj).forEach(k => {
+          const p = parseV(k);
+          if (k === fromKey || normSig(p.baseName, p.mods) === srcSig) {
+            mapObj[toKey] = Math.max(Number(mapObj[toKey]) || 0, Number(mapObj[k]) || 0);
+            if (k !== toKey) delete mapObj[k];
+          }
+        });
+      });
 
       if (state.analyticsSelectedLift === fromKey) {
         state.analyticsSelectedLift = toKey;
