@@ -1,8 +1,3 @@
-
-
-
-JS icon
-core
 // ============================================================================
 // APEX TRAINING ENGINE - PART 1 OF 4: CORE ARCHITECTURE & FOUNDATIONS
 // Production Release v4.6.0-PWA (Neutral Schemes / Multi-Engine / Block Wizard)
@@ -3520,4 +3515,3 @@ function renderRpeMatrixTable(profile) {
     console.error("APEX Engine Part 1 fatal initialization error:", err);
   }
 })();
-Analyzing cloud payload structures
