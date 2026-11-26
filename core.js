@@ -1,3 +1,8 @@
+
+
+
+JS icon
+core
 // ============================================================================
 // APEX TRAINING ENGINE - PART 1 OF 4: CORE ARCHITECTURE & FOUNDATIONS
 // Production Release v4.6.0-PWA (Neutral Schemes / Multi-Engine / Block Wizard)
@@ -13,7 +18,7 @@
 
 (function() {
   try {
-    const APP_VERSION = 'v5.0.1-PWA';
+    const APP_VERSION = 'v5.0.2-PWA';
     const now = new Date();
     const TODAY_YEAR = now.getFullYear();
     const TODAY_MONTH = now.getMonth();
@@ -3120,6 +3125,124 @@ function renderRpeMatrixTable(profile) {
     }
   };
 
+  // Payload Compaction & Deduplication Helpers (Minimizes Supabase Disk IO / TOAST Rewrites)
+  let lastPushedPayloadFingerprint = '';
+
+  function compactDiffAgainstDefaults(currentObj, defaultObj) {
+    if (!currentObj || typeof currentObj !== 'object') return {};
+    const out = {};
+    Object.keys(currentObj).forEach(k => {
+      const curVal = currentObj[k];
+      const defVal = defaultObj ? defaultObj[k] : undefined;
+      if (defVal === undefined || JSON.stringify(curVal) !== JSON.stringify(defVal)) {
+        out[k] = curVal;
+      }
+    });
+    return out;
+  }
+
+  function compactRpeProfilesForCloud(profiles) {
+    if (!profiles || typeof profiles !== 'object') return undefined;
+    const out = {};
+    Object.keys(profiles).forEach(id => {
+      const p = profiles[id];
+      if (!p || !p.matrix) return;
+      // Only sync base rows 1-12; rows 13-50 are deterministically rebuilt by extendRpeMatrix()
+      const compactMatrix = {};
+      for (let r = 1; r <= 12; r++) {
+        if (p.matrix[r]) compactMatrix[r] = p.matrix[r];
+      }
+      out[id] = { id: p.id || id, name: p.name || id, matrix: compactMatrix };
+    });
+    return out;
+  }
+
+  function expandRpeProfilesFromCloud(profiles) {
+    if (!profiles || typeof profiles !== 'object') return profiles;
+    const out = {};
+    Object.keys(profiles).forEach(id => {
+      const p = profiles[id];
+      if (!p || !p.matrix) return;
+      const rowCount = Object.keys(p.matrix).length;
+      out[id] = {
+        ...p,
+        matrix: rowCount <= 12 ? extendRpeMatrix(p.matrix, 50) : p.matrix
+      };
+    });
+    return out;
+  }
+
+  function compactDayLogsForCloud(dayLogsObj) {
+    if (!dayLogsObj || typeof dayLogsObj !== 'object') return {};
+    const out = {};
+    Object.keys(dayLogsObj).forEach(k => {
+      const log = dayLogsObj[k];
+      if (!log || typeof log !== 'object') return;
+      const cleanLog = { ...log };
+      if (cleanLog.workout && Array.isArray(cleanLog.workout.exercises)) {
+        cleanLog.workout = {
+          ...cleanLog.workout,
+          exercises: cleanLog.workout.exercises.map(ex => {
+            if (!ex || typeof ex !== 'object') return ex;
+            const cleanEx = { ...ex };
+            delete cleanEx.densityTimerObj;
+            delete cleanEx.densityRunning;
+            delete cleanEx.densityTargetEnd;
+            delete cleanEx.fatigueWarning;
+            delete cleanEx.liveAnchorSync;
+            if (!cleanEx.notes) delete cleanEx.notes;
+            if (Array.isArray(cleanEx.sets)) {
+              cleanEx.sets = cleanEx.sets.map(s => {
+                if (!s || typeof s !== 'object') return s;
+                const cleanS = { ...s };
+                delete cleanS.lapTimerObj;
+                delete cleanS.lapRunning;
+                delete cleanS.lapStart;
+                delete cleanS.lapAccumulated;
+                if (!cleanS.targetTime) delete cleanS.targetTime;
+                if (!cleanS.actualTime) delete cleanS.actualTime;
+                return cleanS;
+              });
+            }
+            return cleanEx;
+          })
+        };
+      }
+      out[k] = cleanLog;
+    });
+    return out;
+  }
+
+  function buildCompactCloudPayload() {
+    const slimSettings = {
+      ...state.settings,
+      customSplitBlueprints: state.customSplitBlueprints,
+      schemeRecipes: compactDiffAgainstDefaults(state.schemeRecipes, defaultSchemeRecipes),
+      anchorE1rms: state.anchorE1rms,
+      oneRmFormula: state.settings.oneRmFormula || 'apex',
+      rpeProfiles: compactRpeProfilesForCloud(state.rpeProfiles)
+    };
+
+    return {
+      user_id: state.user.id,
+      settings: slimSettings,
+      profile: state.profile,
+      mesocycle: state.mesocycle,
+      weekday_split: state.weekdaySplit,
+      exercise_meta: state.exerciseMeta,
+      phase_rep_matrix: state.phaseRepMatrix,
+      scheme_blueprints: compactDiffAgainstDefaults(state.schemeBlueprints, DEFAULT_SCHEME_BLUEPRINTS),
+      exercise_rep_overrides: state.exerciseRepOverrides,
+      active_block_idx: state.activeBlockIdx,
+      active_week: state.activeWeek,
+      exercises: state.exercises,
+      modifier_cats: state.modifierCats,
+      day_logs: compactDayLogsForCloud(state.dayLogs),
+      e1rms: state.e1rms,
+      pr_ledger: state.prLedger
+    };
+  }
+
   window.pushToCloud = async function(isManual = false) {
     if (!sbClient) window.initSupabase();
     if (!sbClient || !state.user) {
@@ -3132,6 +3255,17 @@ function renderRpeMatrixTable(profile) {
       clearTimeout(cloudSyncTimeout);
       cloudSyncTimeout = null;
     }
+
+    // Deduplicate: skip no-op background pushes when nothing has changed since the last push
+    const prePayload = buildCompactCloudPayload();
+    const preFingerprint = JSON.stringify(prePayload);
+    if (!isManual && preFingerprint === lastPushedPayloadFingerprint) {
+      localStorage.setItem('apex_has_unsynced_changes', 'false');
+      state.syncStatus = 'synced';
+      if (typeof window.renderSyncIndicator === 'function') window.renderSyncIndicator();
+      return;
+    }
+
     isPushingToCloud = true;
     lastPushStartedAt = Date.now();
     localStorage.setItem('apex_last_sync_timestamp', String(lastPushStartedAt));
@@ -3139,54 +3273,44 @@ function renderRpeMatrixTable(profile) {
     if (typeof window.renderSyncIndicator === 'function') window.renderSyncIndicator();
 
     try {
-      // Fetch cloud day_logs & e1rms first so a background tab can NEVER overwrite a completed workout on another device
-      const { data: existingCloud } = await sbClient
-        .from('apex_userdata')
-        .select('day_logs, e1rms, pr_ledger')
-        .eq('user_id', state.user.id)
-        .maybeSingle();
+      // Only run pre-flight SELECT if manual or >3 minutes since last sync (reduces read IO while preserving multi-device safety)
+      const prevSyncTs = Number(localStorage.getItem('apex_last_sync_timestamp_prev') || 0);
+      if (isManual || (Date.now() - prevSyncTs > 180000)) {
+        const { data: existingCloud } = await sbClient
+          .from('apex_userdata')
+          .select('day_logs, e1rms, pr_ledger')
+          .eq('user_id', state.user.id)
+          .maybeSingle();
 
-      if (existingCloud?.day_logs) {
-        state.dayLogs = mergeDayLogs(state.dayLogs, existingCloud.day_logs);
-        safeSaveDayLogsLocal(state.dayLogs);
+        if (existingCloud?.day_logs) {
+          state.dayLogs = mergeDayLogs(state.dayLogs, existingCloud.day_logs);
+          safeSaveDayLogsLocal(state.dayLogs);
+        }
+        if (existingCloud?.e1rms) {
+          state.e1rms = { ...existingCloud.e1rms, ...state.e1rms };
+        }
       }
-      if (existingCloud?.e1rms) {
-        state.e1rms = { ...existingCloud.e1rms, ...state.e1rms };
-      }
 
-      state.settings.customSplitBlueprints = state.customSplitBlueprints;
-      state.settings.schemeRecipes = state.schemeRecipes;
-      state.settings.anchorE1rms = state.anchorE1rms;
-      state.settings.oneRmFormula = state.settings.oneRmFormula || 'apex';
-
-      const nowIso = new Date().toISOString();
+      const finalBody = buildCompactCloudPayload();
+      const finalFingerprint = JSON.stringify(finalBody);
       const payload = {
-        user_id: state.user.id,
-        settings: state.settings,
-        profile: state.profile,
-        mesocycle: state.mesocycle,
-        weekday_split: state.weekdaySplit,
-        exercise_meta: state.exerciseMeta,
-        phase_rep_matrix: state.phaseRepMatrix,
-        scheme_blueprints: state.schemeBlueprints,
-        exercise_rep_overrides: state.exerciseRepOverrides,
-        active_block_idx: state.activeBlockIdx,
-        active_week: state.activeWeek,
-        exercises: state.exercises,
-        modifier_cats: state.modifierCats,
-        day_logs: state.dayLogs,
-        e1rms: state.e1rms,
-        pr_ledger: state.prLedger,
-        updated_at: nowIso
+        ...finalBody,
+        updated_at: new Date().toISOString()
       };
+
       const { error } = await sbClient.from('apex_userdata').upsert(payload, { onConflict: 'user_id' });
       if (error) throw error;
       const doneTs = Date.now();
       lastPushStartedAt = doneTs;
+      lastPushedPayloadFingerprint = finalFingerprint;
       localStorage.setItem('apex_last_sync_timestamp', String(doneTs));
+      localStorage.setItem('apex_last_sync_timestamp_prev', String(doneTs));
       localStorage.setItem('apex_has_unsynced_changes', 'false');
       state.syncStatus = 'synced';
-      if (isManual) showToast("✅ Data pushed to Supabase successfully!");
+      if (isManual) {
+        const kb = Math.round(finalFingerprint.length / 1024);
+        showToast(`✅ Synced to Supabase (${kb} KB)`);
+      }
     } catch (err) {
       console.error("Cloud push error:", err);
       state.syncStatus = 'error';
@@ -3225,7 +3349,7 @@ function renderRpeMatrixTable(profile) {
           if (data.settings.anchorE1rms) state.anchorE1rms = { ...state.e1rms, ...data.settings.anchorE1rms };
           if (data.settings.oneRmFormula) state.settings.oneRmFormula = data.settings.oneRmFormula;
           if (data.settings.mesocycleStartDate) state.mesocycleStartDate = data.settings.mesocycleStartDate;
-          if (data.settings.rpeProfiles) state.rpeProfiles = data.settings.rpeProfiles;
+          if (data.settings.rpeProfiles) state.rpeProfiles = expandRpeProfilesFromCloud(data.settings.rpeProfiles);
           if (data.settings.activeRpeProfileId) state.activeRpeProfileId = data.settings.activeRpeProfileId;
         }
         if (data.profile) state.profile = { ...state.profile, ...data.profile };
@@ -3275,6 +3399,8 @@ function renderRpeMatrixTable(profile) {
           cloudSyncTimeout = null;
         }
         localStorage.setItem('apex_has_unsynced_changes', 'false');
+        localStorage.setItem('apex_last_sync_timestamp_prev', String(Date.now()));
+        try { lastPushedPayloadFingerprint = JSON.stringify(buildCompactCloudPayload()); } catch (_) {}
         state.syncStatus = 'synced';
         if (hasUnsyncedLocal) {
           await window.pushToCloud(false);
@@ -3293,9 +3419,9 @@ function renderRpeMatrixTable(profile) {
     if (typeof window.renderSyncIndicator === 'function') window.renderSyncIndicator();
   };
 
-  // Debounced Auto-Sync Engine
+  // Debounced Auto-Sync Engine (Batches rapid taps into a single Postgres write)
   let cloudSyncTimeout = null;
-  function queueCloudSync(delayMs = 250) {
+  function queueCloudSync(delayMs = 5000) {
     localStorage.setItem('apex_has_unsynced_changes', 'true');
     localStorage.setItem('apex_last_local_edit', String(Date.now()));
     if (!state.user) return;
@@ -3303,10 +3429,11 @@ function renderRpeMatrixTable(profile) {
     state.syncStatus = 'syncing';
     if (typeof window.renderSyncIndicator === 'function') window.renderSyncIndicator();
 
+    const effectiveDelay = Math.max(Number(delayMs) || 0, 5000);
     cloudSyncTimeout = setTimeout(() => {
       cloudSyncTimeout = null;
       window.pushToCloud(false);
-    }, delayMs);
+    }, effectiveDelay);
   }
   window.queueCloudSync = queueCloudSync;
 
@@ -3317,9 +3444,15 @@ function renderRpeMatrixTable(profile) {
     }
   });
 
-  // 60-Second Background Heartbeat Auto-Sync for In-Progress Workouts
+  // 60-Second Background Heartbeat: ONLY push if there are actual unsynced local edits
   setInterval(() => {
-    if (state.user && state.activeWorkout && state.activeWorkout.length && !isPushingToCloud) {
+    if (
+      state.user &&
+      state.activeWorkout &&
+      state.activeWorkout.length &&
+      !isPushingToCloud &&
+      localStorage.getItem('apex_has_unsynced_changes') === 'true'
+    ) {
       window.pushToCloud(false);
     }
   }, 60000);
@@ -3387,3 +3520,4 @@ function renderRpeMatrixTable(profile) {
     console.error("APEX Engine Part 1 fatal initialization error:", err);
   }
 })();
+Analyzing cloud payload structures
