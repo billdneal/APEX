@@ -138,6 +138,50 @@
     };
   }
 
+  function formatServingInfo(qty, servingUnit) {
+    const cleanQty = Math.round(Math.max(0.05, Number(qty) || 1) * 100) / 100;
+    const unit = String(servingUnit || '').trim();
+    if (unit) return `${cleanQty} × ${unit}`;
+    return cleanQty !== 1 ? `${cleanQty}×` : '';
+  }
+
+  function getEntryServingMeta(entry) {
+    let qty = Number(entry?.qty);
+    let servingUnit = entry?.servingUnit !== undefined ? String(entry.servingUnit).trim() : null;
+
+    if (!(qty > 0)) {
+      const rawInfo = String(entry?.servingInfo || '').trim();
+      const m = rawInfo.match(/^(\d+(?:\.\d+)?)\s*[×x]\s*(.*)$/i);
+      if (m) {
+        qty = Math.max(0.05, Number(m[1]) || 1);
+        if (servingUnit === null) servingUnit = m[2].trim();
+      } else {
+        qty = 1;
+        if (servingUnit === null) servingUnit = rawInfo;
+      }
+    } else if (servingUnit === null) {
+      const rawInfo = String(entry?.servingInfo || '').trim();
+      const m = rawInfo.match(/^\d+(?:\.\d+)?\s*[×x]\s*(.*)$/i);
+      servingUnit = m ? m[1].trim() : rawInfo;
+    }
+
+    const per = entry?.perServing && typeof entry.perServing === 'object'
+      ? {
+          kcal: Number(entry.perServing.kcal) || 0,
+          p: Number(entry.perServing.p) || 0,
+          c: Number(entry.perServing.c) || 0,
+          f: Number(entry.perServing.f) || 0
+        }
+      : {
+          kcal: (Number(entry?.kcal) || 0) / qty,
+          p: (Number(entry?.p) || 0) / qty,
+          c: (Number(entry?.c) || 0) / qty,
+          f: (Number(entry?.f) || 0) / qty
+        };
+
+    return { qty, servingUnit: servingUnit || '', perServing: per };
+  }
+
   // Adaptive TDEE Engine (MacroFactor-Style with Noise & Minimum-Day Guardrails)
   function computeAdaptiveTdee(windowDays = 21) {
     const nowMs = Date.now();
@@ -344,21 +388,28 @@
     addNutritionEntry(entry, qtyOverride = null) {
       const k = getSelectedDateKey();
       const nut = getDayNutrition(k);
-      const qty = Math.max(0.1, Number(qtyOverride !== null ? qtyOverride : (entry.qty || 1)) || 1);
-      const servingText = entry.serving ? `${qty} × ${entry.serving}` : (qty !== 1 ? `${qty}×` : '');
+      const qty = Math.max(0.05, Number(qtyOverride !== null ? qtyOverride : (entry.qty || 1)) || 1);
+      const servingUnit = String(entry.serving || '').trim();
+      const servingText = formatServingInfo(qty, servingUnit);
 
       const baseKcal = Number(entry.kcal) || 0;
       const baseP = Number(entry.p) || 0;
       const baseC = Number(entry.c) || 0;
       const baseF = Number(entry.f) || 0;
 
-      // If qtyOverride is passed, multiply per-serving macros by qty
+      // If qtyOverride is passed, base values are per-serving; otherwise they are already totals for qty
       const mult = qtyOverride !== null ? qty : 1;
+      const perServing = qtyOverride !== null
+        ? { kcal: baseKcal, p: baseP, c: baseC, f: baseF }
+        : { kcal: baseKcal / qty, p: baseP / qty, c: baseC / qty, f: baseF / qty };
 
       nut.entries.push({
         id: 'food_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
         name: String(entry.name || 'Food Item').trim(),
+        qty,
+        servingUnit,
         servingInfo: servingText,
+        perServing,
         meal: normalizeMealSlot(entry.meal || state.nutritionUi.mealSlot || 'Lunch'),
         kcal: Math.max(0, Math.round(baseKcal * mult)),
         p: Math.max(0, Math.round(baseP * mult)),
@@ -391,14 +442,47 @@
       if (typeof window.render === 'function') window.render();
     },
 
+    scaleEditedNutritionQty(entryId, newQtyVal) {
+      const k = getSelectedDateKey();
+      const nut = getDayNutrition(k);
+      const item = (nut.entries || []).find(e => e.id === entryId);
+      if (!item) return;
+
+      const q = Math.max(0.05, Number(newQtyVal) || 0);
+      if (!(q > 0)) return;
+      const meta = getEntryServingMeta(item);
+      const per = meta.perServing;
+
+      const setVal = (id, v) => {
+        const el = document.getElementById(id);
+        if (el) el.value = Math.max(0, Math.round(v));
+      };
+      setVal(`nut-edit-kcal-${entryId}`, per.kcal * q);
+      setVal(`nut-edit-p-${entryId}`, per.p * q);
+      setVal(`nut-edit-c-${entryId}`, per.c * q);
+      setVal(`nut-edit-f-${entryId}`, per.f * q);
+    },
+
+    stepEditedNutritionQty(entryId, delta) {
+      const qtyEl = document.getElementById(`nut-edit-qty-${entryId}`);
+      if (!qtyEl) return;
+      const cur = Number(qtyEl.value) || 1;
+      const next = Math.max(0.25, Math.round((cur + Number(delta)) * 100) / 100);
+      qtyEl.value = next;
+      window.appActions.scaleEditedNutritionQty(entryId, next);
+    },
+
     saveEditedNutritionEntry(entryId) {
       const k = getSelectedDateKey();
       const nut = getDayNutrition(k);
       const item = (nut.entries || []).find(e => e.id === entryId);
       if (!item) return;
 
+      const meta = getEntryServingMeta(item);
       const name = document.getElementById(`nut-edit-name-${entryId}`)?.value?.trim();
       const meal = document.getElementById(`nut-edit-meal-${entryId}`)?.value || item.meal;
+      const qtyInput = Number(document.getElementById(`nut-edit-qty-${entryId}`)?.value);
+      const newQty = (qtyInput > 0) ? Math.round(qtyInput * 100) / 100 : meta.qty;
       const kcal = Number(document.getElementById(`nut-edit-kcal-${entryId}`)?.value);
       const p = Number(document.getElementById(`nut-edit-p-${entryId}`)?.value);
       const c = Number(document.getElementById(`nut-edit-c-${entryId}`)?.value);
@@ -411,9 +495,23 @@
       item.f = Math.max(0, Math.round(isNaN(f) ? item.f : f));
       item.kcal = Math.max(0, Math.round(!isNaN(kcal) && kcal > 0 ? kcal : ((item.p * 4) + (item.c * 4) + (item.f * 9))));
 
+      // Preserve exact per-serving baseline if user only scaled qty; recalculate if macros were manually overridden
+      const expectedKcal = Math.round(meta.perServing.kcal * newQty);
+      const expectedP = Math.round(meta.perServing.p * newQty);
+      const expectedC = Math.round(meta.perServing.c * newQty);
+      const expectedF = Math.round(meta.perServing.f * newQty);
+      const macrosManuallyEdited = (item.kcal !== expectedKcal || item.p !== expectedP || item.c !== expectedC || item.f !== expectedF);
+
+      item.qty = newQty;
+      item.servingUnit = meta.servingUnit;
+      item.servingInfo = formatServingInfo(newQty, meta.servingUnit);
+      item.perServing = macrosManuallyEdited
+        ? { kcal: item.kcal / newQty, p: item.p / newQty, c: item.c / newQty, f: item.f / newQty }
+        : meta.perServing;
+
       state.nutritionUi.editingId = null;
       recalcDayTotals(k);
-      toast(`Updated ${item.name}`);
+      toast(`Updated ${item.name} (${item.qty}× • ${item.kcal} kcal)`);
       saveAndSync();
     },
 
@@ -655,15 +753,20 @@ ${ingText}`
         const k = getSelectedDateKey();
         const nut = getDayNutrition(k);
         items.forEach(it => {
+          const kcal = Math.max(0, Math.round(Number(it.kcal) || 0));
+          const p = Math.max(0, Math.round(Number(it.p) || 0));
+          const c = Math.max(0, Math.round(Number(it.c) || 0));
+          const f = Math.max(0, Math.round(Number(it.f) || 0));
+          const servingUnit = it.serving ? String(it.serving).trim() : '';
           nut.entries.push({
             id: 'ai_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
             name: String(it.name || 'Food'),
-            servingInfo: it.serving ? String(it.serving) : '',
+            qty: 1,
+            servingUnit,
+            servingInfo: formatServingInfo(1, servingUnit),
+            perServing: { kcal, p, c, f },
             meal: normalizeMealSlot(state.nutritionUi.mealSlot || 'Lunch'),
-            kcal: Math.max(0, Math.round(Number(it.kcal) || 0)),
-            p: Math.max(0, Math.round(Number(it.p) || 0)),
-            c: Math.max(0, Math.round(Number(it.c) || 0)),
-            f: Math.max(0, Math.round(Number(it.f) || 0)),
+            kcal, p, c, f,
             source: 'ai',
             ts: Date.now()
           });
@@ -880,6 +983,7 @@ ${ingText}`
             <div class="space-y-1.5">
               ${items.map(e => {
                 if (ui.editingId === e.id) {
+                  const sMeta = getEntryServingMeta(e);
                   return `
                     <div class="bg-input p-2.5 rounded-xl border border-accent/60 space-y-2 text-[10.5px]">
                       <div class="grid grid-cols-12 gap-1.5">
@@ -888,11 +992,35 @@ ${ingText}`
                           ${MEAL_SLOTS.map(m => `<option value="${m}" ${normalizeMealSlot(e.meal) === m ? 'selected' : ''}>${m}</option>`).join('')}
                         </select>
                       </div>
+                      <div class="flex items-center justify-between gap-1.5 bg-card-sub/60 p-1.5 rounded-lg border border-sub/70">
+                        <div class="text-[9px] text-slate-400 uppercase font-bold truncate pl-0.5">
+                          Servings${sMeta.servingUnit ? ` <span class="text-slate-300 normal-case">(${sMeta.servingUnit})</span>` : ''}
+                        </div>
+                        <div class="flex items-center space-x-1 shrink-0">
+                          <button type="button" onclick="appActions.stepEditedNutritionQty('${e.id}', -0.5)" class="px-1.5 py-0.5 bg-card-sub border border-sub rounded text-[9.5px] font-bold text-slate-300 hover:text-white tactile">-0.5</button>
+                          <button type="button" onclick="appActions.stepEditedNutritionQty('${e.id}', -0.25)" class="px-1.5 py-0.5 bg-card-sub border border-sub rounded text-[9.5px] font-bold text-slate-300 hover:text-white tactile">-.25</button>
+                          <input type="number" id="nut-edit-qty-${e.id}" step="0.25" min="0.05" value="${sMeta.qty}" oninput="appActions.scaleEditedNutritionQty('${e.id}', this.value)" class="w-12 bg-input border border-accent/50 rounded py-0.5 text-center text-accent font-black text-[10.5px]">
+                          <button type="button" onclick="appActions.stepEditedNutritionQty('${e.id}', 0.25)" class="px-1.5 py-0.5 bg-card-sub border border-sub rounded text-[9.5px] font-bold text-accent hover:text-white tactile">+.25</button>
+                          <button type="button" onclick="appActions.stepEditedNutritionQty('${e.id}', 0.5)" class="px-1.5 py-0.5 bg-card-sub border border-sub rounded text-[9.5px] font-bold text-accent hover:text-white tactile">+0.5</button>
+                        </div>
+                      </div>
                       <div class="grid grid-cols-4 gap-1.5">
-                        <input type="number" id="nut-edit-kcal-${e.id}" value="${e.kcal}" placeholder="kcal" class="bg-card-sub border border-sub rounded-lg py-1 text-center text-white text-[10px] font-bold">
-                        <input type="number" id="nut-edit-p-${e.id}" value="${e.p}" placeholder="P" class="bg-card-sub border border-sub rounded-lg py-1 text-center text-blue-300 text-[10px] font-bold">
-                        <input type="number" id="nut-edit-c-${e.id}" value="${e.c}" placeholder="C" class="bg-card-sub border border-sub rounded-lg py-1 text-center text-emerald-300 text-[10px] font-bold">
-                        <input type="number" id="nut-edit-f-${e.id}" value="${e.f}" placeholder="F" class="bg-card-sub border border-sub rounded-lg py-1 text-center text-amber-300 text-[10px] font-bold">
+                        <div class="space-y-0.5">
+                          <div class="text-[8px] text-slate-400 text-center uppercase">Kcal</div>
+                          <input type="number" id="nut-edit-kcal-${e.id}" value="${e.kcal}" placeholder="kcal" class="w-full bg-card-sub border border-sub rounded-lg py-1 text-center text-white text-[10px] font-bold">
+                        </div>
+                        <div class="space-y-0.5">
+                          <div class="text-[8px] text-blue-300 text-center uppercase">P (g)</div>
+                          <input type="number" id="nut-edit-p-${e.id}" value="${e.p}" placeholder="P" class="w-full bg-card-sub border border-sub rounded-lg py-1 text-center text-blue-300 text-[10px] font-bold">
+                        </div>
+                        <div class="space-y-0.5">
+                          <div class="text-[8px] text-emerald-300 text-center uppercase">C (g)</div>
+                          <input type="number" id="nut-edit-c-${e.id}" value="${e.c}" placeholder="C" class="w-full bg-card-sub border border-sub rounded-lg py-1 text-center text-emerald-300 text-[10px] font-bold">
+                        </div>
+                        <div class="space-y-0.5">
+                          <div class="text-[8px] text-amber-300 text-center uppercase">F (g)</div>
+                          <input type="number" id="nut-edit-f-${e.id}" value="${e.f}" placeholder="F" class="w-full bg-card-sub border border-sub rounded-lg py-1 text-center text-amber-300 text-[10px] font-bold">
+                        </div>
                       </div>
                       <div class="flex justify-end space-x-1.5">
                         <button type="button" onclick="appActions.cancelEditNutritionEntry()" class="px-2.5 py-1 bg-card-sub border border-sub rounded-lg text-[9.5px] text-slate-300">Cancel</button>
