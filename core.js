@@ -13,7 +13,7 @@
 
 (function() {
   try {
-    const APP_VERSION = 'v5.0.3-PWA';
+    const APP_VERSION = 'v5.0.4-PWA';
     const now = new Date();
     const TODAY_YEAR = now.getFullYear();
     const TODAY_MONTH = now.getMonth();
