@@ -341,6 +341,7 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
     const baseReps = periodizedRep;
     const isFixedRep = (minRep === maxRep);
     const rangeStr = isFixedRep ? `${minRep}` : `${minRep}-${maxRep}`;
+    const clampRep = (r) => Math.max(minRep, Math.min(maxRep, Math.round(r)));
 
     // ====================================================
     // SCHEME ROUTING ENGINE: PARAMETRIC VS SPECIALIZED
@@ -528,7 +529,7 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
       // 3. MYO-REPS (Rest-Pause Density Clusters)
       // ----------------------------------------------------------------------
       if (cleanScheme === 'Myo-reps') {
-        const actReps = isFixedRep ? minRep : Math.max(tier === 'Assistance' ? 12 : 10, maxRep + 2);
+        const actReps = isFixedRep ? minRep : maxRep;
         const actRpe = isGrounding ? 9.5 : roundRpe(Number(recipe.actRpe) || 9.0);
         const actLoad = calcLoad(adj, getPct(actReps, actRpe));
         const miniReps = Math.max(3, Math.round(actReps * 0.3));
@@ -660,35 +661,47 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
       // 8. REVERSE PYRAMID (RPT Curve - Dynamic Percentage Offsets)
       // ----------------------------------------------------------------------
       if (cleanScheme === 'Reverse Pyramid') {
-        const topReps = isFixedRep ? minRep : Math.max(tier === 'Assistance' ? 8 : 2, baseReps - 2);
-        const baseRecipeRpe = roundRpe(Number(recipe.topRpe) || 8.5);
+        const totalSets = skipBackoffs ? 1 : Math.max(2, baseWorkingSets);
+        const repAt = (idx) => (isFixedRep || totalSets === 1)
+          ? minRep
+          : clampRep(minRep + (idx / (totalSets - 1)) * (maxRep - minRep));
+        const topReps = repAt(0);
+        const baseRecipeRpe = roundRpe(Number(recipe.topRpe || recipe.targetRpe) || 8.5);
         const topRpe = isGrounding ? 9.0 : roundRpe(Math.min(baseRecipeRpe + weekRpeBump, rpeCap));
         const topLoad = calcLoad(adj, getPct(topReps, topRpe));
 
         const drop1Pct = Number(recipe.drop1Pct) || 10;
         const drop2Pct = Number(recipe.drop2Pct) || 20;
+        const drop3Pct = Number(recipe.drop3Pct) || 30;
+        const drops = [0, drop1Pct, drop2Pct, drop3Pct];
+        const rpes = [topRpe, 8.0, 8.5, 9.0];
 
-        let b1Load = roundLoad(topLoad * (1 - (drop1Pct / 100)));
-        let b2Load = roundLoad(topLoad * (1 - (drop2Pct / 100)));
-        if (b1Load >= topLoad) b1Load = Math.max(0, topLoad - roundingStep);
-        if (b2Load >= b1Load) b2Load = Math.max(0, b1Load - roundingStep);
+        const sets = [];
+        let prevLoad = topLoad;
+        for (let i = 0; i < totalSets; i++) {
+          const dropPct = drops[i] !== undefined ? drops[i] : (drop3Pct + ((i - 3) * 5));
+          let setLoad = i === 0 ? topLoad : roundLoad(topLoad * (1 - (dropPct / 100)));
+          if (i > 0 && setLoad >= prevLoad) setLoad = Math.max(0, prevLoad - roundingStep);
+          prevLoad = setLoad;
+          const setReps = repAt(i);
+          const setRpe = roundRpe(rpes[i] !== undefined ? rpes[i] : 9.0);
+          const label = i === 0
+            ? (isGrounding ? '🔥 Grounding Top Set (@9.0)' : 'Top Effort')
+            : (i >= 3 ? `Capacity (-${dropPct}%)` : `Backoff ${i} (-${dropPct}%)`);
 
-        const sets = [
-          { label: isGrounding ? '🔥 Grounding Top Set (@9.0)' : 'Top Effort', targetLoad: meta.w ? topLoad : 0, targetReps: topReps, targetTime: 0, targetRpe: topRpe, actualWeight: meta.w ? topLoad : 0, actualReps: topReps, actualTime: 0, actualRpe: topRpe, done: false, lapRunning: false }
-        ];
-
-        if (!skipBackoffs) {
-          sets.push(
-            { label: `Backoff 1 (-${drop1Pct}%)`, targetLoad: meta.w ? b1Load : 0, targetReps: topReps + 2, targetTime: 0, targetRpe: 8.0, actualWeight: meta.w ? b1Load : 0, actualReps: topReps + 2, actualTime: 0, actualRpe: 8.0, done: false, lapRunning: false },
-            { label: `Backoff 2 (-${drop2Pct}%)`, targetLoad: meta.w ? b2Load : 0, targetReps: topReps + 4, targetTime: 0, targetRpe: 8.5, actualWeight: meta.w ? b2Load : 0, actualReps: topReps + 4, actualTime: 0, actualRpe: 8.5, done: false, lapRunning: false }
-          );
-
-          if (baseWorkingSets >= 4) {
-            const drop3Pct = Number(recipe.drop3Pct) || 30;
-            let b3Load = roundLoad(topLoad * (1 - (drop3Pct / 100)));
-            if (b3Load >= b2Load) b3Load = Math.max(0, b2Load - roundingStep);
-            sets.push({ label: `Capacity (-${drop3Pct}%)`, targetLoad: meta.w ? b3Load : 0, targetReps: topReps + 6, targetTime: 0, targetRpe: 9.0, actualWeight: meta.w ? b3Load : 0, actualReps: topReps + 6, actualTime: 0, actualRpe: 9.0, done: false, lapRunning: false });
-          }
+          sets.push({
+            label,
+            targetLoad: meta.w ? setLoad : 0,
+            targetReps: setReps,
+            targetTime: 0,
+            targetRpe: setRpe,
+            actualWeight: meta.w ? setLoad : 0,
+            actualReps: setReps,
+            actualTime: 0,
+            actualRpe: setRpe,
+            done: false,
+            lapRunning: false
+          });
         }
         return sets;
       }
@@ -697,7 +710,8 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
       // 9. TAPERED (Capacity Cascade)
       // ----------------------------------------------------------------------
       if (cleanScheme === 'Tapered') {
-        const openerReps = isFixedRep ? minRep : Math.max(tier === 'Assistance' ? 6 : 2, baseReps - 3);
+        const openerReps = minRep;
+        const backReps = isFixedRep ? minRep : maxRep;
         const openerRpe = isGrounding ? 9.0 : roundRpe(Math.min((Number(recipe.openerRpe) || 8.5) + weekRpeBump, rpeCap));
         const openerLoad = calcLoad(adj, getPct(openerReps, openerRpe));
 
@@ -710,8 +724,8 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
           const backLoad = roundLoad(openerLoad * (backLoadPct / 100));
           const backRpe = roundRpe(Number(recipe.backoffRpe) || 8.0);
           sets.push(
-            { label: 'Taper Capacity 1', targetLoad: meta.w ? backLoad : 0, targetReps: baseReps + 2, targetTime: 0, targetRpe: backRpe, actualWeight: meta.w ? backLoad : 0, actualReps: baseReps + 2, actualTime: 0, actualRpe: backRpe, done: false, lapRunning: false },
-            { label: 'Taper Capacity 2', targetLoad: meta.w ? backLoad : 0, targetReps: baseReps + 2, targetTime: 0, targetRpe: roundRpe(backRpe + 0.5), actualWeight: meta.w ? backLoad : 0, actualReps: baseReps + 2, actualTime: 0, actualRpe: roundRpe(backRpe + 0.5), done: false, lapRunning: false }
+            { label: 'Taper Capacity 1', targetLoad: meta.w ? backLoad : 0, targetReps: backReps, targetTime: 0, targetRpe: backRpe, actualWeight: meta.w ? backLoad : 0, actualReps: backReps, actualTime: 0, actualRpe: backRpe, done: false, lapRunning: false },
+            { label: 'Taper Capacity 2', targetLoad: meta.w ? backLoad : 0, targetReps: backReps, targetTime: 0, targetRpe: roundRpe(backRpe + 0.5), actualWeight: meta.w ? backLoad : 0, actualReps: backReps, actualTime: 0, actualRpe: roundRpe(backRpe + 0.5), done: false, lapRunning: false }
           );
         }
         return sets;
@@ -721,7 +735,7 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
       // 10. ASCENDING PYRAMID
       // ----------------------------------------------------------------------
       if (cleanScheme === 'Ascending Pyramid') {
-        const peakReps = isFixedRep ? minRep : Math.max(tier === 'Assistance' ? 8 : 3, baseReps - 2);
+        const peakReps = minRep;
         const basePeakRpe = Number(recipe.peakRpe || recipe.targetRpe) || 8.5;
         const peakRpe = isGrounding ? 9.0 : roundRpe(Math.min(basePeakRpe + weekRpeBump, rpeCap));
         const peakLoad = calcLoad(adj, getPct(peakReps, peakRpe));
@@ -733,7 +747,9 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
         for (let i = 0; i < totalSets; i++) {
           const stepsFromPeak = (totalSets - 1) - i;
           const isPeak = stepsFromPeak === 0;
-          const setReps = peakReps + (stepsFromPeak * 2);
+          const setReps = (isFixedRep || totalSets === 1)
+            ? minRep
+            : clampRep(maxRep - (i / (totalSets - 1)) * (maxRep - minRep));
           const setRpe = isPeak ? peakRpe : roundRpe(Math.max(5.5, peakRpe - (stepsFromPeak * Math.max(0.5, rpeDelta))));
           let setLoad = isPeak ? peakLoad : roundLoad(peakLoad * (1 - ((rampStep * stepsFromPeak) / 100)));
           if (!isPeak && setLoad >= peakLoad) setLoad = Math.max(0, peakLoad - (roundingStep * stepsFromPeak));
@@ -759,9 +775,9 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
       // 11. VOLUME PYRAMID
       // ----------------------------------------------------------------------
       if (cleanScheme === 'Volume Pyramid') {
-        const apexReps = isFixedRep ? minRep : Math.max(tier === 'Assistance' ? 8 : 3, baseReps - 3);
-        const midReps = apexReps + 2;
-        const basePyramidReps = apexReps + 4;
+        const apexReps = minRep;
+        const basePyramidReps = isFixedRep ? minRep : maxRep;
+        const midReps = isFixedRep ? minRep : clampRep((minRep + maxRep) / 2);
 
         const apexRpe = isGrounding ? 9.0 : roundRpe(Math.min((Number(recipe.apexRpe) || 8.5) + weekRpeBump, rpeCap));
         const midRpe = roundRpe(Number(recipe.midRpe) || 8.0);
@@ -790,10 +806,10 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
       // 12. FORCE/METABOLIC INTERLEAVE
       // ----------------------------------------------------------------------
       if (cleanScheme === 'Force/Metabolic Interleave') {
-        const forceReps = isFixedRep ? minRep : (tier === 'Assistance' ? 8 : Math.max(3, baseReps - 2));
+        const forceReps = minRep;
         const forceRpe = isGrounding ? 9.0 : roundRpe(Number(recipe.forceRpe) || 8.5);
         const metaRpe = roundRpe(Number(recipe.metaRpe) || 8.5);
-        const metaReps = Number(recipe.metaReps) || 15;
+        const metaReps = isFixedRep ? minRep : maxRep;
 
         const forceLoad = calcLoad(adj, getPct(forceReps, forceRpe));
         const metaLoad = calcLoad(adj, getPct(metaReps, metaRpe));
@@ -926,8 +942,8 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
       // 17. TOP SET + BACK-OFF
       // ----------------------------------------------------------------------
       if (cleanScheme === 'Top Set + Back-off') {
-        const topReps = isFixedRep ? minRep : Math.max(tier === 'Assistance' ? 8 : 1, baseReps - 4);
-        const backReps = isFixedRep ? minRep : topReps + (tier === 'Assistance' ? 4 : 2);
+        const topReps = minRep;
+        const backReps = isFixedRep ? minRep : maxRep;
         const baseRecipeRpe = roundRpe(Number(recipe.topRpe) || 8.5);
         const topRpe = isGrounding ? 9.0 : roundRpe(Math.min(baseRecipeRpe + weekRpeBump, rpeCap));
         const backRpe = roundRpe(Math.min((Number(recipe.backoffRpe) || 8.0) + weekRpeBump, rpeCap));
@@ -1202,7 +1218,7 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
       // 24. AUTOREGULATED FATIGUE DROP (-5%)
       // ----------------------------------------------------------------------
       if (cleanScheme === 'Autoregulated Fatigue Drop (-5%)') {
-        const topReps = isFixedRep ? minRep : Math.max(tier === 'Assistance' ? 8 : 2, baseReps - 2);
+        const topReps = isFixedRep ? minRep : clampRep(baseReps - 2);
         const topRpe = isGrounding ? 9.0 : roundRpe(Number(recipe.topRpe) || 8.5);
         const topLoad = calcLoad(adj, getPct(topReps, topRpe));
         const dropPct = Number(recipe.dropPct) || 5;
@@ -1225,7 +1241,7 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
       // 25. PRESCRIPTION TABLE (Velocity Focus)
       // ----------------------------------------------------------------------
       if (cleanScheme === 'Prescription Table') {
-        const pReps = isFixedRep ? minRep : (tier === 'Assistance' ? 8 : Math.max(2, baseReps - 3));
+        const pReps = isFixedRep ? minRep : clampRep(baseReps - 2);
         const pRpe = isGrounding ? 9.0 : roundRpe(Number(recipe.targetRpe) || 7.5);
         const pLoad = calcLoad(adj, getPct(pReps, pRpe));
         const count = skipBackoffs ? 1 : (Number(recipe.setsCount) || baseWorkingSets);
@@ -1254,9 +1270,9 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
       // 26. WAVE LOADING
       // ----------------------------------------------------------------------
       if (cleanScheme === 'Wave Loading') {
-        const wBase = isFixedRep ? minRep : (tier === 'Assistance' ? 8 : Math.max(4, baseReps));
-        const wMid = isFixedRep ? minRep : (tier === 'Assistance' ? 6 : Math.max(2, wBase - 2));
-        const wTop = isFixedRep ? minRep : (tier === 'Assistance' ? 4 : Math.max(1, wMid - 2));
+        const wBase = isFixedRep ? minRep : maxRep;
+        const wTop = minRep;
+        const wMid = isFixedRep ? minRep : clampRep((minRep + maxRep) / 2);
 
         const w1TopRpe = roundRpe(Number(recipe.wave1TopRpe) || 8.5);
         const w2TopRpe = isGrounding ? 9.5 : roundRpe(Number(recipe.wave2TopRpe) || 9.0);
@@ -1288,14 +1304,16 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
       // 27. DOUBLE PYRAMID
       // ----------------------------------------------------------------------
       if (cleanScheme === 'Double Pyramid') {
-        const apexPeakReps = isFixedRep ? minRep : Math.max(tier === 'Assistance' ? 6 : 2, baseReps - 3);
+        const apexPeakReps = minRep;
+        const basePyrReps = isFixedRep ? minRep : maxRep;
+        const midPyrReps = isFixedRep ? minRep : clampRep((minRep + maxRep) / 2);
         const peakRpe = isGrounding ? 9.0 : roundRpe(Math.min((Number(recipe.peakRpe) || 8.5) + weekRpeBump, rpeCap));
         const peakLoad = calcLoad(adj, getPct(apexPeakReps, peakRpe));
 
-        const midUpLoad = calcLoad(adj, getPct(apexPeakReps + 2, 7.5));
-        const baseUpLoad = calcLoad(adj, getPct(apexPeakReps + 5, 7.0));
-        const midDownLoad = calcLoad(adj, getPct(apexPeakReps + 2, 8.5));
-        const baseDownLoad = calcLoad(adj, getPct(apexPeakReps + 5, 9.0));
+        const midUpLoad = calcLoad(adj, getPct(midPyrReps, 7.5));
+        const baseUpLoad = calcLoad(adj, getPct(basePyrReps, 7.0));
+        const midDownLoad = calcLoad(adj, getPct(midPyrReps, 8.5));
+        const baseDownLoad = calcLoad(adj, getPct(basePyrReps, 9.0));
 
         if (skipBackoffs) {
           return [
@@ -1304,11 +1322,11 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
         }
 
         return [
-          { label: `Base Up (${apexPeakReps + 5}r)`, targetLoad: meta.w ? baseUpLoad : 0, targetReps: apexPeakReps + 5, targetTime: 0, targetRpe: 7.0, actualWeight: meta.w ? baseUpLoad : 0, actualReps: apexPeakReps + 5, actualTime: 0, actualRpe: 7.0, done: false, lapRunning: false },
-          { label: `Mid Up (${apexPeakReps + 2}r)`, targetLoad: meta.w ? midUpLoad : 0, targetReps: apexPeakReps + 2, targetTime: 0, targetRpe: 7.5, actualWeight: meta.w ? midUpLoad : 0, actualReps: apexPeakReps + 2, actualTime: 0, actualRpe: 7.5, done: false, lapRunning: false },
+          { label: `Base Up (${basePyrReps}r)`, targetLoad: meta.w ? baseUpLoad : 0, targetReps: basePyrReps, targetTime: 0, targetRpe: 7.0, actualWeight: meta.w ? baseUpLoad : 0, actualReps: basePyrReps, actualTime: 0, actualRpe: 7.0, done: false, lapRunning: false },
+          { label: `Mid Up (${midPyrReps}r)`, targetLoad: meta.w ? midUpLoad : 0, targetReps: midPyrReps, targetTime: 0, targetRpe: 7.5, actualWeight: meta.w ? midUpLoad : 0, actualReps: midPyrReps, actualTime: 0, actualRpe: 7.5, done: false, lapRunning: false },
           { label: isGrounding ? '🔥 Grounding Peak (@9.0)' : `Peak (${apexPeakReps}r)`, targetLoad: meta.w ? peakLoad : 0, targetReps: apexPeakReps, targetTime: 0, targetRpe: peakRpe, actualWeight: meta.w ? peakLoad : 0, actualReps: apexPeakReps, actualTime: 0, actualRpe: peakRpe, done: false, lapRunning: false },
-          { label: `Mid Down (${apexPeakReps + 2}r)`, targetLoad: meta.w ? midDownLoad : 0, targetReps: apexPeakReps + 2, targetTime: 0, targetRpe: 8.5, actualWeight: meta.w ? midDownLoad : 0, actualReps: apexPeakReps + 2, actualTime: 0, actualRpe: 8.5, done: false, lapRunning: false },
-          { label: `Base Down (${apexPeakReps + 5}r)`, targetLoad: meta.w ? baseDownLoad : 0, targetReps: apexPeakReps + 5, targetTime: 0, targetRpe: 9.0, actualWeight: meta.w ? baseDownLoad : 0, actualReps: apexPeakReps + 5, actualTime: 0, actualRpe: 9.0, done: false, lapRunning: false }
+          { label: `Mid Down (${midPyrReps}r)`, targetLoad: meta.w ? midDownLoad : 0, targetReps: midPyrReps, targetTime: 0, targetRpe: 8.5, actualWeight: meta.w ? midDownLoad : 0, actualReps: midPyrReps, actualTime: 0, actualRpe: 8.5, done: false, lapRunning: false },
+          { label: `Base Down (${basePyrReps}r)`, targetLoad: meta.w ? baseDownLoad : 0, targetReps: basePyrReps, targetTime: 0, targetRpe: 9.0, actualWeight: meta.w ? baseDownLoad : 0, actualReps: basePyrReps, actualTime: 0, actualRpe: 9.0, done: false, lapRunning: false }
         ];
       }
 
@@ -1316,8 +1334,8 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
       // 28. SAWTOOTH
       // ----------------------------------------------------------------------
       if (cleanScheme === 'Sawtooth') {
-        const heavyReps = isFixedRep ? minRep : Math.max(tier === 'Assistance' ? 6 : 2, baseReps - 3);
-        const repReps = heavyReps + 4;
+        const heavyReps = minRep;
+        const repReps = isFixedRep ? minRep : maxRep;
         const heavyRpe = isGrounding ? 9.0 : roundRpe(Number(recipe.heavyRpe) || 8.5);
         const repRpe = roundRpe(Number(recipe.repRpe) || 8.0);
 
