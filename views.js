@@ -1756,12 +1756,12 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                   </div>
 
                   <!-- Col 2: Target Prescription (Tap to Edit Inline) -->
-                  <button type="button" onclick="appActions.toggleTargetEdit(${exIdx}, ${sIdx}, event)" title="Tap to edit target" class="min-w-0 flex flex-col justify-center items-start text-left font-mono leading-tight group cursor-pointer focus:outline-none">
-                    <span class="inline-flex flex-col max-w-full border-b border-dotted border-slate-500/60 group-hover:border-accent pb-0.5">
-                      <span class="text-[10.5px] sm:text-xs font-bold text-slate-200 group-hover:text-accent truncate">
+                  <button type="button" onclick="appActions.toggleTargetEdit(${exIdx}, ${sIdx}, event)" title="Tap to edit target" class="min-w-0 flex items-center justify-start text-left font-mono leading-tight group cursor-pointer focus:outline-none">
+                    <span class="inline-flex flex-wrap items-baseline gap-x-1 max-w-full border-b border-dotted border-slate-500/60 group-hover:border-accent pb-0.5">
+                      <span class="text-[10px] sm:text-xs font-bold text-slate-200 group-hover:text-accent whitespace-nowrap">
                         ${(s.targetLoad !== undefined && s.targetLoad !== null && s.targetLoad !== '' && Number(s.targetLoad) > 0) ? s.targetLoad + 'x' : ''}${s.targetReps || ''}${meta.r ? 'r' : ''}
                       </span>
-                      <span class="text-[9.5px] sm:text-[10px] font-semibold text-slate-400 group-hover:text-slate-200">@${displayTargetRpe}</span>
+                      <span class="text-[9.5px] sm:text-[10.5px] font-semibold text-slate-400 group-hover:text-slate-200 whitespace-nowrap">@${displayTargetRpe}</span>
                     </span>
                   </button>
 
