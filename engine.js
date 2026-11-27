@@ -1440,7 +1440,7 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
 
         const dLog = state.dayLogs[dKey];
         const wk = dLog?.workout;
-        if (!wk || !wk.done || !Array.isArray(wk.exercises)) return;
+        if (!wk || !wk.done || wk.isRecovery || !Array.isArray(wk.exercises)) return;
 
         // Look up next calendar day's localized soreness
         const nextDate = new Date(parts[0], parts[1] - 1, parts[2] + 1);
@@ -1483,7 +1483,8 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
               latestE1: topE1,
               peakE1: topE1,
               sorenessSum: 0,
-              srpeSum: 0
+              srpeSum: 0,
+              jointSum: 0
             };
           }
           const rec = map[vKey];
@@ -1492,6 +1493,7 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
           if (topE1 > rec.peakE1) rec.peakE1 = topE1;
           rec.sorenessSum += nextSoreness;
           rec.srpeSum += srpe;
+          rec.jointSum += (Number(exObj.jointDiscomfort) || 0);
         });
       });
 
@@ -1500,10 +1502,11 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
         .map(r => {
           const avgSoreness = Math.round((r.sorenessSum / r.sessions) * 10) / 10;
           const avgSrpe = Math.round((r.srpeSum / r.sessions) * 10) / 10;
+          const avgJoint = Math.round((r.jointSum / r.sessions) * 10) / 10;
           const gainLbs = r.peakE1 - r.startE1;
           const gainPct = r.startE1 > 0 ? (gainLbs / r.startE1) * 100 : 0;
-          // Higher soreness rating (5 = zero DOMS) = lower fatigue cost
-          const fatigueCost = Math.max(1.5, ((6.0 - avgSoreness) * 1.4) + (avgSrpe * 0.45));
+          // Higher soreness rating (5 = zero DOMS) = lower fatigue cost; joint discomfort adds direct fatigue penalty
+          const fatigueCost = Math.max(1.5, ((6.0 - avgSoreness) * 1.4) + (avgSrpe * 0.45) + (avgJoint * 1.15));
           const rawScore = ((gainPct + 4.0) * (1 + Math.min(r.sessions, 8) * 0.05)) / fatigueCost;
           const sfrScore = Math.max(10, Math.min(99, Math.round(rawScore * 22)));
 
@@ -1521,6 +1524,7 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
             gainLbs,
             avgNextDaySoreness: avgSoreness,
             avgSrpe,
+            avgJointDiscomfort: avgJoint,
             sfrScore,
             grade,
             badge

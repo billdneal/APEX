@@ -403,9 +403,45 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
   core.getMissedSplitsForWeek = getMissedSplitsForWeek;
   if (window.apexCore) window.apexCore.getMissedSplitsForWeek = getMissedSplitsForWeek;
 
-  function rebuildStagedSlotSets(slots, targetDateKey, phaseOverride = null) {
+  function halveRepTarget(repVal) {
+    if (repVal === undefined || repVal === null || repVal === '') return repVal;
+    const str = String(repVal).trim();
+    if (str.includes('-')) {
+      const parts = str.split('-').map(p => Math.max(1, Math.round((Number(p.trim()) || 2) / 2)));
+      return parts[0] === parts[1] ? `${parts[0]}` : `${Math.min(parts[0], parts[1])}-${Math.max(parts[0], parts[1])}`;
+    }
+    const num = Number(str);
+    if (!isNaN(num) && num > 0) return Math.max(1, Math.round(num / 2));
+    return repVal;
+  }
+
+  function applyRecoverySetsTransform(sets, recoveryMode) {
+    if (!recoveryMode || !Array.isArray(sets) || !sets.length) return sets;
+    const keepCount = Math.max(1, Math.ceil(sets.length / 2));
+    return sets.slice(0, keepCount).map((s, idx) => {
+      const next = { ...s };
+      next.targetRpe = 6.0;
+      next.actualRpe = 6.0;
+      next.label = `Recovery ${idx + 1}`;
+      if (recoveryMode === 'sets_reps') {
+        next.targetReps = halveRepTarget(s.targetReps);
+        const minR = parseInt(String(next.targetReps).split('-')[0], 10);
+        if (!isNaN(minR) && minR > 0) next.actualReps = minR;
+      } else if (recoveryMode === 'sets_load') {
+        if (Number(s.targetLoad) > 0) {
+          const halfLoad = roundLoad(Number(s.targetLoad) * 0.5);
+          next.targetLoad = halfLoad;
+          next.actualWeight = halfLoad;
+        }
+      }
+      return next;
+    });
+  }
+
+  function rebuildStagedSlotSets(slots, targetDateKey, phaseOverride = null, recoveryMode = null) {
     const r = getRollingReadiness(targetDateKey, 3);
     const readyBand = getReadinessBand(r);
+    const activeRecovery = recoveryMode !== undefined ? recoveryMode : (state.stagingContext?.recoveryMode || null);
     return (slots || []).map(s => {
       const cleanMods = sanitizeModifiers(s.modifiers);
       const normScheme = normalizeSchemeName(s.scheme);
@@ -416,6 +452,10 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
         skipBackoffs: Boolean(s.skipBackoffs)
       };
       if (phaseOverride) opts.phase = phaseOverride;
+      let builtSets = dispatchBuildSets(normScheme, anchorE1, readyBand.factor, s.tier || 'Main', s.exercise, cleanMods, opts);
+      if (activeRecovery) {
+        builtSets = applyRecoverySetsTransform(builtSets, activeRecovery);
+      }
       return {
         ...s,
         tier: s.tier || 'Main',
@@ -424,7 +464,7 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
         scheme: normScheme,
         isGrounding: Boolean(s.isGrounding),
         skipBackoffs: Boolean(s.skipBackoffs),
-        sets: dispatchBuildSets(normScheme, anchorE1, readyBand.factor, s.tier || 'Main', s.exercise, cleanMods, opts)
+        sets: builtSets
       };
     });
   }
@@ -829,11 +869,13 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
       const phaseOverride = opts.phase || null;
       const isDetour = (mode === 'custom' || mode === 'blank' || Boolean(phaseOverride));
 
+      const recoveryMode = opts.recoveryMode || null;
       state.stagingContext = {
         mode,
         phaseOverride,
         splitOverride,
-        isDetour
+        isDetour: isDetour || Boolean(recoveryMode),
+        recoveryMode
       };
 
       let rawSlots = [];
@@ -891,6 +933,19 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
       }
       persist();
       showToast(splitName === '__BLANK__' ? 'Cleared to Blank Slate' : `Loaded split: ${splitName}`);
+      safeRender();
+    },
+
+    setStagingRecoveryMode(mode) {
+      const k = formatIsoDate(state.year, state.month, state.selectedDay);
+      if (!state.stagingContext) state.stagingContext = { mode: 'plan', phaseOverride: null, splitOverride: null, isDetour: false, recoveryMode: null };
+      const nextMode = (mode === 'off' || !mode || state.stagingContext.recoveryMode === mode) ? null : mode;
+      state.stagingContext.recoveryMode = nextMode;
+      if (nextMode) state.stagingContext.isDetour = true;
+      state.stagedSlots = rebuildStagedSlotSets(state.stagedSlots, k, state.stagingContext.phaseOverride || null, nextMode);
+      persist();
+      const labels = { sets_reps: 'Recovery Mode: ½ Sets & Reps (same weight)', sets_load: 'Recovery Mode: ½ Sets & Load (same reps)' };
+      showToast(nextMode ? labels[nextMode] : 'Restored Normal Session Targets');
       safeRender();
     },
 
@@ -1260,7 +1315,9 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
         phase: effectivePhase,
         week: w,
         splitName: effectiveSplit,
-        isDetour: Boolean(ctx.isDetour)
+        isDetour: Boolean(ctx.isDetour),
+        isRecovery: Boolean(ctx.recoveryMode),
+        recoveryMode: ctx.recoveryMode || null
       };
 
       state.sStart = Date.now();
@@ -1291,6 +1348,7 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
           isGrounding: Boolean(slot.isGrounding),
           skipBackoffs: Boolean(slot.skipBackoffs),
           notes: slot.notes !== undefined ? slot.notes : getLastExerciseNote(slot.exercise),
+          jointDiscomfort: 0,
           fatigueWarning: false,
           densityLoad: calcLoad(anchorE1 * readyBand.factor, dPct),
           densitySec: dTotalSecs,
@@ -1298,12 +1356,15 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
           densityRunning: false,
           densityTimerObj: null,
           densityReps: 0,
-          sets: dispatchBuildSets(normScheme, anchorE1, readyBand.factor, slot.tier, slot.exercise, cleanMods, {
-            dateKey: targetDateKey,
-            phase: effectivePhase,
-            isGrounding: slot.isGrounding,
-            skipBackoffs: slot.skipBackoffs
-          })
+          sets: (() => {
+            const rawBuilt = dispatchBuildSets(normScheme, anchorE1, readyBand.factor, slot.tier, slot.exercise, cleanMods, {
+              dateKey: targetDateKey,
+              phase: effectivePhase,
+              isGrounding: slot.isGrounding,
+              skipBackoffs: slot.skipBackoffs
+            });
+            return ctx.recoveryMode ? applyRecoverySetsTransform(rawBuilt, ctx.recoveryMode) : rawBuilt;
+          })()
         };
       });
 
@@ -1410,9 +1471,23 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
         }
         
         const rem = ex.sets.filter(x => !x.done).length;
-        ex.fatigueWarning = (roundRpe(s.actualRpe) >= roundRpe(s.targetRpe) + 1.0 && rem >= 1);
-        if (ex.fatigueWarning) {
+        const rpeOvershoot = (roundRpe(s.actualRpe) >= roundRpe(s.targetRpe) + 1.0);
+        const minTargetRep = parseInt(String(s.targetReps || '').split('-')[0], 10);
+        const repMiss = (meta.r && !isNaN(minTargetRep) && minTargetRep > 0 && Number(s.actualReps) > 0 && Number(s.actualReps) < minTargetRep);
+        const readyScore = state.dayLogs?.[sessionDate]?.recovery?.score || getRollingReadiness(sessionDate, 3);
+        const lowReadiness = Number(readyScore) < 65;
+
+        if (rem >= 1 && (rpeOvershoot || (lowReadiness && repMiss))) {
+          ex.fatigueWarning = {
+            lowReadiness,
+            readyScore: Number(readyScore) || 75,
+            reason: rpeOvershoot
+              ? `RPE exceeded target by ≥1.0${lowReadiness ? ` with ${readyScore}% readiness` : ''}.`
+              : `Missed target reps (${s.actualReps} vs ${s.targetReps}r) with ${readyScore}% readiness.`
+          };
           playAudioBeep(440, 0.3);
+        } else {
+          ex.fatigueWarning = false;
         }
       }
       persist();
@@ -1524,6 +1599,102 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
         state.activeWorkout[exIdx].fatigueWarning = false;
         safeRender();
       }
+    },
+
+    trimRemainingSet(exIdx) {
+      const ex = state.activeWorkout?.[exIdx];
+      if (!ex || !Array.isArray(ex.sets)) return;
+      for (let i = ex.sets.length - 1; i >= 0; i--) {
+        if (!ex.sets[i].done) {
+          clearInterval(ex.sets[i].lapTimerObj);
+          ex.sets.splice(i, 1);
+          break;
+        }
+      }
+      ex.fatigueWarning = false;
+      persist();
+      triggerCloudSync(1500);
+      showToast('Trimmed 1 remaining set');
+      safeRender();
+    },
+
+    setExerciseJointDiscomfort(exIdx, level) {
+      if (!state.activeWorkout?.[exIdx]) return;
+      const lvl = Math.max(0, Math.min(3, Number(level) || 0));
+      state.activeWorkout[exIdx].jointDiscomfort = lvl;
+      persist();
+      triggerCloudSync(2500);
+      safeRender();
+    },
+
+    toggleTargetEdit(exIdx, sIdx, event) {
+      if (event?.stopPropagation) event.stopPropagation();
+      if (state.editingTarget && state.editingTarget.exIdx === exIdx && state.editingTarget.sIdx === sIdx) {
+        state.editingTarget = null;
+      } else {
+        state.editingTarget = { exIdx, sIdx };
+      }
+      safeRender();
+    },
+
+    closeTargetEdit() {
+      state.editingTarget = null;
+      safeRender();
+    },
+
+    stepTargetEditLoad(exIdx, sIdx, delta) {
+      const el = document.getElementById(`target-edit-load-${exIdx}-${sIdx}`);
+      if (!el) return;
+      const cur = Number(el.value) || 0;
+      const next = Math.max(0, Math.round((cur + Number(delta)) * 10) / 10);
+      el.value = next;
+    },
+
+    applyTargetEdit(exIdx, sIdx, applyAllOpen = false) {
+      const ex = state.activeWorkout?.[exIdx];
+      const baseSet = ex?.sets?.[sIdx];
+      if (!ex || !baseSet) return;
+
+      const loadEl = document.getElementById(`target-edit-load-${exIdx}-${sIdx}`);
+      const repsEl = document.getElementById(`target-edit-reps-${exIdx}-${sIdx}`);
+      const rpeEl = document.getElementById(`target-edit-rpe-${exIdx}-${sIdx}`);
+
+      const oldBaseLoad = Number(baseSet.targetLoad) || 0;
+      const newLoad = loadEl ? Math.max(0, Number(loadEl.value) || 0) : oldBaseLoad;
+      const rawReps = repsEl ? String(repsEl.value || '').trim() : String(baseSet.targetReps || '');
+      const newReps = rawReps || baseSet.targetReps;
+      const newRpe = rpeEl ? roundRpe(rpeEl.value) : roundRpe(baseSet.targetRpe);
+      const parsedMinRep = parseInt(String(newReps).split('-')[0], 10);
+
+      const updateOneSet = (targetSet, scaledLoad, repsVal, rpeVal) => {
+        targetSet.targetLoad = scaledLoad;
+        targetSet.targetReps = repsVal;
+        targetSet.targetRpe = rpeVal;
+        if (!targetSet.done) {
+          if (scaledLoad > 0) targetSet.actualWeight = scaledLoad;
+          if (!isNaN(parsedMinRep) && parsedMinRep > 0) targetSet.actualReps = parsedMinRep;
+        }
+      };
+
+      updateOneSet(baseSet, newLoad, newReps, newRpe);
+
+      if (applyAllOpen) {
+        ex.sets.forEach((other, idx) => {
+          if (idx === sIdx || !other || other.done) return;
+          const otherOldLoad = Number(other.targetLoad) || 0;
+          let scaledLoad = newLoad;
+          if (oldBaseLoad > 0 && otherOldLoad > 0 && otherOldLoad !== oldBaseLoad) {
+            scaledLoad = roundLoad(newLoad * (otherOldLoad / oldBaseLoad));
+          }
+          updateOneSet(other, scaledLoad, newReps, newRpe);
+        });
+      }
+
+      state.editingTarget = null;
+      persist();
+      triggerCloudSync(2000);
+      showToast(applyAllOpen ? `Updated target across open sets` : `Updated S${sIdx + 1} target`);
+      safeRender();
     },
 
     // Lap & Density Timers
@@ -1722,6 +1893,9 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
         week: stampedWeek,
         splitName: stampedSplit,
         isDetour: stampedDetour,
+        isRecovery: (state.isEditingHistorical && existingWorkout.isRecovery !== undefined)
+          ? Boolean(existingWorkout.isRecovery)
+          : Boolean(activeCtx.isRecovery),
         isDeload: stampedPhase === 'Deload',
         dur: state.finishModal.dur,
         srpe: roundRpe(state.finishModal.srpe),
@@ -1742,6 +1916,7 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
             isGrounding: Boolean(ex.isGrounding),
             skipBackoffs: Boolean(ex.skipBackoffs),
             notes: ex.notes ? String(ex.notes).trim() : '',
+            jointDiscomfort: Number(ex.jointDiscomfort) || 0,
             densityLoad: ex.densityLoad || 0,
             densitySec: ex.densitySec || 0,
             sets: ex.sets.map(s => ({ ...s, targetRpe: roundRpe(s.targetRpe), actualRpe: roundRpe(s.actualRpe), lapRunning: false, lapTimerObj: null })),

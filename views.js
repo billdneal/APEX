@@ -1699,6 +1699,10 @@ function renderBottomNav() {
           const cleanMods = sanitizeModifiers(ex.modifiers);
           const variantKey = core.getVariantKey ? core.getVariantKey(ex.exercise, cleanMods) : ex.exercise;
           const prEvent = state.sessionPRs[variantKey];
+          const prevLiftHist = (typeof getLiftHistory === 'function') ? getLiftHistory(ex.exercise, true, cleanMods) : [];
+          const prevJointScore = (prevLiftHist && prevLiftHist.length && Number(prevLiftHist[0]?.jointDiscomfort) >= 2)
+            ? Number(prevLiftHist[0].jointDiscomfort)
+            : 0;
 
           const exBpObj = state.schemeBlueprints?.[ex.scheme] || DEFAULT_SCHEME_BLUEPRINTS?.[ex.scheme] || {};
           const isDensity = (ex.scheme === 'Density Block' || exBpObj.pattern === 'density_block');
@@ -1751,13 +1755,13 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                     <span title="${cleanCustomLabel || `Set ${sIdx + 1}`}" class="w-6 sm:w-7 h-7 rounded-md bg-card-sub border ${isGroundingLabel ? 'border-accent/60 text-accent' : 'border-sub text-slate-300'} font-mono text-[10px] font-bold flex items-center justify-center shrink-0">S${sIdx + 1}</span>
                   </div>
 
-                  <!-- Col 2: Target Prescription (Clean Left-Aligned 2-Line Stack) -->
-                  <div class="min-w-0 flex flex-col justify-center text-left font-mono leading-tight">
-                    <span class="text-[10.5px] sm:text-xs font-bold text-slate-200 truncate">
+                  <!-- Col 2: Target Prescription (Tap to Edit Inline) -->
+                  <button type="button" onclick="appActions.toggleTargetEdit(${exIdx}, ${sIdx}, event)" title="Tap to edit target" class="min-w-0 flex flex-col justify-center text-left font-mono leading-tight group cursor-pointer focus:outline-none">
+                    <span class="text-[10.5px] sm:text-xs font-bold text-slate-200 group-hover:text-accent truncate border-b border-dotted border-slate-500/60 group-hover:border-accent pb-0.5">
                       ${(s.targetLoad !== undefined && s.targetLoad !== null && s.targetLoad !== '' && Number(s.targetLoad) > 0) ? s.targetLoad + 'x' : ''}${s.targetReps || ''}${meta.r ? 'r' : ''}
                     </span>
-                    <span class="text-[9.5px] sm:text-[10px] font-semibold text-slate-400">@${displayTargetRpe}</span>
-                  </div>
+                    <span class="text-[9.5px] sm:text-[10px] font-semibold text-slate-400 group-hover:text-slate-200">@${displayTargetRpe}</span>
+                  </button>
 
                   <!-- Col 3: Actual Inputs (Lbs, Reps, RPE) -->
                   <div class="grid grid-cols-[1.15fr_0.85fr_1fr] gap-1 items-center">
@@ -1792,6 +1796,36 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                   </div>
 
                 </div>
+
+                ${(state.editingTarget && state.editingTarget.exIdx === exIdx && state.editingTarget.sIdx === sIdx) ? `
+                  <div class="mt-1.5 pt-1.5 border-t border-accent/40 space-y-1.5 font-mono text-[10px]" onclick="event.stopPropagation()">
+                    <div class="flex items-center justify-between text-[8.5px] uppercase font-bold text-accent">
+                      <span>Edit S${sIdx + 1} Target</span>
+                      <button type="button" onclick="appActions.closeTargetEdit()" class="text-slate-400 hover:text-white">✕</button>
+                    </div>
+                    <div class="grid grid-cols-12 gap-1.5 items-center">
+                      <div class="col-span-5 flex items-center space-x-1">
+                        <button type="button" onclick="appActions.stepTargetEditLoad(${exIdx}, ${sIdx}, -5)" class="px-1.5 h-7 bg-card-sub border border-sub rounded-lg text-[9.5px] font-bold text-slate-300 hover:text-white tactile">-5</button>
+                        <input type="number" step="2.5" id="target-edit-load-${exIdx}-${sIdx}" value="${s.targetLoad || 0}" placeholder="lbs" class="w-full h-7 bg-card-sub border border-sub rounded-lg text-center text-white text-[11px] font-bold focus:outline-none focus:border-accent">
+                        <button type="button" onclick="appActions.stepTargetEditLoad(${exIdx}, ${sIdx}, 5)" class="px-1.5 h-7 bg-card-sub border border-sub rounded-lg text-[9.5px] font-bold text-accent hover:text-white tactile">+5</button>
+                      </div>
+                      <div class="col-span-4">
+                        <input type="text" id="target-edit-reps-${exIdx}-${sIdx}" value="${String(s.targetReps ?? '')}" placeholder="8 or 8-12" class="w-full h-7 bg-card-sub border border-sub rounded-lg text-center text-white text-[11px] font-bold focus:outline-none focus:border-accent">
+                      </div>
+                      <div class="col-span-3">
+                        <select id="target-edit-rpe-${exIdx}-${sIdx}" class="w-full h-7 bg-card-sub border border-sub rounded-lg text-center text-accent text-[11px] font-bold focus:outline-none focus:border-accent">
+                          <option value="5.5" ${targetRpenum <= 5.5 ? 'selected' : ''}>&lt;6.0</option>
+                          ${[6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0].map(r => `<option value="${r}" ${targetRpenum === r ? 'selected' : ''}>@${r.toFixed(1)}</option>`).join('')}
+                        </select>
+                      </div>
+                    </div>
+                    <div class="flex justify-end space-x-1.5">
+                      <button type="button" onclick="appActions.closeTargetEdit()" class="px-2 py-1 bg-card-sub border border-sub rounded-lg text-[9.5px] text-slate-400 hover:text-white tactile">Cancel</button>
+                      <button type="button" onclick="appActions.applyTargetEdit(${exIdx}, ${sIdx}, false)" class="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 rounded-lg text-[9.5px] text-white font-bold tactile">This Set</button>
+                      <button type="button" onclick="appActions.applyTargetEdit(${exIdx}, ${sIdx}, true)" class="px-2.5 py-1 bg-card-sub hover:bg-slate-800 border border-accent/60 rounded-lg text-[9.5px] text-accent font-bold tactile">All Open</button>
+                    </div>
+                  </div>
+                ` : ''}
 
                 ${meta.t ? `
                   <div class="pt-1.5 mt-1 border-t border-sub/50 flex items-center justify-between text-xs font-mono">
@@ -2065,7 +2099,8 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                     </div>
                     <div class="flex items-center space-x-2 mt-0.5">
                       <h3 class="text-xs md:text-sm font-bold text-white">${ex.exercise}</h3>
-                      </div>
+                      ${prevJointScore >= 2 ? `<span class="text-[8px] font-mono bg-rose-500/20 text-rose-300 border border-rose-500/60 px-1.5 py-0.2 rounded font-bold" title="Previous session logged joint discomfort ${prevJointScore}/3">Prev Joint: ${prevJointScore}/3</span>` : ''}
+                    </div>
 
                     <div class="flex flex-wrap gap-1 mt-1 cursor-pointer" onclick="event.stopPropagation(); appActions.openConfig(${exIdx}, true)" title="Tap to adjust modifiers">
                       ${cleanMods.length ? cleanMods.map(m => `<span class="text-[8px] font-mono bg-input text-slate-300 hover:text-white px-1.5 py-0.2 rounded border border-sub">${m}</span>`).join('') : `<span class="text-[8px] font-mono text-slate-500 hover:text-accent">+ Add Modifiers</span>`}
@@ -2129,19 +2164,22 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
               ` : ''}
 
               ${ex.fatigueWarning ? `
-                <div class="bg-amber-950/70 border border-amber-600/80 p-2.5 rounded-xl flex items-center justify-between text-xs font-mono animate-pulse">
-                  <div class="flex items-center space-x-2">
+                <div class="bg-amber-950/70 border border-amber-600/80 p-2.5 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+                  <div class="flex items-center space-x-2 min-w-0">
                     ${ic('alert','w-4 h-4 text-accent shrink-0')}
-                    <div>
-                      <div class="text-amber-200 font-bold">Fatigue Overshoot Detected</div>
-                      <div class="text-[10px] text-amber-300/80">RPE exceeded target by ≥1.0. Recommend -5% back-off.</div>
+                    <div class="min-w-0">
+                      <div class="text-amber-200 font-bold">${ex.fatigueWarning.lowReadiness ? 'Readiness + Deviation Pullback' : 'Fatigue Overshoot Detected'}</div>
+                      <div class="text-[10px] text-amber-300/80">${ex.fatigueWarning.reason || 'RPE exceeded target by ≥1.0. Recommend -5% back-off.'}</div>
                     </div>
                   </div>
-                  <div class="flex items-center space-x-1">
-                    <button type="button" onclick="appActions.applyDrop(${exIdx})" class="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-black font-black rounded-lg text-[10px] uppercase shadow tactile">
-                      Apply -5% Drop
+                  <div class="flex items-center space-x-1 shrink-0">
+                    <button type="button" onclick="appActions.applyDrop(${exIdx})" class="px-2 py-1 bg-amber-500 hover:bg-amber-400 text-black font-black rounded-lg text-[9.5px] uppercase shadow tactile">
+                      -5% Load
                     </button>
-                    <button type="button" onclick="appActions.dismissFatigueWarning(${exIdx})" class="px-2 py-1 bg-input text-slate-400 hover:text-white rounded-lg text-[10px] tactile">✕</button>
+                    <button type="button" onclick="appActions.trimRemainingSet(${exIdx})" class="px-2 py-1 bg-card-sub hover:bg-slate-800 border border-sub text-slate-200 font-bold rounded-lg text-[9.5px] tactile">
+                      Trim 1 Set
+                    </button>
+                    <button type="button" onclick="appActions.dismissFatigueWarning(${exIdx})" class="px-1.5 py-1 bg-input text-slate-400 hover:text-white rounded-lg text-[10px] tactile">✕</button>
                   </div>
                 </div>
               ` : ''}
@@ -2214,11 +2252,31 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                       </div>
                     ` : ''}
 
-                    <div class="mt-1.5">
+                    <div class="mt-1.5 space-y-1.5">
                       <input type="text" placeholder="Note (e.g. J-cup hole 11, bench notch 3, elbow cue)..."
                         value="${String(ex.notes || '').replace(/"/g, '&quot;')}"
                         onchange="appActions.updateExerciseNotes(${exIdx}, this.value)"
                         class="w-full bg-input/60 border border-sub/60 rounded-xl px-2.5 py-1 text-[10px] font-mono text-slate-300 placeholder-slate-500 focus:outline-none focus:border-accent" />
+                      <div class="flex items-center justify-between px-1 font-mono text-[9.5px]">
+                        <span class="text-slate-400 uppercase font-bold">Joint Discomfort</span>
+                        <div class="flex items-center space-x-1">
+                          ${[
+                            { v: 0, lbl: '0 Clean' },
+                            { v: 1, lbl: '1 Mild' },
+                            { v: 2, lbl: '2 Nag' },
+                            { v: 3, lbl: '3 Sharp' }
+                          ].map(opt => {
+                            const curJ = Number(ex.jointDiscomfort) || 0;
+                            const active = curJ === opt.v;
+                            const activeCls = opt.v === 0
+                              ? 'bg-card-sub border-slate-400 text-white font-bold'
+                              : (opt.v === 1 ? 'bg-blue-600/30 border-blue-500 text-blue-300 font-bold'
+                                : (opt.v === 2 ? 'bg-amber-500/25 border-amber-500 text-amber-300 font-bold'
+                                  : 'bg-rose-600/30 border-rose-500 text-rose-300 font-bold'));
+                            return `<button type="button" onclick="appActions.setExerciseJointDiscomfort(${exIdx}, ${opt.v})" class="px-1.5 py-0.5 rounded-lg border text-[9px] transition tactile ${active ? activeCls : 'bg-input border-sub text-slate-500 hover:text-slate-300'}">${opt.lbl}</button>`;
+                          }).join('')}
+                        </div>
+                      </div>
                     </div>
 
                     <div class="flex justify-between items-center pt-2 mt-1 border-t border-sub/40 font-mono text-[10px]">
@@ -2417,6 +2475,14 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                     </select>
                   </div>
                 </div>
+                <div class="pt-1.5 border-t border-sub/50 flex flex-wrap items-center justify-between gap-1.5">
+                  <span class="text-[8.5px] text-slate-400 uppercase font-bold">Recovery Session</span>
+                  <div class="flex items-center space-x-1">
+                    <button type="button" onclick="appActions.setStagingRecoveryMode('off')" class="px-2 py-1 rounded-lg border text-[9.5px] font-bold tactile ${!stagingCtx.recoveryMode ? 'bg-blue-600 text-white border-blue-500' : 'bg-input text-slate-400 border-sub hover:text-white'}">Normal</button>
+                    <button type="button" onclick="appActions.setStagingRecoveryMode('sets_reps')" class="px-2 py-1 rounded-lg border text-[9.5px] font-bold tactile ${stagingCtx.recoveryMode === 'sets_reps' ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-input text-slate-300 border-sub hover:text-white'}">½ Sets &amp; Reps</button>
+                    <button type="button" onclick="appActions.setStagingRecoveryMode('sets_load')" class="px-2 py-1 rounded-lg border text-[9.5px] font-bold tactile ${stagingCtx.recoveryMode === 'sets_load' ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-input text-slate-300 border-sub hover:text-white'}">½ Sets &amp; Load</button>
+                  </div>
+                </div>
               </div>
             <div class="bg-card-sub p-3 rounded-2xl border ${isOverCeiling ? 'border-rose-500/80' : 'border-sub'} font-mono space-y-1.5 shadow-sm">
       <div class="flex justify-between items-center text-xs">
@@ -2561,7 +2627,10 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
           <main class="flex-1 min-h-0 overflow-y-auto space-y-3 w-full pr-0.5" onclick="appActions.closeCardMenu()">
             <div class="flex justify-between items-center border-b border-sub pb-2 font-mono w-full">
               <div>
-                <span class="text-[9px] text-emerald-400 uppercase font-bold">✓ Historical Record</span>
+                <div class="flex items-center space-x-1.5">
+                  <span class="text-[9px] text-emerald-400 uppercase font-bold">✓ Historical Record</span>
+                  ${baseWorkout.isRecovery ? `<span class="text-[8.5px] px-1.5 py-0.2 rounded bg-teal-500/20 border border-teal-500/60 text-teal-300 font-bold uppercase">Recovery</span>` : ''}
+                </div>
                 <h2 class="text-base font-bold text-white">${dKey} Completed Session</h2>
               </div>
               <button type="button" onclick="appActions.navigate('calendar', event)" class="text-xs text-slate-400 hover:text-white underline">Calendar</button>
@@ -2609,6 +2678,7 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                     <div class="text-[10px] text-slate-300 pt-1 border-t border-sub/50 leading-relaxed">
                       ${setDetails || 'No completed sets recorded.'}
                     </div>
+                    ${(Number(ex.jointDiscomfort) || 0) > 0 ? `<div class="text-[9px] font-bold ${Number(ex.jointDiscomfort) >= 2 ? 'text-rose-300' : 'text-slate-300'} pt-0.5">Joint Discomfort: ${ex.jointDiscomfort}/3</div>` : ''}
                     ${ex.notes ? `<div class="text-[9.5px] text-slate-400 italic pt-0.5">Note: ${ex.notes}</div>` : ''}
                   </div>
                 `;
@@ -3967,7 +4037,7 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                                 <span class="font-bold text-white truncate">${item.variant}</span>
                               </div>
                               <div class="text-[9px] text-slate-400 mt-0.5">
-                                ${item.sessions} sessions • e1RM: <b class="${item.gainLbs >= 0 ? 'text-emerald-400' : 'text-rose-400'}">${item.gainLbs >= 0 ? '+' : ''}${item.gainLbs} lbs</b> • Next-Day Recovery: <b>${item.avgNextDaySoreness}/5</b>
+                                ${item.sessions} sessions • e1RM: <b class="${item.gainLbs >= 0 ? 'text-emerald-400' : 'text-rose-400'}">${item.gainLbs >= 0 ? '+' : ''}${item.gainLbs} lbs</b> • Recovery: <b>${item.avgNextDaySoreness}/5</b>${item.avgJointDiscomfort > 0 ? ` • Joint: <b class="${item.avgJointDiscomfort >= 1.5 ? 'text-rose-300' : 'text-slate-200'}">${item.avgJointDiscomfort}/3</b>` : ''}
                               </div>
                             </div>
                             <div class="flex items-center space-x-2 shrink-0">
@@ -4365,6 +4435,17 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
               </div>
 
               <div class="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1">
+                ${(d.jointSwapCandidates && d.jointSwapCandidates.length) ? `
+                  <div class="p-2.5 bg-rose-950/40 border border-rose-500/60 rounded-2xl space-y-1">
+                    <div class="text-[9.5px] text-rose-300 font-bold uppercase">Joint Discomfort Swap Candidates (2+ Sessions ≥ 2/3)</div>
+                    ${d.jointSwapCandidates.map(j => `
+                      <div class="flex justify-between items-center text-[10px] text-slate-200">
+                        <span class="font-bold truncate pr-2">${j.variant}</span>
+                        <span class="text-rose-300 shrink-0">${j.count}x logged (peak ${j.maxScore}/3)</span>
+                      </div>
+                    `).join('')}
+                  </div>
+                ` : ''}
                 <span class="text-[10px] text-accent font-bold uppercase">Granular Tier Recommendations</span>
                 ${recRows}
               </div>
