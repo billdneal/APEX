@@ -1,8 +1,3 @@
-
-
-
-JS icon
-core
 // ============================================================================
 // APEX TRAINING ENGINE - PART 1 OF 4: CORE ARCHITECTURE & FOUNDATIONS
 // Production Release v4.6.0-PWA (Neutral Schemes / Multi-Engine / Block Wizard)
