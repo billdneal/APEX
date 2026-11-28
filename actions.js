@@ -121,21 +121,46 @@ if (!state.editingRpeProfile) {
     } catch(e) {}
   }
 
+  let _pendingConfirmCallback = null;
+  function apexConfirm(title, message, onConfirm, opts = {}) {
+    _pendingConfirmCallback = typeof onConfirm === 'function' ? onConfirm : null;
+    state.confirmModal = {
+      open: true,
+      title: title || 'Confirm Action',
+      message: message || 'Are you sure?',
+      confirmLabel: opts.confirmLabel || 'Delete',
+      tone: opts.tone || 'danger'
+    };
+    safeRender();
+  }
+  window.apexConfirm = apexConfirm;
+
   function playAudioBeep(freq = 880, duration = 0.15) {
     try {
+      const cueMode = state.settings?.audioCue || 'chime';
+      if (cueMode === 'off') return;
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (AudioCtx) {
         const ctx = new AudioCtx();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.value = freq;
-        gain.gain.setValueAtTime(0.1, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + duration);
+        const playNote = (f, startOffset, dur, vol = 0.1) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = cueMode === 'chime' ? 'triangle' : 'sine';
+          osc.frequency.value = f;
+          const t0 = ctx.currentTime + startOffset;
+          gain.gain.setValueAtTime(vol, t0);
+          gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(t0);
+          osc.stop(t0 + dur);
+        };
+        if (cueMode === 'chime') {
+          playNote(freq, 0, duration, 0.09);
+          playNote(Math.round(freq * 1.25), duration * 0.55, duration * 1.2, 0.08);
+        } else {
+          playNote(freq, 0, duration, 0.1);
+        }
       }
     } catch(e) {}
   }
@@ -297,6 +322,12 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
               cEl.classList.remove('text-accent');
               cEl.classList.add('text-emerald-400', 'animate-pulse');
             }
+          }
+          const barEl = document.getElementById('workout-rest-progress-bar');
+          if (barEl) {
+            const tot = Math.max(1, Number(state.restCountdownTotal) || 90);
+            const pctLeft = Math.min(100, Math.max(0, Math.round((rem / tot) * 100)));
+            barEl.style.width = pctLeft + '%';
           }
           if (rem === 0 && !state.restCountdownChimed) {
             state.restCountdownChimed = true;
@@ -749,13 +780,13 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
       showToast("Cannot delete the only remaining profile");
       return;
     }
-    if (!confirm(`Delete profile "${state.editingRpeProfile.name}"?`)) return;
-    delete state.rpeProfiles[id];
-    state.activeRpeProfileId = Object.keys(state.rpeProfiles)[0];
-    state.editingRpeProfile = JSON.parse(JSON.stringify(state.rpeProfiles[state.activeRpeProfileId]));
-    persist();
-    triggerCloudSync(1000);
-    safeRender();
+    apexConfirm('Delete RPE Profile', `Delete profile "${state.editingRpeProfile.name}"?`, () => {
+      delete state.rpeProfiles[id];
+      state.activeRpeProfileId = Object.keys(state.rpeProfiles)[0];
+      state.editingRpeProfile = JSON.parse(JSON.stringify(state.rpeProfiles[state.activeRpeProfileId]));
+      persist();
+      triggerCloudSync(1000);
+    });
   },
     // Date Selection & Modal Activation
     selectDate(d) {
@@ -1034,7 +1065,15 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
       safeRender();
     },
 
-    deleteStagedSlot(i) { state.stagedSlots.splice(i, 1); persist(); triggerCloudSync(2000); safeRender(); },
+    deleteStagedSlot(i) {
+      const slot = state.stagedSlots?.[i];
+      if (!slot) return;
+      apexConfirm('Remove Staged Movement', `Remove "${slot.exercise}" from this staged workout?`, () => {
+        state.stagedSlots.splice(i, 1);
+        persist();
+        triggerCloudSync(2000);
+      }, { confirmLabel: 'Remove' });
+    },
 
     changeSlotScheme(i, val) { 
       const cleanVal = normalizeSchemeName(val);
@@ -1470,6 +1509,7 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
         const protoRest = Number(s.targetTime) > 0
           ? Number(s.targetTime)
           : (Number(bpObj.restSeconds) || (ex.tier === 'Assistance' ? 90 : 120));
+        state.restCountdownTotal = protoRest;
         state.restCountdownSecs = protoRest;
         state.restCountdownTarget = Date.now() + (protoRest * 1000);
         state.restCountdownChimed = false;
@@ -1546,25 +1586,36 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
 
     deleteSet(exIdx, sIdx) {
       const ex = state.activeWorkout[exIdx];
-      if (ex.sets.length > 1) {
-        clearInterval(ex.sets[sIdx].lapTimerObj);
+      if (!ex || ex.sets.length <= 1) return;
+      const targetSet = ex.sets[sIdx];
+      const doDelete = () => {
+        clearInterval(ex.sets[sIdx]?.lapTimerObj);
         ex.sets.splice(sIdx, 1);
+        persist();
+        triggerCloudSync(2000);
+      };
+      if (targetSet?.done) {
+        apexConfirm('Delete Logged Set', `Delete logged Set ${sIdx + 1} (${targetSet.actualWeight || 0} lbs x ${targetSet.actualReps || 0}r) from ${ex.exercise}?`, doDelete);
+      } else {
+        doDelete();
+        safeRender();
       }
-      persist();
-      triggerCloudSync(2000);
-      safeRender();
     },
 
     deleteActiveEx(exIdx) {
       const ex = state.activeWorkout[exIdx];
-      if (ex) {
+      if (!ex) return;
+      const loggedCount = (ex.sets || []).filter(s => s && s.done).length;
+      const msg = loggedCount > 0
+        ? `Remove "${ex.exercise}" from this active workout? (${loggedCount} logged set${loggedCount === 1 ? '' : 's'} will be lost)`
+        : `Remove "${ex.exercise}" from this active workout?`;
+      apexConfirm('Remove Movement', msg, () => {
         clearInterval(ex.densityTimerObj);
         (ex.sets || []).forEach(s => clearInterval(s.lapTimerObj));
         state.activeWorkout.splice(exIdx, 1);
         persist();
         triggerCloudSync(2000);
-        safeRender();
-      }
+      }, { confirmLabel: 'Remove' });
     },
 
     moveActiveEx(i, dir) {
@@ -1622,6 +1673,7 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
       const nextTarget = Math.max(now, base + (Number(deltaSecs) * 1000));
       state.restCountdownTarget = nextTarget;
       state.restCountdownSecs = Math.max(0, Math.ceil((nextTarget - now) / 1000));
+      state.restCountdownTotal = Math.max(state.restCountdownSecs, (Number(state.restCountdownTotal) || 0) + Math.max(0, Number(deltaSecs)));
       state.restCountdownChimed = state.restCountdownSecs === 0;
       const cEl = document.getElementById('workout-rest-countdown');
       if (cEl) {
@@ -2183,20 +2235,19 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
 
     deleteHistoricalSession(dateKey) {
       const normKey = normalizeDateKey(dateKey);
-      if (confirm("Are you sure you want to delete this completed workout record?")) {
+      apexConfirm('Delete Workout Log', `Permanently delete the completed workout record for ${normKey}?`, () => {
         if (state.dayLogs[normKey] && state.dayLogs[normKey].workout) {
           delete state.dayLogs[normKey].workout;
           persist();
           window.pushToCloud(false);
           state.dateActionModal.open = false;
           state.screen = 'calendar';
-          safeRender();
         }
-      }
+      });
     },
 
     discardActiveWorkout() {
-      if (confirm("Are you sure you want to discard this in-progress session? Changes will not be saved.")) {
+      apexConfirm('Discard Active Session', 'Discard this in-progress workout? Unsaved sets will be lost.', () => {
         clearInterval(window.apexTimers.sInterval);
         clearInterval(window.apexTimers.restInterval);
         releaseWakeLock(true);
@@ -2218,13 +2269,12 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
         state.sessionPRs = {};
         persist();
         state.screen = 'calendar';
-        safeRender();
-      }
+      }, { confirmLabel: 'Discard' });
     },
 
     forceClearActiveWorkout(e) {
       if (e?.stopPropagation) e.stopPropagation();
-      if (confirm("Purge and clear this active workout session? This will dismiss any stuck banner and unfreeze the app.")) {
+      apexConfirm('Reset Active Session', 'Purge and clear this active workout session? This will dismiss any stuck banner.', () => {
         clearInterval(window.apexTimers.sInterval);
         clearInterval(window.apexTimers.restInterval);
         releaseWakeLock(true);
@@ -2252,8 +2302,7 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
         persist();
         window.pushToCloud(false);
         showToast("Active workout state cleared successfully.");
-        safeRender();
-      }
+      }, { confirmLabel: 'Reset' });
     },
 
     // Planner & History
@@ -2436,11 +2485,13 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
     
     deleteMacroBlock(idx) {
       if (state.mesocycle.length <= 1) return;
-      state.mesocycle.splice(idx, 1);
-      syncMesocycleProgression();
-      persist();
-      window.pushToCloud(false);
-      safeRender();
+      const blk = state.mesocycle[idx];
+      apexConfirm('Delete Training Block', `Delete Block ${idx + 1} (${blk?.phase || 'Block'}, ${blk?.weeks || 3} wks) from your mesocycle?`, () => {
+        state.mesocycle.splice(idx, 1);
+        syncMesocycleProgression();
+        persist();
+        window.pushToCloud(false);
+      });
     },
 
     setBlockProgressionMode(idx, mode) {
@@ -2500,13 +2551,12 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
     },
 
     deleteBlueprint(name) {
-      if (confirm(`Delete the "${name}" split template?`)) {
+      apexConfirm('Delete Split Template', `Delete the "${name}" split template?`, () => {
         delete state.customSplitBlueprints[name];
         const remaining = Object.keys(state.customSplitBlueprints);
         state.editingBlueprintName = remaining[0] || 'Squat & Push Focus';
         persist();
-        safeRender();
-      }
+      });
     },
 
     addSlotToBlueprint(blueprintName) {
@@ -2515,10 +2565,13 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
     },
 
     deleteBlueprintSlot(blueprintName, slotIdx) {
-      if (state.customSplitBlueprints[blueprintName]) {
-        state.customSplitBlueprints[blueprintName].splice(slotIdx, 1);
-        persist();
-        safeRender();
+      const list = state.customSplitBlueprints?.[blueprintName];
+      if (list && list[slotIdx]) {
+        const slotName = list[slotIdx].exercise || 'this movement';
+        apexConfirm('Remove Split Slot', `Remove "${slotName}" from the "${blueprintName}" split template?`, () => {
+          list.splice(slotIdx, 1);
+          persist();
+        }, { confirmLabel: 'Remove' });
       }
     },
 updateSplitSlotTier(splitName, slotIdx, newTier) {
@@ -2574,6 +2627,54 @@ updateSplitSlotTier(splitName, slotIdx, newTier) {
     setUiScale(scaleKey) { state.settings.uiScale = scaleKey; persist(); window.pushToCloud(false); safeRender(); },
     setUiStyle(styleKey) { state.settings.uiStyle = styleKey; persist(); window.pushToCloud(false); safeRender(); },
     setCustomAccent(colorHex) { state.settings.customAccent = colorHex; persist(); window.pushToCloud(false); safeRender(); },
+    setBgStyle(bgKey) { state.settings.bgStyle = bgKey; persist(); window.pushToCloud(false); safeRender(); },
+    toggleSplitTypography() { state.settings.splitTypography = !state.settings.splitTypography; persist(); window.pushToCloud(false); safeRender(); },
+    setAudioCue(mode) { state.settings.audioCue = mode; persist(); window.pushToCloud(false); if (mode !== 'off') playAudioBeep(880, 0.16); safeRender(); },
+    confirmModalAccept() {
+      const cb = _pendingConfirmCallback;
+      _pendingConfirmCallback = null;
+      state.confirmModal = { open: false };
+      if (typeof cb === 'function') cb();
+      safeRender();
+    },
+    confirmModalCancel() {
+      _pendingConfirmCallback = null;
+      state.confirmModal = { open: false };
+      safeRender();
+    },
+    restoreDefaultExercises() {
+      const defaults = {
+        'Knee Dominant': ['Squat', 'Belt Squat', 'Bulgarian Split Squat', 'Front Squat', 'Goblet Squat', 'Hack Squat', 'Leg Extensions', 'Lunges'],
+        'Hip Dominant': ['Deadlift (conv)', 'Deadlift (sumo)', 'RDL', 'SLDL', 'Hip Thrust', 'Leg Curls', 'Pull Through'],
+        'Horizontal Push': ['Bench Press', 'Incline Bench', 'Floor Press', 'Spoto Press', 'Larsen Bench', 'JM Press', 'Push Up', 'Tricep Extension'],
+        'Vertical Push': ['Dips', 'BW Dips', 'Standing Military', 'Seated Military', 'Landmine Press'],
+        'Horizontal Pull': ['Row', 'Chest Supported Row', 'Cable Row', 'Pendlay Row', 'Seal Row', 'T-Bar Row', 'Face Pull'],
+        'Vertical Pull': ['Pull Down', 'Pull Up', 'BW Pull Up', 'Shrugs', 'Upright Row'],
+        'Core': ['Ab Wheel', 'Hanging Leg Raise', 'Plank', 'Pallof Press', 'Suitcase Carry'],
+        'Isolation': ['Curls', 'Calf Raise', 'Hammer Curl', 'Incline Curl', 'Lateral Raise', 'Lu Raise', 'Tricep Pushdowns'],
+        'Circuits & GPP': ['Barbell Complex (RDL+Row+FSq+Press)', 'KB Swing + Pushup Density', 'Sled Drag + Carry Medley']
+      };
+      let restored = 0;
+      Object.entries(defaults).forEach(([cat, list]) => {
+        if (!state.exercises[cat]) state.exercises[cat] = [];
+        list.forEach(ex => {
+          if (!state.exercises[cat].includes(ex)) {
+            state.exercises[cat].push(ex);
+            if (!state.e1rms[ex]) state.e1rms[ex] = 135;
+            if (!state.anchorE1rms[ex]) state.anchorE1rms[ex] = state.e1rms[ex];
+            restored++;
+          }
+        });
+      });
+      if (restored > 0) {
+        persist();
+        window.pushToCloud(false);
+        showToast(`Restored ${restored} missing default movement${restored === 1 ? '' : 's'}!`);
+      } else {
+        showToast('All default movements are already in your catalog.');
+      }
+      safeRender();
+    },
     updateProfile(field, val) { state.profile[field] = (field === 'age' || field === 'bodyweight') ? Number(val) : val; persist(); window.pushToCloud(false); safeRender(); },
 
     // Dual-Bound Rep Matrix & Override Controllers
@@ -2603,11 +2704,12 @@ updateSplitSlotTier(splitName, slotIdx, newTier) {
     },
 
     resetPhaseRepMatrix() {
-      state.phaseRepMatrix = JSON.parse(JSON.stringify(core.defaultPhaseRepMatrix));
-      persist();
-      triggerCloudSync(2000);
-      showToast("Reset Phase Rep Matrix to defaults");
-      safeRender();
+      apexConfirm('Reset Phase Rep Matrix', 'Reset all Phase Target Rep Ranges back to factory defaults?', () => {
+        state.phaseRepMatrix = JSON.parse(JSON.stringify(core.defaultPhaseRepMatrix));
+        persist();
+        triggerCloudSync(2000);
+        showToast("Reset Phase Rep Matrix to defaults");
+      }, { confirmLabel: 'Reset' });
     },
 
     setExerciseRepOverride(exName, phaseOrAll, minVal, maxVal) {
@@ -2631,13 +2733,14 @@ updateSplitSlotTier(splitName, slotIdx, newTier) {
 
     deleteExerciseRepOverride(exName, phaseOrAll) {
       if (state.exerciseRepOverrides && state.exerciseRepOverrides[exName]) {
-        delete state.exerciseRepOverrides[exName][phaseOrAll];
-        if (Object.keys(state.exerciseRepOverrides[exName]).length === 0) {
-          delete state.exerciseRepOverrides[exName];
-        }
-        persist();
-        triggerCloudSync(2000);
-        safeRender();
+        apexConfirm('Remove Rep Override', `Remove custom rep override (${phaseOrAll}) for "${exName}"?`, () => {
+          delete state.exerciseRepOverrides[exName][phaseOrAll];
+          if (Object.keys(state.exerciseRepOverrides[exName]).length === 0) {
+            delete state.exerciseRepOverrides[exName];
+          }
+          persist();
+          triggerCloudSync(2000);
+        }, { confirmLabel: 'Remove' });
       }
     },
 
@@ -2671,14 +2774,16 @@ updateSplitSlotTier(splitName, slotIdx, newTier) {
     },
 
     deleteExercise(cat, ex) {
-      state.exercises[cat] = state.exercises[cat].filter(x => x !== ex);
-      delete state.exerciseMeta[ex];
-      if (state.exerciseRepOverrides && state.exerciseRepOverrides[ex]) {
-        delete state.exerciseRepOverrides[ex];
-      }
-      persist();
-      window.pushToCloud(false);
-      safeRender();
+      apexConfirm('Delete Movement', `Delete "${ex}" from the ${cat} catalog? Past workout logs and e1RMs remain intact.`, () => {
+        state.exercises[cat] = state.exercises[cat].filter(x => x !== ex);
+        delete state.exerciseMeta[ex];
+        if (state.exerciseRepOverrides && state.exerciseRepOverrides[ex]) {
+          delete state.exerciseRepOverrides[ex];
+        }
+        persist();
+        window.pushToCloud(false);
+        showToast(`Deleted "${ex}" from ${cat}`);
+      });
     },
 
     addCustomModifier() {
@@ -2695,11 +2800,13 @@ updateSplitSlotTier(splitName, slotIdx, newTier) {
     },
 
     deleteModifier(catName, mod) {
-      const catObj = state.modifierCats.find(c => c.name === catName);
-      if (catObj) catObj.opts = catObj.opts.filter(x => x !== mod);
-      persist();
-      window.pushToCloud(false);
-      safeRender();
+      apexConfirm('Delete Modifier', `Delete modifier tag "${mod}" from ${catName}?`, () => {
+        const catObj = state.modifierCats.find(c => c.name === catName);
+        if (catObj) catObj.opts = catObj.opts.filter(x => x !== mod);
+        persist();
+        window.pushToCloud(false);
+        showToast(`Deleted modifier "${mod}"`);
+      });
     },
 
     // Analytics Controllers

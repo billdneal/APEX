@@ -426,10 +426,18 @@
     deleteNutritionEntry(entryId) {
       const k = getSelectedDateKey();
       const nut = getDayNutrition(k);
-      nut.entries = nut.entries.filter(e => e.id !== entryId);
-      if (state.nutritionUi.editingId === entryId) state.nutritionUi.editingId = null;
-      recalcDayTotals(k);
-      saveAndSync();
+      const target = (nut.entries || []).find(e => e.id === entryId);
+      const doDelete = () => {
+        nut.entries = nut.entries.filter(e => e.id !== entryId);
+        if (state.nutritionUi.editingId === entryId) state.nutritionUi.editingId = null;
+        recalcDayTotals(k);
+        saveAndSync();
+      };
+      if (typeof window.apexConfirm === 'function') {
+        window.apexConfirm('Delete Food Entry', `Delete "${target?.name || 'this food entry'}" from ${k}?`, doDelete);
+      } else if (confirm(`Delete "${target?.name || 'this food entry'}" from ${k}?`)) {
+        doDelete();
+      }
     },
 
     editNutritionEntry(entryId) {
@@ -673,8 +681,16 @@ ${ingText}`
     },
 
     deleteSavedMeal(mealId) {
-      state.settings.savedMeals = getSavedMeals().filter(m => m.id !== mealId);
-      saveAndSync();
+      const target = getSavedMeals().find(m => m.id === mealId);
+      const doDelete = () => {
+        state.settings.savedMeals = getSavedMeals().filter(m => m.id !== mealId);
+        saveAndSync();
+      };
+      if (typeof window.apexConfirm === 'function') {
+        window.apexConfirm('Delete Saved Meal', `Delete saved meal "${target?.name || 'this meal'}" from your library?`, doDelete);
+      } else if (confirm(`Delete saved meal "${target?.name || 'this meal'}"?`)) {
+        doDelete();
+      }
     },
 
     setNutritionGoalMode(modeKey) {

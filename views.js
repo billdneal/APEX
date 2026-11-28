@@ -265,7 +265,8 @@ window.appActions.removeRpeMatrixSet = function(idx) {
   function applyGlobalThemeAndFont() {
     const activeTheme = (state.settings?.theme || 'Midnight').toLowerCase();
     const activeStyle = state.settings?.uiStyle || 'glass';
-    document.body.className = `theme-${activeTheme} style-${activeStyle}`;
+    const activeBg = state.settings?.bgStyle || 'solid';
+    document.body.className = `theme-${activeTheme} style-${activeStyle} bg-${activeBg}`;
     
     const themeColors = {
       onyx: { bg: '#000000', card: '#0f0f10', input: '#19191b', border: '#2b2b2f' },
@@ -300,9 +301,23 @@ window.appActions.removeRpeMatrixSet = function(idx) {
       fontStyle.id = 'apex-font-override';
       document.head.appendChild(fontStyle);
     }
+    const splitTypo = Boolean(state.settings?.splitTypography);
+    const uiSansFont = (font === 'JetBrains Mono') ? 'Inter' : font;
     fontStyle.textContent = `
-      html, body, #app, #app *, .font-mono {
-        font-family: '${font}', monospace, sans-serif !important;
+      ${splitTypo ? `
+        html, body, #app, #app * {
+          font-family: '${uiSansFont}', -apple-system, BlinkMacSystemFont, sans-serif !important;
+        }
+        #app .font-mono, #app input[type="number"], #app select, #workout-elapsed-time, #workout-rest-display, #workout-rest-countdown {
+          font-family: 'JetBrains Mono', monospace !important;
+        }
+      ` : `
+        html, body, #app, #app *, .font-mono {
+          font-family: '${font}', monospace, sans-serif !important;
+        }
+      `}
+      .font-mono, input[type="number"], #workout-elapsed-time, #workout-rest-display, #workout-rest-countdown {
+        font-variant-numeric: tabular-nums;
       }
       #app main::after {
         content: '';
@@ -378,6 +393,39 @@ window.appActions.removeRpeMatrixSet = function(idx) {
       body.style-minimal input[type="text"] {
         border: 1px solid transparent !important;
         background-color: rgba(0, 0, 0, 0.35) !important;
+      }
+
+      /* 4. Neon HUD: High-contrast edge glow & telemetry bloom */
+      body.style-neon .bg-card,
+      body.style-neon .bg-card-sub {
+        background-color: var(--card-bg) !important;
+        border: 1px solid color-mix(in srgb, var(--accent-primary, #38bdf8) 28%, rgba(255, 255, 255, 0.08)) !important;
+        box-shadow: 0 0 18px -6px color-mix(in srgb, var(--accent-primary, #38bdf8) 38%, transparent), inset 0 1px 0 0 rgba(255, 255, 255, 0.09) !important;
+        backdrop-filter: blur(12px) !important;
+        -webkit-backdrop-filter: blur(12px) !important;
+      }
+      body.style-neon .bg-input,
+      body.style-neon input[type="number"],
+      body.style-neon input[type="text"] {
+        border: 1px solid rgba(255, 255, 255, 0.10) !important;
+        box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.45) !important;
+      }
+      body.style-neon .text-accent,
+      body.style-neon #workout-rest-countdown,
+      body.style-neon #workout-rest-display {
+        text-shadow: 0 0 10px color-mix(in srgb, var(--accent-primary, #38bdf8) 55%, transparent);
+      }
+
+      /* Background Surface Textures */
+      body.bg-radial {
+        background-color: var(--bg-main) !important;
+        background-image: radial-gradient(circle at 50% -12%, color-mix(in srgb, var(--accent-primary, #38bdf8) 16%, transparent) 0%, transparent 58%) !important;
+        background-attachment: fixed !important;
+      }
+      body.bg-dots {
+        background-color: var(--bg-main) !important;
+        background-image: radial-gradient(rgba(255, 255, 255, 0.075) 1px, transparent 1px) !important;
+        background-size: 20px 20px !important;
       }
 
       /* Global Amber Neutralization: Converts amber highlights to clean slate & chosen accent */
@@ -2088,8 +2136,13 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
       `;
     }
 
+          const totalCardSets = (ex.sets || []).length;
+          const cardProgPct = totalCardSets > 0 ? Math.round((completedSets.length / totalCardSets) * 100) : 0;
           return `
-            <div id="active-ex-card-${exIdx}" class="bg-card-sub rounded-2xl border ${isDensity ? 'border-blue-700/80 shadow-lg' : 'border-sub'} p-3 space-y-2 relative shadow-md scroll-mt-24">
+            <div id="active-ex-card-${exIdx}" class="bg-card-sub rounded-2xl border ${isDensity ? 'border-blue-700/80 shadow-lg' : 'border-sub'} p-3 space-y-2 relative overflow-hidden shadow-md scroll-mt-24">
+              <div class="absolute top-0 left-0 right-0 h-[2px] bg-input/70">
+                <div class="h-full transition-all duration-300 ${cardProgPct >= 100 ? 'bg-emerald-500' : 'bg-accent'}" style="width: ${cardProgPct}%"></div>
+              </div>
               <div class="flex justify-between items-start border-b border-sub pb-1.5 cursor-pointer" onclick="appActions.toggleCardCollapse(${exIdx})">
                 <div class="flex items-center space-x-2">
                   <span class="text-xs text-slate-400">${isCollapsed ? '▶' : '▼'}</span>
@@ -2323,7 +2376,13 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
 
         html += `
           <main class="flex-1 min-h-0 overflow-y-auto space-y-3 max-w-6xl mx-auto w-full pr-0.5" onclick="appActions.closeCardMenu()">
-            <div class="sticky top-0 z-30 bg-card/95 backdrop-blur-md border border-sub p-2.5 rounded-2xl space-y-2 text-[10px] md:text-xs font-mono shadow-xl w-full">
+            <div class="sticky top-0 z-30 bg-card/95 backdrop-blur-md border border-sub p-2.5 rounded-2xl space-y-2 text-[10px] md:text-xs font-mono shadow-xl w-full relative overflow-hidden">
+              ${state.restCountdownTarget > 0 ? (() => {
+                const totR = Math.max(1, Number(state.restCountdownTotal) || 90);
+                const remR = Math.max(0, Number(state.restCountdownSecs) || 0);
+                const barPct = Math.min(100, Math.max(0, Math.round((remR / totR) * 100)));
+                return `<div class="absolute bottom-0 left-0 right-0 h-[2.5px] bg-input/60"><div id="workout-rest-progress-bar" class="h-full transition-all duration-700 ${remR === 0 ? 'bg-emerald-500' : 'bg-accent'}" style="width: ${barPct}%"></div></div>`;
+              })() : ''}
               <div class="flex flex-wrap justify-between items-center gap-2">
                 <div class="flex items-center space-x-2">
                   <span class="text-slate-400 font-semibold">Session:</span>
@@ -2900,7 +2959,10 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
 
             ${activeTab === 'exercises' ? `
               <div class="p-3.5 bg-card-sub rounded-2xl border border-sub space-y-2.5 text-xs font-mono shadow-sm w-full">
-                <div class="text-[10px] text-accent font-bold uppercase">Add Movement with Tracking Schema</div>
+                <div class="flex justify-between items-center">
+                  <div class="text-[10px] text-accent font-bold uppercase">Add Movement with Tracking Schema</div>
+                  <button type="button" onclick="appActions.restoreDefaultExercises()" class="px-2 py-0.5 bg-input hover:bg-slate-800 border border-sub rounded-lg text-[9.5px] text-slate-300 hover:text-white font-bold tactile" title="Re-add any missing factory movements without affecting custom lifts or history">↺ Restore Defaults</button>
+                </div>
                 <div class="grid grid-cols-12 gap-1.5">
                   <select onchange="state.newExCat = this.value" class="col-span-5 bg-input border border-sub rounded-xl p-2 text-white text-xs focus:outline-none">
                     ${catKeys.map(c => `<option value="${c}" ${state.newExCat === c ? 'selected' : ''}>${c}</option>`).join('')}
@@ -3301,6 +3363,15 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                       </button>
                     `).join('')}
                   </div>
+                  <div class="pt-1.5 border-t border-sub/50 flex items-center justify-between text-[10px]">
+                    <div>
+                      <div class="text-slate-200 font-bold">Split Typography (Sans + Mono)</div>
+                      <div class="text-[8.5px] text-slate-400">Clean sans UI labels with tabular monospace numbers</div>
+                    </div>
+                    <button type="button" onclick="appActions.toggleSplitTypography()" class="px-2.5 py-1 rounded-lg font-bold text-[9.5px] border transition tactile ${state.settings?.splitTypography ? 'bg-blue-600 text-white border-blue-500' : 'bg-input text-slate-400 border-sub'}">
+                      ${state.settings?.splitTypography ? 'ON' : 'OFF'}
+                    </button>
+                  </div>
                 </div>
 
                 <div class="p-3.5 bg-card-sub rounded-2xl border border-sub space-y-2 shadow-md">
@@ -3314,23 +3385,58 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                   </div>
                 </div>
 
-                <div class="p-3.5 bg-card-sub rounded-2xl border border-sub space-y-2 shadow-md">
-                <div class="text-[10px] text-accent font-bold uppercase">Visual Style</div>
-                <select onchange="appActions.setUiStyle(this.value)" class="w-full bg-input border border-sub rounded-xl p-2 text-xs font-mono text-white focus:outline-none">
-                  <option value="glass" ${state.settings?.uiStyle === 'glass' ? 'selected' : ''}>Acrylic Glass (Depth & Blur)</option>
-                  <option value="tactical" ${state.settings?.uiStyle === 'tactical' ? 'selected' : ''}>Tactical Matte (Crisp / Contrast)</option>
-                  <option value="minimal" ${state.settings?.uiStyle === 'minimal' ? 'selected' : ''}>Neo-Onyx (Flush / Minimal)</option>
-                </select>
-              </div>
+                <div class="p-3.5 bg-card-sub rounded-2xl border border-sub space-y-2.5 shadow-md">
+                  <div class="text-[10px] text-accent font-bold uppercase">Visual Style &amp; Background</div>
+                  <select onchange="appActions.setUiStyle(this.value)" class="w-full bg-input border border-sub rounded-xl p-2 text-xs font-mono text-white focus:outline-none">
+                    <option value="glass" ${state.settings?.uiStyle === 'glass' ? 'selected' : ''}>Acrylic Glass (Depth & Blur)</option>
+                    <option value="tactical" ${state.settings?.uiStyle === 'tactical' ? 'selected' : ''}>Tactical Matte (Crisp / Contrast)</option>
+                    <option value="minimal" ${state.settings?.uiStyle === 'minimal' ? 'selected' : ''}>Neo-Onyx (Flush / Minimal)</option>
+                    <option value="neon" ${state.settings?.uiStyle === 'neon' ? 'selected' : ''}>Neon HUD (Accent Edge Glow)</option>
+                  </select>
+                  <div class="grid grid-cols-3 gap-1.5 pt-0.5">
+                    ${[
+                      { k: 'solid', lbl: 'Solid' },
+                      { k: 'radial', lbl: 'Ambient Glow' },
+                      { k: 'dots', lbl: 'Dot Grid' }
+                    ].map(bg => {
+                      const active = (state.settings?.bgStyle || 'solid') === bg.k;
+                      return `<button type="button" onclick="appActions.setBgStyle('${bg.k}')" class="py-1.5 rounded-xl font-bold text-[10px] transition tactile ${active ? 'bg-blue-600 text-white shadow' : 'bg-input text-slate-400 border border-sub hover:text-white'}">${bg.lbl}</button>`;
+                    }).join('')}
+                  </div>
+                </div>
 
                 <div class="p-3.5 bg-card-sub rounded-2xl border border-sub space-y-2 shadow-md">
                   <div class="flex justify-between items-center text-[10px] text-accent font-bold uppercase">
-                    <span>Custom Accent Glow Color</span>
+                    <span>Accent &amp; Neon Presets</span>
                     <span class="text-slate-400 font-mono">${state.settings?.customAccent || '#38bdf8'}</span>
                   </div>
-                  <div class="flex items-center space-x-3 pt-1">
-                    <input type="color" value="${state.settings?.customAccent || '#38bdf8'}" onchange="appActions.setCustomAccent(this.value)" class="w-10 h-10 rounded-xl bg-input border border-sub cursor-pointer">
-                    <div class="text-[10px] text-slate-400 leading-tight">Applied to badges, accents, and graphs.</div>
+                  <div class="flex flex-wrap items-center gap-2 pt-1">
+                    <input type="color" value="${state.settings?.customAccent || '#38bdf8'}" onchange="appActions.setCustomAccent(this.value)" class="w-9 h-9 rounded-xl bg-input border border-sub cursor-pointer shrink-0">
+                    ${[
+                      { hex: '#38bdf8', name: 'Sky Blue' },
+                      { hex: '#00f0ff', name: 'Electric Cyan' },
+                      { hex: '#a3e635', name: 'Acid Lime' },
+                      { hex: '#ff5e00', name: 'Volt Orange' },
+                      { hex: '#f43f5e', name: 'Hyper Magenta' },
+                      { hex: '#a855f7', name: 'Ultraviolet' }
+                    ].map(sw => {
+                      const active = (state.settings?.customAccent || '#38bdf8').toLowerCase() === sw.hex;
+                      return `<button type="button" title="${sw.name}" onclick="appActions.setCustomAccent('${sw.hex}')" class="w-7 h-7 rounded-full border-2 transition tactile ${active ? 'border-white scale-110 shadow-lg' : 'border-sub/80 opacity-85 hover:opacity-100'}" style="background-color: ${sw.hex};"></button>`;
+                    }).join('')}
+                  </div>
+                </div>
+
+                <div class="p-3.5 bg-card-sub rounded-2xl border border-sub space-y-2 shadow-md">
+                  <div class="text-[10px] text-accent font-bold uppercase">Rest &amp; Alert Audio Cue</div>
+                  <div class="grid grid-cols-3 gap-1.5">
+                    ${[
+                      { k: 'chime', lbl: 'Chime' },
+                      { k: 'beep', lbl: 'Beep' },
+                      { k: 'off', lbl: 'Muted' }
+                    ].map(au => {
+                      const active = (state.settings?.audioCue || 'chime') === au.k;
+                      return `<button type="button" onclick="appActions.setAudioCue('${au.k}')" class="py-1.5 rounded-xl font-bold text-[10px] transition tactile ${active ? 'bg-blue-600 text-white shadow' : 'bg-input text-slate-400 border border-sub hover:text-white'}">${au.lbl}</button>`;
+                    }).join('')}
                   </div>
                 </div>
 
@@ -5219,6 +5325,28 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
               <button type="button" onclick="appActions.closeSchemeInfoModal()" class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs tactile">
                 Got It
               </button>
+            </div>
+          </div>
+        `;
+      }
+      if (state.confirmModal && state.confirmModal.open) {
+        const isDanger = (state.confirmModal.tone || 'danger') === 'danger';
+        html += `
+          <div class="fixed inset-0 z-[60] bg-black/85 flex items-center justify-center p-4 backdrop-blur-sm" onclick="appActions.confirmModalCancel()">
+            <div class="bg-card border ${isDanger ? 'border-rose-500/50' : 'border-sub'} rounded-3xl p-4 w-full max-w-sm space-y-3.5 shadow-2xl font-mono text-xs" onclick="event.stopPropagation()">
+              <div class="flex items-center justify-between border-b border-sub pb-2">
+                <span class="font-bold text-sm ${isDanger ? 'text-rose-300' : 'text-white'}">${state.confirmModal.title || 'Confirm Action'}</span>
+                <button type="button" onclick="appActions.confirmModalCancel()" class="text-slate-400 hover:text-white text-base leading-none">✕</button>
+              </div>
+              <p class="text-[11px] text-slate-200 leading-relaxed">${state.confirmModal.message || 'Are you sure?'}</p>
+              <div class="grid grid-cols-2 gap-2 pt-1">
+                <button type="button" onclick="appActions.confirmModalCancel()" class="py-2.5 bg-input hover:bg-slate-800 border border-sub text-slate-300 font-bold rounded-xl text-xs tactile">
+                  Cancel
+                </button>
+                <button type="button" onclick="appActions.confirmModalAccept()" class="py-2.5 ${isDanger ? 'bg-rose-600 hover:bg-rose-500' : 'bg-blue-600 hover:bg-blue-500'} text-white font-bold rounded-xl text-xs shadow-lg tactile">
+                  ${state.confirmModal.confirmLabel || 'Confirm'}
+                </button>
+              </div>
             </div>
           </div>
         `;
