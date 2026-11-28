@@ -2213,6 +2213,21 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                           </button>
                         </div>
                       </div>
+                      ${(() => {
+                        const prevTotal = Number(ex.densityPrevReps || ex.sets?.[0]?.densityPrevReps) || 0;
+                        const goalTotal = Number(ex.densityGoalReps || ex.sets?.[0]?.densityGoalReps) || 35;
+                        const targetTotal = prevTotal > 0 ? prevTotal : goalTotal;
+                        const beatPrev = prevTotal > 0 && liveReps > prevTotal;
+                        const hitGoal = liveReps >= goalTotal;
+                        return `
+                          <div class="flex items-center justify-between pt-1.5 border-t border-blue-900/50 text-[9.5px]">
+                            <span class="text-slate-400">Block Volume: <b class="${(beatPrev || hitGoal) ? 'text-emerald-400' : 'text-white'}">${liveReps}r</b></span>
+                            <span class="${(beatPrev || hitGoal) ? 'text-emerald-400 font-bold' : 'text-accent font-semibold'}">
+                              ${beatPrev ? `✓ Beat Last (${prevTotal}r)` : (prevTotal > 0 ? `Beat Last: ${prevTotal}r • Goal: ${goalTotal}r` : `Target Goal: ${goalTotal}r`)}
+                            </span>
+                          </div>
+                        `;
+                      })()}
                     </div>
                   ` : ''}
 
@@ -2236,10 +2251,14 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
       <div class="text-center pb-0.5">LOG</div>
     </div>
     ${ex.liveAnchorSync ? `
-                <div class="mb-2 p-2 bg-amber-500/10 border border-amber-500/40 rounded-xl flex items-center justify-between font-mono text-xs">
-                  <span class="text-amber-300">${ic('bolt','w-3 h-3 text-accent mr-1')}Set 1 Drift: <b>${ex.liveAnchorSync.pctDiff > 0 ? '+' : ''}${ex.liveAnchorSync.pctDiff}%</b> (Live e1RM: <b>${ex.liveAnchorSync.liveE1} lbs</b>)</span>
-                  <button type="button" onclick="appActions.syncLiveAnchor(${exIdx})" class="px-2.5 py-1 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-bold shadow-sm transition tactile">
-                    Sync Remaining Sets
+                <div class="mb-2 p-2 bg-amber-500/10 border border-amber-500/40 rounded-xl flex items-center justify-between gap-2 font-mono text-[10.5px]">
+                  <span class="text-amber-300">
+                    ${ic('bolt','w-3 h-3 text-accent mr-1')}${ex.liveAnchorSync.mode === 'top_set_backoff'
+                      ? `Top Set Logged &rarr; Scale Back-offs (-${ex.liveAnchorSync.dropPct}%): <b>${ex.liveAnchorSync.scaledBackoffLoad} lbs</b>`
+                      : `Set 1 Drift: <b>${ex.liveAnchorSync.pctDiff > 0 ? '+' : ''}${ex.liveAnchorSync.pctDiff}%</b> (Live e1RM: <b>${ex.liveAnchorSync.liveE1} lbs</b>)`}
+                  </span>
+                  <button type="button" onclick="appActions.syncLiveAnchor(${exIdx})" class="px-2.5 py-1 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-bold shadow-sm transition tactile shrink-0">
+                    ${ex.liveAnchorSync.mode === 'top_set_backoff' ? `Sync ${ex.liveAnchorSync.scaledBackoffLoad} lbs` : 'Sync Remaining'}
                   </button>
                 </div>
               ` : ''}
@@ -2288,7 +2307,11 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                         <span>•</span>
                         <span>Reps: <b class="text-slate-200">${liveReps}</b></span>
                         <span>•</span>
-                        <span>Drop: <b class="${liveFatiguePct >= 5 ? 'text-amber-400' : 'text-slate-200'}">${liveFatiguePct}%</b></span>
+                        ${(() => {
+                          const fTarget = Number(ex.fatigueTargetPct) || 0;
+                          const hitStop = fTarget > 0 && liveFatiguePct >= fTarget;
+                          return `<button type="button" onclick="appActions.cycleFatigueTarget(${exIdx})" title="Tap to set RTS Fatigue Stop % (3/5/7/10%)" class="px-1.5 py-0.5 rounded-md border transition tactile ${hitStop ? 'bg-amber-500/20 border-amber-500 text-amber-300 font-bold' : (fTarget > 0 ? 'bg-input border-accent/50 text-slate-200' : 'border-transparent hover:border-sub text-slate-400')}">Drop: <b class="${hitStop ? 'text-amber-300' : (liveFatiguePct >= 5 ? 'text-amber-400' : 'text-slate-200')}">${liveFatiguePct}%</b>${fTarget > 0 ? `/${fTarget}%${hitStop ? ' STOP' : ''}` : ''}</button>`;
+                        })()}
                       </div>
                     </div>
                   </div>
@@ -2670,7 +2693,20 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                         <span class="text-[9px] text-accent uppercase font-bold">${ex.tier || 'Main'} • ${ex.scheme || 'Straight Sets'}</span>
                         <h4 class="text-xs font-bold text-white">${ex.exercise}</h4>
                       </div>
-                      <span class="text-[9px] text-slate-400 font-mono">${Math.round(ex.tonnage || 0).toLocaleString()} lbs vol</span>
+                      ${(() => {
+                        const dSets = (ex.sets || []).filter(s => s && s.done && Number(s.actualWeight) > 0 && Number(s.actualReps) > 0);
+                        let topE1 = 0;
+                        dSets.forEach(s => {
+                          const est = Math.round(Number(s.actualWeight) / (getPct(s.actualReps, s.actualRpe || 8.0) / 100));
+                          if (est > topE1) topE1 = est;
+                        });
+                        const nl = dSets.reduce((a, s) => a + (Number(s.actualReps) || 0), 0);
+                        const avgInt = (topE1 > 0 && nl > 0)
+                          ? Math.round((dSets.reduce((a, s) => a + ((Number(s.actualWeight) / topE1) * 100 * (Number(s.actualReps) || 0)), 0) / nl) * 10) / 10
+                          : 0;
+                        const normVol = avgInt > 0 ? Math.round(nl * (avgInt / 100)) : 0;
+                        return `<div class="text-right font-mono"><div class="text-[9px] text-slate-300 font-bold">${Math.round(ex.tonnage || 0).toLocaleString()} lbs vol</div>${avgInt > 0 ? `<div class="text-[8.5px] text-slate-400">Avg ${avgInt}% • NV ${normVol}</div>` : ''}</div>`;
+                      })()}
                     </div>
                     ${cleanMods.length ? `
                       <div class="flex flex-wrap gap-1">
@@ -3344,9 +3380,10 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
 
                 <div class="p-3.5 bg-card-sub rounded-2xl border border-sub space-y-2 shadow-md">
                   <div class="text-[10px] text-accent font-bold uppercase">Weekly Overload Progression Model</div>
-                  <div class="grid grid-cols-2 gap-1.5">
-                    <button type="button" onclick="appActions.setSetting('progressionType', 'percent')" class="py-2 rounded-xl font-bold tactile ${state.settings.progressionType === 'percent' ? 'bg-blue-600 text-white shadow' : 'bg-input text-slate-400 border border-sub'}">% Intensity (+1.5%/wk)</button>
-                    <button type="button" onclick="appActions.setSetting('progressionType', 'absolute')" class="py-2 rounded-xl font-bold tactile ${state.settings.progressionType === 'absolute' ? 'bg-blue-600 text-white shadow' : 'bg-input text-slate-400 border border-sub'}">Absolute Load (+5 lbs/wk)</button>
+                  <div class="grid grid-cols-3 gap-1.5">
+                    <button type="button" onclick="appActions.setSetting('progressionType', 'percent')" class="py-2 px-1 rounded-xl font-bold text-[10px] tactile ${state.settings.progressionType === 'percent' ? 'bg-blue-600 text-white shadow' : 'bg-input text-slate-400 border border-sub'}">% (+1.5%/wk)</button>
+                    <button type="button" onclick="appActions.setSetting('progressionType', 'absolute')" class="py-2 px-1 rounded-xl font-bold text-[10px] tactile ${state.settings.progressionType === 'absolute' ? 'bg-blue-600 text-white shadow' : 'bg-input text-slate-400 border border-sub'}">Load (+5/wk)</button>
+                    <button type="button" onclick="appActions.setSetting('progressionType', 'reactive')" class="py-2 px-1 rounded-xl font-bold text-[10px] tactile ${state.settings.progressionType === 'reactive' ? 'bg-blue-600 text-white shadow' : 'bg-input text-slate-400 border border-sub'}">Reactive (0%)</button>
                   </div>
                 </div>
 
@@ -3986,6 +4023,40 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                 </div>
               </div>
 
+              <!-- Multi-Week Block Momentum Signal (Extend vs. Transition) -->
+              ${(() => {
+                const mom = core.computeBlockMomentumSignal ? core.computeBlockMomentumSignal() : null;
+                if (!mom) return '';
+                return `
+                  <div class="bg-card-sub p-4 rounded-3xl border border-sub space-y-2.5 font-mono text-xs shadow-xl">
+                    <div class="flex flex-wrap justify-between items-center gap-2 border-b border-sub pb-2">
+                      <div>
+                        <span class="text-[10px] text-accent font-bold uppercase">Block Momentum Signal (2–4 Wk Trend)</span>
+                        <div class="text-[9px] text-slate-400">Evaluates whether to keep rolling or pivot/deload across ${mom.tracked} tracked lifts</div>
+                      </div>
+                      <span class="px-2.5 py-1 rounded-xl border text-[10px] font-bold ${mom.badge}">${mom.verdict}</span>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2 text-center">
+                      <div class="bg-input p-2 rounded-xl border border-sub">
+                        <div class="text-[8.5px] text-slate-400 uppercase">Climbing</div>
+                        <div class="text-sm font-black text-emerald-400 mt-0.5">${mom.up.length}</div>
+                      </div>
+                      <div class="bg-input p-2 rounded-xl border border-sub">
+                        <div class="text-[8.5px] text-slate-400 uppercase">Holding</div>
+                        <div class="text-sm font-bold text-slate-200 mt-0.5">${mom.holding.length}</div>
+                      </div>
+                      <div class="bg-input p-2 rounded-xl border border-sub">
+                        <div class="text-[8.5px] text-slate-400 uppercase">Stalled / Dip</div>
+                        <div class="text-sm font-black ${mom.stalled.length >= 3 ? 'text-rose-400' : 'text-amber-300'} mt-0.5">${mom.stalled.length}</div>
+                      </div>
+                    </div>
+                    <div class="text-[10px] text-slate-300 bg-input/60 px-3 py-2 rounded-xl border border-sub/60">
+                      ${mom.detail}
+                    </div>
+                  </div>
+                `;
+              })()}
+
               <!-- Lift-Specific Time-to-Peak (TTP) Tracker -->
               ${(() => {
                 const ttp = core.computeLiftTimeToPeak ? core.computeLiftTimeToPeak(baseName, mods) : null;
@@ -4189,6 +4260,35 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
             ` : ''}
 
             ${activeTab === 'fatigue' ? `
+              ${(() => {
+                const acwr = core.computeAcwrMetrics ? core.computeAcwrMetrics() : null;
+                if (!acwr) return '';
+                return `
+                  <div class="bg-card-sub p-4 rounded-3xl border border-sub space-y-2.5 font-mono text-xs shadow-xl">
+                    <div class="flex flex-wrap justify-between items-center gap-2 border-b border-sub pb-2">
+                      <div>
+                        <span class="text-[10px] text-accent font-bold uppercase">Acute : Chronic Workload Ratio (AU / CU)</span>
+                        <div class="text-[9px] text-slate-400">7-day Acute AU vs. 28-day rolling weekly Chronic AU (${acwr.sessions28} sessions)</div>
+                      </div>
+                      <span class="px-2.5 py-1 rounded-xl border text-[10px] font-bold ${acwr.badge}">${acwr.status}</span>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2 text-center">
+                      <div class="bg-input p-2 rounded-xl border border-sub">
+                        <div class="text-[8.5px] text-slate-400 uppercase">ACWR Ratio</div>
+                        <div class="text-sm font-black text-accent mt-0.5">${acwr.ready ? acwr.ratio.toFixed(2) + 'x' : '—'}</div>
+                      </div>
+                      <div class="bg-input p-2 rounded-xl border border-sub">
+                        <div class="text-[8.5px] text-slate-400 uppercase">Acute (7D AU)</div>
+                        <div class="text-sm font-bold text-white mt-0.5">${acwr.acute7}</div>
+                      </div>
+                      <div class="bg-input p-2 rounded-xl border border-sub">
+                        <div class="text-[8.5px] text-slate-400 uppercase">Chronic (Wk Avg)</div>
+                        <div class="text-sm font-bold text-slate-300 mt-0.5">${acwr.chronicWeeklyAvg}</div>
+                      </div>
+                    </div>
+                  </div>
+                `;
+              })()}
               <div class="bg-card-sub p-4 rounded-3xl border border-sub space-y-3 font-mono text-xs shadow-xl">
                 <div class="flex justify-between items-center border-b border-sub pb-2">
                   <div>
@@ -4259,6 +4359,39 @@ const actualRpenum = (s.actualRpe !== undefined && s.actualRpe !== null && s.act
                   ${volumeBarsHtml}
                 </div>
               </div>
+              ${(() => {
+                const inv = core.computeIntensityAndNormalizedVolume ? core.computeIntensityAndNormalizedVolume(cutoffEpoch) : null;
+                if (!inv) return '';
+                const maxB = Math.max(1, ...Object.values(inv.brackets));
+                return `
+                  <div class="bg-card-sub p-4 rounded-3xl border border-sub space-y-3 font-mono text-xs shadow-xl w-full">
+                    <div class="flex flex-wrap justify-between items-center gap-2 border-b border-sub pb-2">
+                      <div>
+                        <span class="text-[10px] text-accent font-bold uppercase">NL by Intensity Bracket &amp; Normalized Volume (${activeTf})</span>
+                        <div class="text-[9px] text-slate-400">Apples-to-apples workload across variations: NL &times; Avg Intensity</div>
+                      </div>
+                      <div class="flex items-center space-x-2 text-[10px]">
+                        <span class="bg-input px-2 py-0.5 rounded-lg border border-sub">Avg Int: <b class="text-accent">${inv.avgIntensityPct}%</b></span>
+                        <span class="bg-input px-2 py-0.5 rounded-lg border border-sub">NV: <b class="text-white">${inv.normalizedVolume}</b></span>
+                      </div>
+                    </div>
+                    <div class="grid grid-cols-5 gap-1.5 text-center">
+                      ${Object.entries(inv.brackets).map(([bLabel, nlCount]) => {
+                        const barH = Math.max(6, Math.round((nlCount / maxB) * 100));
+                        return `
+                          <div class="bg-input p-2 rounded-xl border border-sub space-y-1.5 flex flex-col justify-end">
+                            <div class="h-14 flex items-end justify-center">
+                              <div class="w-6 rounded-t-md bg-accent/80 transition-all" style="height: ${barH}%"></div>
+                            </div>
+                            <div class="text-xs font-black text-white">${nlCount}</div>
+                            <div class="text-[8.5px] text-slate-400 font-bold">${bLabel}</div>
+                          </div>
+                        `;
+                      }).join('')}
+                    </div>
+                  </div>
+                `;
+              })()}
             ` : ''}
           ${activeTab === 'tools' ? `
             <div class="space-y-4 font-mono">

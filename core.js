@@ -13,7 +13,7 @@
 
 (function() {
   try {
-    const APP_VERSION = 'v5.0.8-PWA';
+    const APP_VERSION = 'v5.0.5-PWA';
     const now = new Date();
     const TODAY_YEAR = now.getFullYear();
     const TODAY_MONTH = now.getMonth();
@@ -52,7 +52,8 @@
       'Intensity Matched',
       'The 3/7 Tension Ladder',
       'Integrated Lengthened Partials',
-      'Statodynamic Occlusion Waves'
+      'Statodynamic Occlusion Waves',
+      'Repeat to RPE Cap'
     ];
 
     const strengthSchemes = [
@@ -72,7 +73,8 @@
       'e1RM Grounding AMRAP',
       'Intensity Matched',
       'Rest-Redistribution Singles',
-      'Reciprocal Antagonist Potentiation'
+      'Reciprocal Antagonist Potentiation',
+      'Inverted Juggernaut'
     ];
 
     // Backward-Compatibility Aliases
@@ -132,7 +134,9 @@
       'Sawtooth': 'Alternating rep efforts at constant intensity across working sets.',
       'Strength Cluster': 'Intra-cluster rest pauses to sustain maximal force production.',
       'e1RM Grounding AMRAP': 'Warmup ramping into 1 max-rep anchor AMRAP set to ground estimated 1RM.',
-      'Intensity Matched': 'Target reps and RPE are fixed; athlete freely selects load on the bar.'
+      'Intensity Matched': 'Target reps and RPE are fixed; athlete freely selects load on the bar.',
+      'Repeat to RPE Cap': 'Hit 1 top set (@9.0), then repeat the exact same weight to RPE 8.0 (reps naturally vary) for predictable training stress without plate changes.',
+      'Inverted Juggernaut': 'High-velocity submaximal accumulation (10x5 @60% -> 10x3 @67.5% -> AMAP) on strict 60-90s rest to maximize bar speed and technical consistency.'
     };
 
     // Default Dual-Bound Rep Range Matrix (Low/High Bookends)
@@ -170,17 +174,19 @@
       'Primer Single + % Back-offs': { singleRpe: 8.0, singlePct: 92, backoffDropPct: 12, backoffSets: 3, enableRpeProgression: false, minReps: 0, maxReps: 0 },
       'Benchmark + Density Back-Off': { benchRpe: 8.0, densityDropPct: 14, densitySets: 6, intraRestSec: 45, enableRpeProgression: false, minReps: 0, maxReps: 0 },
       'Submaximal AMRAP Calibration': { anchorReps: 10, anchorRpe: 9.0, anchorPct: 70, repeatReps: 12, repeatRpe: 7.5, repeatPct: 62, backoffSets: 3, enableRpeProgression: false, minReps: 0, maxReps: 0 },
-      'Autoregulated Fatigue Stop': { targetRpe: 8.0, stopRpe: 9.0, setsCount: 3, enableRpeProgression: false, minReps: 0, maxReps: 0 },
+      'Autoregulated Fatigue Stop': { targetRpe: 8.0, stopRpe: 9.0, fatigueTargetPct: 5, setsCount: 3, enableRpeProgression: false, minReps: 0, maxReps: 0 },
       'Dynamic Effort (Speed Waves)': { basePct: 65, speedStepPct: 2.5, setsCount: 6, reps: 3, enableRpeProgression: false, minReps: 0, maxReps: 0 },
       'Intra-Set Cluster (4x[2+2+2])': { loadPct: 85, intraRestSec: 15, setsCount: 3, enableRpeProgression: false, minReps: 0, maxReps: 0 },
-      'Autoregulated Fatigue Drop (-5%)': { topRpe: 8.5, dropPct: 5, enableRpeProgression: false, minReps: 0, maxReps: 0 },
+      'Autoregulated Fatigue Drop (-5%)': { topRpe: 8.5, dropPct: 5, fatigueTargetPct: 5, enableRpeProgression: false, minReps: 0, maxReps: 0 },
       'Prescription Table': { targetRpe: 7.5, setsCount: 3, enableRpeProgression: false, minReps: 0, maxReps: 0 },
       'Wave Loading': { wave1TopRpe: 8.5, wave2TopRpe: 9.0, enableRpeProgression: false, minReps: 0, maxReps: 0 },
       'Double Pyramid': { peakRpe: 8.5, enableRpeProgression: true, minReps: 0, maxReps: 0 },
       'Sawtooth': { heavyRpe: 8.5, repRpe: 8.0, enableRpeProgression: false, minReps: 0, maxReps: 0 },
       'Strength Cluster': { loadPct: 88, intraRestSec: 30, setsCount: 4, reps: 2, enableRpeProgression: false, minReps: 0, maxReps: 0 },
       'e1RM Grounding AMRAP': { primer1Pct: 65, primer2Pct: 75, anchorRpe: 9.5, enableRpeProgression: false, minReps: 0, maxReps: 0 },
-      'Intensity Matched': { targetRpe: 8.0, setsCount: 3, enableRpeProgression: false, minReps: 0, maxReps: 0 }
+      'Intensity Matched': { targetRpe: 8.0, setsCount: 3, enableRpeProgression: false, minReps: 0, maxReps: 0 },
+      'Repeat to RPE Cap': { topRpe: 9.0, capRpe: 8.0, setsCount: 3, enableRpeProgression: false, minReps: 0, maxReps: 0 },
+      'Inverted Juggernaut': { basePct: 60, setsCount: 10, reps: 5, intraRestSec: 60, enableRpeProgression: false, minReps: 0, maxReps: 0 }
     };
 
     const defaultModifierCats = [
@@ -1238,6 +1244,7 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
     reps: 5,
     targetRpe: 8.0,
     fatigueStopRpe: 9.5,
+    fatigueTargetPct: 5,
     restSeconds: 180,
     intraSetRest: 0,
     densityPenalty: 1.0,
@@ -1421,6 +1428,38 @@ const DEFAULT_SCHEME_BLUEPRINTS = {
       Secondary: { restSeconds: 120, targetRpe: 8.0 },
       Assistance: { restSeconds: 90, targetRpe: 8.5 }
     }
+  },
+  'Repeat to RPE Cap': {
+    id: 'repeat_to_rpe_cap',
+    name: 'Repeat to RPE Cap',
+    category: 'Hypertrophy',
+    pattern: 'repeats',
+    baseSets: 3,
+    reps: 8,
+    topRpe: 9.0,
+    capRpe: 8.0,
+    targetRpe: 9.0,
+    fatigueStopRpe: 8.0,
+    restSeconds: 120,
+    intraSetRest: 0,
+    densityPenalty: 1.0,
+    instructions: 'Hit Set 1 at target reps @9.0, then keep the exact same weight and repeat sets until you hit @8.0 (reps naturally drop by 1-2).',
+    sfrRating: 'A'
+  },
+  'Inverted Juggernaut': {
+    id: 'inverted_juggernaut',
+    name: 'Inverted Juggernaut',
+    category: 'Strength',
+    pattern: 'cluster',
+    baseSets: 10,
+    reps: 5,
+    targetLoadPct: 60.0,
+    targetRpe: 7.0,
+    restSeconds: 60,
+    intraSetRest: 60,
+    densityPenalty: 1.0,
+    instructions: 'W1: 10x5 @60% (60s rest) | W2: 10x3 @67.5% (90s rest) | W3: Ramp to 75% AMAP. Prioritize crisp bar velocity on every rep.',
+    sfrRating: 'A'
   }
 };
 window.DEFAULT_SCHEME_BLUEPRINTS = DEFAULT_SCHEME_BLUEPRINTS;
@@ -2335,7 +2374,7 @@ window.appActions.updateSchemeBlueprint = function(schemeName, key, value) {
     'fatigueDropPct', 'backoffDropPct', 'dropPct', 'drop1Pct', 'drop2Pct', 'drop3Pct', 'densityDropPct',
     'densityPenalty', 'repGoal', 'rpeStepDelta', 'rampStepPct', 'targetLoadPct', 'loadPct', 'clusterLoadPct',
     'stepLbs', 'deloadPct', 'defaultMinutes', 'miniSets', 'clusters', 'clusterReps', 'backoffSets',
-    'densitySets', 'wave1TopRpe', 'wave2TopRpe', 'heavyRpe', 'repRpe', 'fatigueStopRpe', 'stopRpe'
+    'densitySets', 'wave1TopRpe', 'wave2TopRpe', 'heavyRpe', 'repRpe', 'fatigueStopRpe', 'stopRpe', 'fatigueTargetPct', 'capRpe'
   ].includes(key)) {
     const num = Number(value);
     if (!isNaN(num)) value = num;

@@ -505,16 +505,28 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
     const ex = state.activeWorkout[exIdx];
     if (!ex || !ex.liveAnchorSync) return;
 
-    const newE1 = ex.liveAnchorSync.liveE1;
-    ex.e1rm = newE1;
-
-    if (typeof buildSets === 'function') {
-      const freshSets = buildSets(ex.scheme, newE1, ex.factor || 1.0, ex.tier || 'Main', ex.exercise, ex.modifiers, { isGrounding: false });
-      ex.sets = ex.sets.map((s, idx) => s.done ? s : (freshSets[idx] || s));
+    const info = ex.liveAnchorSync;
+    if (info.mode === 'top_set_backoff' && info.scaledBackoffLoad > 0) {
+      ex.sets.forEach((s, idx) => {
+        if (idx > 0 && !s.done) {
+          s.targetLoad = info.scaledBackoffLoad;
+          s.actualWeight = info.scaledBackoffLoad;
+        }
+      });
+      showToast(`Synced back-offs to ${info.scaledBackoffLoad} lbs (-${info.dropPct}% off Set 1)`);
+    } else {
+      const newE1 = info.liveE1;
+      ex.e1rm = newE1;
+      if (typeof buildSets === 'function') {
+        const freshSets = buildSets(ex.scheme, newE1, ex.factor || 1.0, ex.tier || 'Main', ex.exercise, ex.modifiers, { isGrounding: false });
+        ex.sets = ex.sets.map((s, idx) => s.done ? s : (freshSets[idx] || s));
+      }
+      showToast(`Synced remaining sets to ${newE1} lbs live e1RM`);
     }
 
     delete ex.liveAnchorSync;
     persist();
+    triggerCloudSync(1500);
     safeRender();
   },
   
@@ -1350,12 +1362,15 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
           notes: slot.notes !== undefined ? slot.notes : getLastExerciseNote(slot.exercise),
           jointDiscomfort: 0,
           fatigueWarning: false,
+          fatigueTargetPct: Number(bpObj.fatigueTargetPct || recObj.fatigueTargetPct) || ((normScheme === 'Autoregulated Fatigue Stop' || normScheme === 'Autoregulated Fatigue Drop (-5%)') ? 5 : 0),
           densityLoad: calcLoad(anchorE1 * readyBand.factor, dPct),
           densitySec: dTotalSecs,
           densityTotalSec: dTotalSecs,
           densityRunning: false,
           densityTimerObj: null,
           densityReps: 0,
+          densityPrevReps: 0,
+          densityGoalReps: Number(bpObj.repGoal || recObj.repGoal) || 35,
           sets: (() => {
             const rawBuilt = dispatchBuildSets(normScheme, anchorE1, readyBand.factor, slot.tier, slot.exercise, cleanMods, {
               dateKey: targetDateKey,
@@ -1366,6 +1381,12 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
             return ctx.recoveryMode ? applyRecoverySetsTransform(rawBuilt, ctx.recoveryMode) : rawBuilt;
           })()
         };
+      });
+
+      (state.activeWorkout || []).forEach(ex => {
+        if (ex && Array.isArray(ex.sets) && ex.sets[0]?.densityPrevReps) {
+          ex.densityPrevReps = Number(ex.sets[0].densityPrevReps) || 0;
+        }
       });
 
       state.collapsedCards = {};
@@ -1406,8 +1427,27 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
         );
         const pctDiff = anchorE1 > 0 ? ((liveE1 - anchorE1) / anchorE1) * 100 : 0;
 
-        if (Math.abs(pctDiff) >= 2.5) {
+        const isTopSetScheme = ['Primer Single + % Back-offs', 'Top Set + Back-off', 'Benchmark + Density Back-Off'].includes(ex.scheme);
+        const openBackoffs = (ex.sets || []).filter((x, i) => i > 0 && x && !x.done);
+        if (isTopSetScheme && openBackoffs.length > 0 && actW !== Number(s.targetLoad)) {
+          const bp = state.schemeBlueprints?.[ex.scheme] || DEFAULT_SCHEME_BLUEPRINTS?.[ex.scheme] || {};
+          const rec = state.schemeRecipes?.[ex.scheme] || {};
+          const dropPct = ex.scheme === 'Benchmark + Density Back-Off'
+            ? (Number(rec.densityDropPct || bp.densityDropPct) || 14)
+            : (ex.scheme === 'Primer Single + % Back-offs'
+              ? (Number(rec.backoffDropPct || bp.backoffDropPct) || 12)
+              : (Number(rec.backoffDropPct || bp.backoffDropPct) || 10));
+          const scaledBackoffLoad = roundLoad(actW * (1 - (dropPct / 100)));
           ex.liveAnchorSync = {
+            mode: 'top_set_backoff',
+            liveE1,
+            pctDiff: Math.round(pctDiff * 10) / 10,
+            dropPct,
+            scaledBackoffLoad
+          };
+        } else if (Math.abs(pctDiff) >= 2.5) {
+          ex.liveAnchorSync = {
+            mode: 'e1rm',
             liveE1,
             pctDiff: Math.round(pctDiff * 10) / 10
           };
@@ -1553,12 +1593,15 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
     const anchorActual = lastDone ? (Number(lastDone.actualWeight) || Number(lastDone.weight) || Number(lastDone.targetLoad)) : 0;
     const anchorTarget = lastDone ? (Number(lastDone.targetLoad) || anchorActual) : 0;
 
+    // RTS FAQ Overshoot Correction: estimate what the target-RPE load should have been (~2.5% per 0.5 RPE overshoot) before taking -5%
+    const rpeOver = lastDone ? Math.max(0, roundRpe(lastDone.actualRpe) - roundRpe(lastDone.targetRpe)) : 0;
+    const overshootAdjFactor = rpeOver >= 0.5 ? Math.max(0.85, 1 - (rpeOver * 0.05)) : 1.0;
+    const correctedAnchor = anchorActual > 0 ? (anchorActual * overshootAdjFactor) : 0;
+
     ex.sets.forEach(s => {
       if (!s.done) {
-        // Anchor to actual logged weight: if remaining set had the same targetLoad as the overshot set,
-        // drop 5% directly off anchorActual; if it's a scaled backoff set, scale proportionally from anchorActual * 0.95
-        const baseLoad = (anchorActual > 0 && anchorTarget > 0)
-          ? (s.targetLoad === anchorTarget ? anchorActual : (s.targetLoad * (anchorActual / anchorTarget)))
+        const baseLoad = (correctedAnchor > 0 && anchorTarget > 0)
+          ? (s.targetLoad === anchorTarget ? correctedAnchor : (s.targetLoad * (correctedAnchor / anchorTarget)))
           : s.targetLoad;
         s.targetLoad = roundLoad(baseLoad * 0.95);
         s.actualWeight = s.targetLoad;
@@ -1567,7 +1610,9 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
     ex.fatigueWarning = false;
     persist();
     triggerCloudSync(1500);
-    showToast("Applied -5% load drop off logged weight");
+    showToast(rpeOver >= 0.5
+      ? `Adjusted for +${rpeOver.toFixed(1)} RPE overshoot, then applied -5% drop`
+      : "Applied -5% load drop off logged weight");
     safeRender();
   },
 
@@ -1624,6 +1669,19 @@ if (window.apexCore) window.apexCore.calculate1RmEquivalent = calculate1RmEquiva
       state.activeWorkout[exIdx].jointDiscomfort = lvl;
       persist();
       triggerCloudSync(2500);
+      safeRender();
+    },
+
+    cycleFatigueTarget(exIdx) {
+      const ex = state.activeWorkout?.[exIdx];
+      if (!ex) return;
+      const cycle = [0, 3, 5, 7, 10];
+      const cur = Number(ex.fatigueTargetPct) || 0;
+      const next = cycle[(cycle.indexOf(cur) + 1) % cycle.length];
+      ex.fatigueTargetPct = next;
+      persist();
+      triggerCloudSync(2500);
+      showToast(next > 0 ? `RTS Fatigue Stop Target: ${next}%` : 'Fatigue Stop Target: Off');
       safeRender();
     },
 

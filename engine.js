@@ -220,7 +220,10 @@
       let progressionAbsolute = 0;
       const weekStep = hasHistory ? 1 : Math.max(0, w - 1);
       
-      if (state.settings?.progressionType === 'absolute') {
+      if (state.settings?.progressionType === 'reactive') {
+        progressionMultiplier = 1.0;
+        progressionAbsolute = 0;
+      } else if (state.settings?.progressionType === 'absolute') {
         progressionAbsolute = weekStep * (Number(state.settings.progressionRate) || 5.0);
       } else {
         progressionMultiplier = 1.0 + (weekStep * ((Number(state.settings?.progressionRate) || 1.5) / 100));
@@ -375,7 +378,9 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
       'Volume Pyramid',
       'Tapered',
       'Top Set + Back-off',
-      'Ascending Triplet + Load Drop'
+      'Ascending Triplet + Load Drop',
+      'Repeat to RPE Cap',
+      'Inverted Juggernaut'
     ];
 
     const bpCatalog = (typeof DEFAULT_SCHEME_BLUEPRINTS !== 'undefined' ? DEFAULT_SCHEME_BLUEPRINTS : (state.schemeBlueprints || {}));
@@ -613,25 +618,63 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
       if (cleanScheme === 'Density Block' || recipe.pattern === 'density_block') {
         const dLoadPct = Number(recipe.targetLoadPct) || 65;
         const penalty = Number(recipe.densityPenalty) || 1.0;
-        const dLoad = calcLoad(adj, dLoadPct * penalty);
-        const dReps = meta.r ? (isFixedRep ? minRep : (Number(recipe.reps) || (tier === 'Assistance' ? 10 : Math.max(4, baseReps)))) : 0;
-        const count = skipBackoffs ? 1 : (Number(recipe.baseSets || recipe.setsCount) || 4);
+        let dLoad = calcLoad(adj, dLoadPct * penalty);
+        const defaultReps = meta.r ? (isFixedRep ? minRep : (Number(recipe.reps) || (tier === 'Assistance' ? 10 : Math.max(4, baseReps)))) : 0;
+        let count = skipBackoffs ? 1 : (Number(recipe.baseSets || recipe.setsCount) || 4);
         const intervalRest = Number(recipe.intraSetRest !== undefined ? recipe.intraSetRest : (recipe.restSeconds || 45));
         const baseRpe = roundRpe(Number(recipe.targetRpe) || 8.0);
+        const repGoal = Number(recipe.repGoal || bpPool[cleanScheme]?.repGoal) || 35;
 
-        return Array.from({ length: count }, (_, idx) => ({
-          label: `Density S${idx + 1}`,
-          targetLoad: meta.w ? dLoad : 0,
-          targetReps: dReps,
-          targetTime: intervalRest,
-          targetRpe: roundRpe(Math.min(10.0, baseRpe + (idx * 0.5))),
-          actualWeight: meta.w ? dLoad : 0,
-          actualReps: dReps,
-          actualTime: intervalRest,
-          actualRpe: roundRpe(Math.min(10.0, baseRpe + (idx * 0.5))),
-          done: false,
-          lapRunning: false
-        }));
+        let repList = Array.from({ length: count }, () => defaultReps);
+        let prevTotalReps = 0;
+        let graduated = false;
+
+        if (!opts.isPreview && exName && meta.r) {
+          const hist = getLiftHistory(exName, true, mods, true);
+          const lastDensity = (hist || []).find(h =>
+            Array.isArray(h.sets) && h.sets.some(s => s && s.done && Number(s.actualReps) > 0)
+          );
+          if (lastDensity) {
+            const doneSets = lastDensity.sets.filter(s => s && s.done && Number(s.actualReps) > 0);
+            if (doneSets.length > 0) {
+              prevTotalReps = doneSets.reduce((sum, s) => sum + (Number(s.actualReps) || 0), 0);
+              const prevWeight = Math.max(...doneSets.map(s => Number(s.actualWeight) || 0));
+              const isCableMove = (Array.isArray(mods) && mods.includes('Cable')) || /\b(cable|pushdown|pull down|face pull)\b/i.test(exName);
+              const loadStep = isCableMove ? 2.5 : roundingStep;
+
+              if (prevTotalReps >= repGoal && prevWeight > 0) {
+                dLoad = roundLoad(prevWeight + loadStep);
+                graduated = true;
+                count = skipBackoffs ? 1 : doneSets.length;
+                repList = doneSets.map(s => Math.max(4, Math.round((Number(s.actualReps) || defaultReps) * 0.85)));
+              } else {
+                if (prevWeight > 0) dLoad = prevWeight;
+                count = skipBackoffs ? 1 : doneSets.length;
+                repList = doneSets.map((s, i) => (Number(s.actualReps) || defaultReps) + (i === 0 ? 1 : 0));
+              }
+            }
+          }
+        }
+
+        return Array.from({ length: count }, (_, idx) => {
+          const sRep = meta.r ? (repList[idx] || defaultReps) : 0;
+          const sRpe = roundRpe(Math.min(10.0, baseRpe + (idx * 0.5)));
+          return {
+            label: graduated && idx === 0 ? `Density S1 (+Load)` : `Density S${idx + 1}`,
+            targetLoad: meta.w ? dLoad : 0,
+            targetReps: sRep,
+            targetTime: intervalRest,
+            targetRpe: sRpe,
+            actualWeight: meta.w ? dLoad : 0,
+            actualReps: sRep,
+            actualTime: intervalRest,
+            actualRpe: sRpe,
+            densityPrevReps: prevTotalReps,
+            densityGoalReps: repGoal,
+            done: false,
+            lapRunning: false
+          };
+        });
       }
 
       // ----------------------------------------------------------------------
@@ -1403,6 +1446,82 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
       }
 
       // ----------------------------------------------------------------------
+      // 30B. REPEAT TO RPE CAP (BBM Hypertrophy: Top Set @9 -> Repeats to @8)
+      // ----------------------------------------------------------------------
+      if (cleanScheme === 'Repeat to RPE Cap') {
+        const topRpe = isGrounding ? 9.5 : roundRpe(Math.min(Number(recipe.topRpe) || 9.0, rpeCap));
+        const capRpe = roundRpe(Math.min(Number(recipe.capRpe || recipe.fatigueStopRpe) || 8.0, rpeCap));
+        const topLoad = calcLoad(adj, getPct(baseReps, topRpe));
+        const count = skipBackoffs ? 1 : Math.max(2, baseWorkingSets);
+        const repLow = Math.max(1, baseReps - 2);
+        const repeatRepStr = isFixedRep ? `${minRep}` : `${repLow}-${baseReps}`;
+
+        return Array.from({ length: count }, (_, idx) => {
+          const isTop = idx === 0;
+          const rpe = isTop ? topRpe : capRpe;
+          return {
+            label: isTop ? (isGrounding ? '🔥 Grounding Top (@9.5)' : `Top Set (@${topRpe.toFixed(1)})`) : `Repeat ${idx} (to @${capRpe.toFixed(1)})`,
+            targetLoad: meta.w ? topLoad : 0,
+            targetReps: isTop ? baseReps : repeatRepStr,
+            targetTime: 0,
+            targetRpe: rpe,
+            actualWeight: meta.w ? topLoad : 0,
+            actualReps: isTop ? baseReps : repLow,
+            actualTime: 0,
+            actualRpe: rpe,
+            done: false,
+            lapRunning: false
+          };
+        });
+      }
+
+      // ----------------------------------------------------------------------
+      // 30C. INVERTED JUGGERNAUT (High-Velocity Submaximal Waves)
+      // ----------------------------------------------------------------------
+      if (cleanScheme === 'Inverted Juggernaut') {
+        const isHeavierWave = ['Intensification', 'Strength', 'Realization / Peaking'].includes(phase);
+        let ijSets = isHeavierWave ? 8 : 10;
+        let ijReps = 5;
+        let ijPct = isHeavierWave ? 65 : 60;
+        let ijRest = isHeavierWave ? 75 : 60;
+
+        if (w === 2) {
+          ijReps = 3;
+          ijPct = isHeavierWave ? 72.5 : 67.5;
+          ijRest = 90;
+        } else if (w >= 3) {
+          const amapPct = isHeavierWave ? 80 : 75;
+          const amapLoad = calcLoad(adj, amapPct);
+          const p1 = calcLoad(adj, 55);
+          const p2 = calcLoad(adj, 65);
+          if (skipBackoffs) {
+            return [{ label: `🔥 Realization AMAP (${amapPct}%)`, targetLoad: meta.w ? amapLoad : 0, targetReps: isHeavierWave ? '8+' : '10+', targetTime: 0, targetRpe: 9.5, actualWeight: meta.w ? amapLoad : 0, actualReps: isHeavierWave ? 8 : 10, actualTime: 0, actualRpe: 9.5, done: false, lapRunning: false }];
+          }
+          return [
+            { label: 'Ramp 1 (55%)', targetLoad: meta.w ? p1 : 0, targetReps: 5, targetTime: 0, targetRpe: 6.0, actualWeight: meta.w ? p1 : 0, actualReps: 5, actualTime: 0, actualRpe: 6.0, done: false, lapRunning: false },
+            { label: 'Ramp 2 (65%)', targetLoad: meta.w ? p2 : 0, targetReps: 3, targetTime: 0, targetRpe: 7.0, actualWeight: meta.w ? p2 : 0, actualReps: 3, actualTime: 0, actualRpe: 7.0, done: false, lapRunning: false },
+            { label: `🔥 Realization AMAP (${amapPct}%)`, targetLoad: meta.w ? amapLoad : 0, targetReps: isHeavierWave ? '8+' : '10+', targetTime: 0, targetRpe: 9.5, actualWeight: meta.w ? amapLoad : 0, actualReps: isHeavierWave ? 8 : 10, actualTime: 0, actualRpe: 9.5, done: false, lapRunning: false }
+          ];
+        }
+
+        const ijLoad = calcLoad(adj, ijPct);
+        const totalIjSets = skipBackoffs ? 2 : (phase === 'Deload' ? 4 : ijSets);
+        return Array.from({ length: totalIjSets }, (_, idx) => ({
+          label: `IJ Set ${idx + 1} (${ijPct}%)`,
+          targetLoad: meta.w ? ijLoad : 0,
+          targetReps: ijReps,
+          targetTime: ijRest,
+          targetRpe: 7.0,
+          actualWeight: meta.w ? ijLoad : 0,
+          actualReps: ijReps,
+          actualTime: ijRest,
+          actualRpe: 7.0,
+          done: false,
+          lapRunning: false
+        }));
+      }
+
+      // ----------------------------------------------------------------------
       // 31. INTENSITY MATCHED (Default / Custom Split Fallback)
       // ----------------------------------------------------------------------
       const baseRecipeRpe = roundRpe(Number(recipe.targetRpe) || 8.0);
@@ -1735,6 +1854,169 @@ if (blockProgMode === 'intensity' && !hasRecipeRepLock && totalBlockWeeks > 1 &&
     window.apexCore.computePersonalSfrLeaderboard = computePersonalSfrLeaderboard;
     window.apexCore.computeLiftTimeToPeak = computeLiftTimeToPeak;
     window.apexCore.getCalorieAwareVolumeMultiplier = getCalorieAwareVolumeMultiplier;
+    function computeAcwrMetrics(refDate = new Date()) {
+      const nowMs = refDate instanceof Date ? refDate.getTime() : Date.now();
+      const dayMs = 86400000;
+      let acute7 = 0;
+      let total28 = 0;
+      let sessions28 = 0;
+
+      Object.keys(state.dayLogs || {}).forEach(dKey => {
+        const wk = state.dayLogs[dKey]?.workout;
+        if (!wk || !wk.done) return;
+        const parts = dKey.split('-').map(Number);
+        if (parts.length < 3) return;
+        const ep = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0).getTime();
+        const ageDays = (nowMs - ep) / dayMs;
+        if (ageDays < 0 || ageDays > 28) return;
+        const au = Math.round((Number(wk.dur) || 45) * roundRpe(wk.srpe || 7.5));
+        total28 += au;
+        sessions28 += 1;
+        if (ageDays <= 7) acute7 += au;
+      });
+
+      const chronicWeeklyAvg = Math.round(total28 / 4);
+      const ready = sessions28 >= 4 && chronicWeeklyAvg > 0;
+      const ratio = ready ? Math.round((acute7 / chronicWeeklyAvg) * 100) / 100 : null;
+
+      let status = 'Calibrating';
+      let badge = 'bg-slate-700/40 text-slate-300 border-slate-600';
+      if (ready) {
+        if (ratio > 1.35) {
+          status = 'Spike Risk (>1.35x)';
+          badge = 'bg-rose-500/20 text-rose-300 border-rose-500/60';
+        } else if (ratio < 0.80) {
+          status = 'Under-Loaded (<0.80x)';
+          badge = 'bg-amber-500/20 text-amber-300 border-amber-500/50';
+        } else {
+          status = 'Optimal Zone';
+          badge = 'bg-emerald-500/20 text-emerald-300 border-emerald-500/60';
+        }
+      }
+      return { ready, acute7, chronicWeeklyAvg, ratio, status, badge, sessions28 };
+    }
+
+    function computeIntensityAndNormalizedVolume(cutoffEpoch = 0) {
+      const brackets = { '<60%': 0, '60-70%': 0, '70-80%': 0, '80-90%': 0, '90%+': 0 };
+      let totalNL = 0;
+      let weightedIntensitySum = 0;
+
+      Object.keys(state.dayLogs || {}).forEach(dKey => {
+        const parts = dKey.split('-').map(Number);
+        if (parts.length < 3) return;
+        const ep = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0).getTime();
+        if (ep < cutoffEpoch) return;
+
+        const wk = state.dayLogs[dKey]?.workout;
+        if (!wk || !wk.done || !Array.isArray(wk.exercises)) return;
+
+        wk.exercises.forEach(exObj => {
+          if (!exObj || !exObj.exercise) return;
+          const doneSets = (exObj.sets || []).filter(s => s && s.done && Number(s.actualWeight) > 0 && Number(s.actualReps) > 0);
+          if (!doneSets.length) return;
+
+          const cleanMods = window.apexCore?.sanitizeModifiers ? window.apexCore.sanitizeModifiers(exObj.modifiers || []) : (exObj.modifiers || []);
+          const vKey = window.apexCore?.getVariantKey ? window.apexCore.getVariantKey(exObj.exercise, cleanMods) : exObj.exercise;
+          let refE1 = Number(state.e1rms?.[vKey] || state.e1rms?.[exObj.exercise] || 0);
+          doneSets.forEach(s => {
+            const est = Math.round(Number(s.actualWeight) / (getPct(s.actualReps, s.actualRpe || 8.0) / 100));
+            if (est > refE1) refE1 = est;
+          });
+          if (refE1 <= 0) return;
+
+          doneSets.forEach(s => {
+            const reps = Number(s.actualReps) || 0;
+            const pct = Math.min(105, Math.max(20, (Number(s.actualWeight) / refE1) * 100));
+            totalNL += reps;
+            weightedIntensitySum += (pct * reps);
+            if (pct < 60) brackets['<60%'] += reps;
+            else if (pct < 70) brackets['60-70%'] += reps;
+            else if (pct < 80) brackets['70-80%'] += reps;
+            else if (pct < 90) brackets['80-90%'] += reps;
+            else brackets['90%+'] += reps;
+          });
+        });
+      });
+
+      const avgIntensityPct = totalNL > 0 ? Math.round((weightedIntensitySum / totalNL) * 10) / 10 : 0;
+      const normalizedVolume = Math.round(totalNL * (avgIntensityPct / 100));
+      return { totalNL, avgIntensityPct, normalizedVolume, brackets };
+    }
+
+    function computeBlockMomentumSignal() {
+      const cutoff28 = Date.now() - (28 * 86400000);
+      const liftSeries = {};
+
+      Object.keys(state.dayLogs || {}).sort().forEach(dKey => {
+        const parts = dKey.split('-').map(Number);
+        if (parts.length < 3) return;
+        const ep = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0).getTime();
+        if (ep < cutoff28) return;
+
+        const wk = state.dayLogs[dKey]?.workout;
+        if (!wk || !wk.done || wk.isDeload || wk.isRecovery || wk.phase === 'Deload' || !Array.isArray(wk.exercises)) return;
+
+        wk.exercises.forEach(exObj => {
+          if (!exObj || !exObj.exercise) return;
+          const doneSets = (exObj.sets || []).filter(s => s && s.done && Number(s.actualWeight) > 0 && Number(s.actualReps) > 0);
+          if (!doneSets.length) return;
+          const cleanMods = window.apexCore?.sanitizeModifiers ? window.apexCore.sanitizeModifiers(exObj.modifiers || []) : (exObj.modifiers || []);
+          const vKey = window.apexCore?.getVariantKey ? window.apexCore.getVariantKey(exObj.exercise, cleanMods) : exObj.exercise;
+
+          let topE1 = 0;
+          doneSets.forEach(s => {
+            const c = Math.round(Number(s.actualWeight) / (getPct(s.actualReps, s.actualRpe || 8.0) / 100));
+            if (c > topE1) topE1 = c;
+          });
+          if (topE1 <= 0) return;
+          if (!liftSeries[vKey]) liftSeries[vKey] = [];
+          liftSeries[vKey].push({ date: dKey, e1: topE1 });
+        });
+      });
+
+      const up = [];
+      const holding = [];
+      const stalled = [];
+
+      Object.entries(liftSeries).forEach(([vKey, pts]) => {
+        if (pts.length < 2) return;
+        const latest = pts[pts.length - 1].e1;
+        const priorPts = pts.slice(Math.max(0, pts.length - 3), pts.length - 1);
+        const priorAvg = priorPts.reduce((s, p) => s + p.e1, 0) / priorPts.length;
+        const pctDelta = priorAvg > 0 ? ((latest - priorAvg) / priorAvg) * 100 : 0;
+
+        if (pctDelta >= 1.0) up.push({ variant: vKey, deltaPct: Math.round(pctDelta * 10) / 10 });
+        else if (pctDelta <= -1.0) stalled.push({ variant: vKey, deltaPct: Math.round(pctDelta * 10) / 10 });
+        else holding.push({ variant: vKey, deltaPct: Math.round(pctDelta * 10) / 10 });
+      });
+
+      const tracked = up.length + holding.length + stalled.length;
+      let verdict = 'Gathering 2-3 Week Baseline';
+      let detail = 'Log at least 2 non-deload exposures per lift to evaluate block momentum.';
+      let badge = 'bg-slate-700/40 text-slate-300 border-slate-600';
+
+      if (tracked >= 2) {
+        if (stalled.length >= 3 || (stalled.length >= 2 && stalled.length >= up.length)) {
+          verdict = 'Consider Transition / Deload';
+          detail = `${stalled.length} active lifts trending down over the last 2–4 weeks. Good window to deload or pivot exercises.`;
+          badge = 'bg-rose-500/20 text-rose-300 border-rose-500/60';
+        } else if (up.length >= Math.max(2, Math.ceil(tracked * 0.5))) {
+          verdict = 'Extend Block — Gains Rolling';
+          detail = `${up.length} of ${tracked} tracked lifts are still climbing. No need to short-circuit this block early.`;
+          badge = 'bg-emerald-500/20 text-emerald-300 border-emerald-500/60';
+        } else {
+          verdict = 'Steady Accumulation';
+          detail = `${up.length} climbing, ${holding.length} holding, ${stalled.length} dipping. Stay the course and monitor next week.`;
+          badge = 'bg-blue-500/20 text-blue-300 border-blue-500/50';
+        }
+      }
+
+      return { tracked, up, holding, stalled, verdict, detail, badge };
+    }
+
+    window.apexCore.computeAcwrMetrics = computeAcwrMetrics;
+    window.apexCore.computeIntensityAndNormalizedVolume = computeIntensityAndNormalizedVolume;
+    window.apexCore.computeBlockMomentumSignal = computeBlockMomentumSignal;
     window.apexCore.getGhostPacerForLift = getGhostPacerForLift;
 
     window.apexCore.buildSets = buildSets;
